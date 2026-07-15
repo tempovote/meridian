@@ -38,6 +38,27 @@ import Testing
     #expect(leaves.flatMap(\.bytes) == bytes)
 }
 
+@Test func leavesSplitWalkBackWhenScalarStraddlesIdealEnd() {
+    // 1 ASCII byte then 4-byte emojis: ideal split at 2048 lands mid-scalar
+    // ((2048 - 1) % 4 != 0), forcing the boundary walk-back.
+    let bytes = Array(("a" + String(repeating: "😀", count: 1500)).utf8)
+    let leaves = Leaf.leaves(from: bytes)
+    #expect(leaves.count >= 2)
+    for leaf in leaves {
+        #expect(leaf.bytes.count <= Leaf.maxBytes)
+        #expect(leaf.bytes.first.map { $0 & 0xC0 != 0x80 } == true)
+    }
+    #expect(leaves.flatMap(\.bytes) == bytes)
+    // Also verify with 3-byte scalars (2048 % 3 == 2): forces walk-back too.
+    let euro = Array(String(repeating: "€", count: 1000).utf8)
+    let euroLeaves = Leaf.leaves(from: euro)
+    #expect(euroLeaves.flatMap(\.bytes) == euro)
+    for leaf in euroLeaves {
+        #expect(leaf.bytes.count <= Leaf.maxBytes)
+        #expect(leaf.bytes.first.map { $0 & 0xC0 != 0x80 } == true)
+    }
+}
+
 @Test func leavesFromEmptyInput() {
     #expect(Leaf.leaves(from: []).isEmpty)
 }

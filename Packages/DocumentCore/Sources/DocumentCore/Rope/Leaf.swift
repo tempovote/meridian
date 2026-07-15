@@ -35,13 +35,10 @@ struct Leaf: Sendable {
         var start = 0
         while start < bytes.count {
             let idealEnd = min(start + maxBytes, bytes.count)
-            var end = idealEnd
-            while end > start, bytes.indices.contains(end), bytes[end] & 0xC0 == 0x80 {
-                end -= 1
+            var end = scalarBoundary(in: bytes, notAfter: idealEnd)
+            if end <= start {
+                end = idealEnd // degenerate: oversized scalar run, take as-is
             }
-            if end == start {
-                end = idealEnd
-            } // degenerate: oversized scalar run, take as-is
             result.append(Leaf(bytes: Array(bytes[start ..< end])))
             start = end
         }
