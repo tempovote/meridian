@@ -1,0 +1,7 @@
+--swiftversion 6.1
+--indent 4
+--maxwidth 120
+--self remove
+--importgrouping testable-bottom
+--stripunusedargs closure-only
+--exclude **/.build
