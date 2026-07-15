@@ -1,0 +1,45 @@
+name: Meridian
+options:
+  bundleIdPrefix: dev.meridian
+  deploymentTarget:
+    macOS: "15.0"
+  createIntermediateGroups: true
+
+settings:
+  base:
+    SWIFT_VERSION: "6.0"
+    SWIFT_STRICT_CONCURRENCY: complete
+    ENABLE_HARDENED_RUNTIME: true
+    CODE_SIGN_STYLE: Automatic
+
+packages:
+  WorkspaceUI: { path: Packages/WorkspaceUI }
+  SearchKit: { path: Packages/SearchKit }
+  FileKit: { path: Packages/FileKit }
+  PluginHost: { path: Packages/PluginHost }
+  SettingsKit: { path: Packages/SettingsKit }
+
+targets:
+  Meridian:
+    type: application
+    platform: macOS
+    sources: [App]
+    dependencies:
+      - package: WorkspaceUI
+      - package: SearchKit
+      - package: FileKit
+      - package: PluginHost
+      - package: SettingsKit
+    info:
+      path: App/Resources/Info.plist
+      properties:
+        CFBundleName: Meridian
+        CFBundleDisplayName: Meridian
+        LSMinimumSystemVersion: "15.0"
+        NSPrincipalClass: NSApplication
+        NSHumanReadableCopyright: ""
+    entitlements:
+      path: App/Resources/Meridian.entitlements
+      properties:
+        com.apple.security.app-sandbox: true
+        com.apple.security.files.user-selected.read-write: true
