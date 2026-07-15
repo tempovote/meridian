@@ -4,6 +4,8 @@ included:
 excluded:
   - "**/.build"
 line_length: 120
+trailing_comma:
+  mandatory_comma: true # align with SwiftFormat's trailingCommas rule (Swift 6.1 style)
 identifier_name:
   min_length: 2
 opt_in_rules:
