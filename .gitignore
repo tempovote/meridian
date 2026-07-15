@@ -6,3 +6,5 @@ xcuserdata/
 .swiftpm/
 CLAUDE.md
 .superpowers/
+App/Resources/Info.plist
+App/Resources/Meridian.entitlements
