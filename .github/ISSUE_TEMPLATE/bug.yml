@@ -1,0 +1,30 @@
+name: Bug
+description: Something behaves incorrectly
+labels: ["type:bug"]
+body:
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+    validations:
+      required: true
+  - type: input
+    id: filesize
+    attributes:
+      label: File size
+      description: Editors live and die by repro details — e.g. "140 MB log file".
+    validations:
+      required: true
+  - type: input
+    id: encoding
+    attributes:
+      label: Encoding & line endings
+      description: e.g. UTF-8/LF, UTF-16LE/CRLF, Shift-JIS.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected vs actual
+    validations:
+      required: true

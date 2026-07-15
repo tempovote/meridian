@@ -1,0 +1,25 @@
+name: Feature
+description: A new capability or enhancement
+labels: ["type:feat"]
+body:
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: What should Meridian do, and for whom?
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      description: Bullet list — each item independently verifiable.
+    validations:
+      required: true
+  - type: textarea
+    id: perf
+    attributes:
+      label: Performance impact
+      description: Which budgets (docs/ROADMAP.md) could this affect? How is that verified?
+    validations:
+      required: true
