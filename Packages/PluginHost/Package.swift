@@ -13,5 +13,5 @@ let package = Package(
     targets: [
         .target(name: "PluginHost", dependencies: ["PluginAPI"]),
         .testTarget(name: "PluginHostTests", dependencies: ["PluginHost"]),
-    ]
+    ],
 )

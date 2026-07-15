@@ -14,5 +14,5 @@ let package = Package(
     targets: [
         .target(name: "WorkspaceUI", dependencies: ["EditorUI", "SettingsKit"]),
         .testTarget(name: "WorkspaceUITests", dependencies: ["WorkspaceUI"]),
-    ]
+    ],
 )

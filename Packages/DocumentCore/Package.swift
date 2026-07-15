@@ -13,8 +13,8 @@ let package = Package(
     targets: [
         .target(
             name: "DocumentCore",
-            dependencies: [.product(name: "Collections", package: "swift-collections")]
+            dependencies: [.product(name: "Collections", package: "swift-collections")],
         ),
         .testTarget(name: "DocumentCoreTests", dependencies: ["DocumentCore"]),
-    ]
+    ],
 )

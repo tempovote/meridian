@@ -13,5 +13,5 @@ let package = Package(
     targets: [
         .target(name: "SearchKit", dependencies: ["DocumentCore"]),
         .testTarget(name: "SearchKitTests", dependencies: ["SearchKit"]),
-    ]
+    ],
 )

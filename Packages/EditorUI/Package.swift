@@ -15,8 +15,8 @@ let package = Package(
     targets: [
         .target(
             name: "EditorUI",
-            dependencies: ["DocumentCore", "SyntaxKit", "ThemeKit"]
+            dependencies: ["DocumentCore", "SyntaxKit", "ThemeKit"],
         ),
         .testTarget(name: "EditorUITests", dependencies: ["EditorUI"]),
-    ]
+    ],
 )

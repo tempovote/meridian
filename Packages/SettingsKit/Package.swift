@@ -10,5 +10,5 @@ let package = Package(
     targets: [
         .target(name: "SettingsKit"),
         .testTarget(name: "SettingsKitTests", dependencies: ["SettingsKit"]),
-    ]
+    ],
 )

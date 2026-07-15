@@ -14,8 +14,8 @@ let package = Package(
     targets: [
         .target(
             name: "SyntaxKit",
-            dependencies: ["DocumentCore", "SwiftTreeSitter"]
+            dependencies: ["DocumentCore", "SwiftTreeSitter"],
         ),
         .testTarget(name: "SyntaxKitTests", dependencies: ["SyntaxKit"]),
-    ]
+    ],
 )

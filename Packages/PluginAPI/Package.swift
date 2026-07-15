@@ -10,5 +10,5 @@ let package = Package(
     targets: [
         .target(name: "PluginAPI"),
         .testTarget(name: "PluginAPITests", dependencies: ["PluginAPI"]),
-    ]
+    ],
 )

@@ -13,5 +13,5 @@ let package = Package(
     targets: [
         .target(name: "FileKit", dependencies: ["DocumentCore"]),
         .testTarget(name: "FileKitTests", dependencies: ["FileKit"]),
-    ]
+    ],
 )
