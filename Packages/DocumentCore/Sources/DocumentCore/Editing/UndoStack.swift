@@ -1,3 +1,5 @@
+import DequeModule
+
 extension EditTransaction {
     /// Returns a copy of `self` with `baseVersion` swapped to `version`;
     /// every other field (`edits`, selections, `coalescingKey`, `origin`) is
@@ -93,11 +95,15 @@ struct Entry: Sendable {
 /// number of steps returned, so the next call starts from the version those
 /// applies will have produced.
 public struct UndoStack: Sendable {
-    private var entries: [Entry] = []
+    private var entries: Deque<Entry> = []
     private var redoEntries: [Entry] = []
     /// Maximum retained cost (see `retainedCost`) before `record` starts
     /// evicting the oldest entries.
     private let byteBudget: Int
+    /// Incrementally maintained mirror of `recomputedRetainedCost` — updated
+    /// at every entry/step mutation so eviction never rescans history (O(1)
+    /// per record instead of O(entries × steps)).
+    private var cachedRetainedCost = 0
     /// The version the live buffer will hold when the caller next applies a
     /// transaction this stack returns. Meaningless while `entries` and
     /// `redoEntries` are both empty (nothing has been recorded yet), so its
@@ -146,12 +152,14 @@ public struct UndoStack: Sendable {
             if top.isGroup, !top.isClosed {
                 entries[topIndex].steps.append(step)
                 entries[topIndex].lastInstant = instant
+                cachedRetainedCost += step.cost
                 evict()
                 return
             }
             if !top.isClosed, coalesces(transaction, into: top, at: instant) {
                 entries[topIndex].steps.append(step)
                 entries[topIndex].lastInstant = instant
+                cachedRetainedCost += step.cost
                 evict()
                 return
             }
@@ -164,6 +172,7 @@ public struct UndoStack: Sendable {
             isGroup: false,
             isClosed: false,
         ))
+        cachedRetainedCost += step.cost
         evict()
     }
 
@@ -233,6 +242,7 @@ public struct UndoStack: Sendable {
         closeOpenGroupIfNeeded()
         guard var entry = entries.popLast() else { return nil }
         entry.isClosed = true
+        cachedRetainedCost -= entry.steps.reduce(0) { $0 + $1.cost }
         var version = expectedVersion
         var inverses: [EditTransaction] = []
         inverses.reserveCapacity(entry.steps.count)
@@ -259,6 +269,7 @@ public struct UndoStack: Sendable {
         closeOpenGroupIfNeeded()
         guard var entry = redoEntries.popLast() else { return nil }
         entry.isClosed = true
+        cachedRetainedCost += entry.steps.reduce(0) { $0 + $1.cost }
         var version = expectedVersion
         var forwards: [EditTransaction] = []
         forwards.reserveCapacity(entry.steps.count)
@@ -297,6 +308,12 @@ public struct UndoStack: Sendable {
     /// undone (never larger than undo depth ever was) and is discarded
     /// wholesale on the next `record()`.
     public var retainedCost: Int {
+        cachedRetainedCost
+    }
+
+    /// Full recompute of the retained cost; test-only ground truth for the
+    /// incremental cache.
+    var recomputedRetainedCost: Int {
         entries.reduce(0) { total, entry in
             total + entry.steps.reduce(0) { $0 + $1.cost }
         }
@@ -335,8 +352,9 @@ public struct UndoStack: Sendable {
     /// Drops the oldest entries while the retained cost exceeds
     /// `byteBudget`, always leaving at least the newest entry in place.
     private mutating func evict() {
-        while retainedCost > byteBudget, entries.count > 1 {
-            entries.removeFirst()
+        while cachedRetainedCost > byteBudget, entries.count > 1 {
+            let removed = entries.removeFirst()
+            cachedRetainedCost -= removed.steps.reduce(0) { $0 + $1.cost }
         }
     }
 
