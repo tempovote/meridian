@@ -8,6 +8,16 @@ public struct BufferVersion: Hashable, Comparable, Sendable {
     /// and increments by one per mutation on that buffer instance.
     public let value: UInt64
 
+    /// Creates a version stamp from a raw counter value.
+    ///
+    /// Exposed explicitly because the synthesized memberwise initializer for
+    /// a `public` struct is only `internal`; callers outside this module
+    /// (e.g. comparing against `EditTransaction.baseVersion`, or tests) need
+    /// a public way to construct one.
+    public init(value: UInt64) {
+        self.value = value
+    }
+
     /// Orders versions by their raw counter.
     public static func < (lhs: Self, rhs: Self) -> Bool {
         lhs.value < rhs.value
@@ -48,6 +58,16 @@ public struct TextBuffer: Sendable {
     /// Creates a buffer containing `string`'s UTF-8 bytes, at version 0.
     public init(_ string: some StringProtocol) {
         root = Node.build(from: Array(string.utf8))
+        version = BufferVersion(value: 0)
+    }
+
+    /// Wraps an existing rope node as a fresh buffer at version 0.
+    ///
+    /// Internal because `Node` isn't part of the public API; used by
+    /// `slicing(_:)` to hand back a slice that shares chunks with the
+    /// source buffer without copying bytes.
+    init(root: Node) {
+        self.root = root
         version = BufferVersion(value: 0)
     }
 
