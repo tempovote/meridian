@@ -11,8 +11,9 @@ public enum UTF8ValidationResult: Hashable, Sendable {
 /// surrogates, code points above U+10FFFF, and truncated sequences.
 /// ASCII runs are consumed 8 bytes at a time (word-wise high-bit test).
 public enum UTF8Validator {
-    /// Validates a slice of bytes as strict UTF-8, returning the result and the
-    /// byte offset of any malformed sequence.
+    /// Validates a slice of bytes as strict UTF-8.
+    ///
+    /// Returns `.valid`, or `.invalid` carrying the offset of the first malformed sequence's lead byte.
     public static func validate(_ bytes: ArraySlice<UInt8>) -> UTF8ValidationResult {
         bytes.withUnsafeBufferPointer { validate($0) }
     }
@@ -41,8 +42,7 @@ public enum UTF8Validator {
             guard index + sequenceLength <= count, secondByteRange.contains(buffer[index + 1]) else {
                 return .invalid(firstInvalidByte: ByteOffset(index))
             }
-            let continuationBytes = Array(buffer[(index + 2) ..< (index + sequenceLength)])
-            if !continuationBytes.allSatisfy({ (0x80 ... 0xBF).contains($0) }) {
+            if !buffer[(index + 2) ..< (index + sequenceLength)].allSatisfy({ (0x80 ... 0xBF).contains($0) }) {
                 return .invalid(firstInvalidByte: ByteOffset(index))
             }
             index += sequenceLength
