@@ -16,8 +16,19 @@ jobs:
           curl -fsSL -o /tmp/swiftformat.zip \
             "https://github.com/nicklockwood/SwiftFormat/releases/download/${SWIFTFORMAT_VERSION}/swiftformat.zip"
           unzip -o /tmp/swiftformat.zip -d /tmp/swiftformat
-          install -m 755 "$(find /tmp/swiftformat -name swiftformat -type f | head -1)" /usr/local/bin/swiftformat
-          swiftformat --version
+          mkdir -p "$RUNNER_TEMP/pinned-bin"
+          install -m 755 "$(find /tmp/swiftformat -name swiftformat -type f | head -1)" "$RUNNER_TEMP/pinned-bin/swiftformat"
+          # Runner images ship a pre-installed SwiftFormat under /opt/homebrew/bin,
+          # which precedes /usr/local/bin on PATH and silently shadows a pinned
+          # install there. Prepend our pinned copy via GITHUB_PATH instead, so it
+          # wins for every later step in this job regardless of image contents.
+          echo "$RUNNER_TEMP/pinned-bin" >> "$GITHUB_PATH"
+          RESOLVED_VERSION="$("$RUNNER_TEMP/pinned-bin/swiftformat" --version)"
+          echo "Pinned SwiftFormat version: $RESOLVED_VERSION"
+          if [ "$RESOLVED_VERSION" != "$SWIFTFORMAT_VERSION" ]; then
+            echo "::error::Downloaded SwiftFormat reports $RESOLVED_VERSION, expected $SWIFTFORMAT_VERSION"
+            exit 1
+          fi
           brew install swiftlint
       - name: SwiftFormat (lint mode)
         run: swiftformat --lint .
