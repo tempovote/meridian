@@ -30,7 +30,10 @@ public struct BufferVersion: Hashable, Comparable, Sendable {
 /// buffer (e.g. from a UTF-16 or line/column conversion) before using it
 /// here.
 public struct TextBuffer: Sendable {
-    private var root: Node
+    /// Internal (not `private`) so same-module extensions — e.g.
+    /// `TextBufferConversions.swift` — can descend the tree directly via the
+    /// `Node` primitives instead of duplicating access through public API.
+    var root: Node
 
     /// The version stamp of the buffer's current content. Bumped by every
     /// call to `replaceSubrange`; unaffected by copying.
