@@ -1,7 +1,7 @@
 /// A rope tree node: either a leaf chunk or an inner node fanning out to
 /// child nodes. Immutable — edits build new nodes structurally sharing
 /// unchanged subtrees (Task 5's concern).
-enum Node: Sendable {
+enum Node {
     case leaf(Leaf)
     case inner([Node], Summary, height: Int)
 

@@ -34,7 +34,7 @@ extension Node {
                 // right) so adjacent underfull leaves get a chance to
                 // combine, then repack the resulting child list.
                 let seam = concatNodes(leftChildren[leftChildren.count - 1], rightChildren[0])
-                let combined = leftChildren.dropLast() + seam + rightChildren.dropFirst()
+                let combined = Array(leftChildren.dropLast()) + seam + Array(rightChildren.dropFirst())
                 return packChildren(Array(combined))
             default:
                 preconditionFailure("equal-height nodes must both be leaves or both be inner")

@@ -2,7 +2,7 @@
 /// sum to the summary of the whole. Counts Unicode scalars, not grapheme
 /// clusters — grapheme counts are not additive across chunk boundaries
 /// (ADR 0007); grapheme handling belongs to the cursor layer.
-struct Summary: Equatable, Sendable {
+struct Summary: Equatable {
     var utf8: Int
     var utf16: Int
     var scalars: Int

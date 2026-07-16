@@ -50,5 +50,5 @@ import Testing
     #expect(summary.utf8 == text.utf8.count)
     #expect(summary.utf16 == text.utf16.count)
     #expect(summary.scalars == text.unicodeScalars.count)
-    #expect(summary.newlines == text.utf8.filter { $0 == 0x0A }.count)
+    #expect(summary.newlines == text.utf8.count { $0 == 0x0A })
 }

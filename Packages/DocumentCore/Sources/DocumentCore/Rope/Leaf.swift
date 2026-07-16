@@ -15,7 +15,7 @@ func scalarBoundary(in bytes: [UInt8], notAfter index: Int) -> Int {
 
 /// A rope leaf: an owned UTF-8 chunk with cached summary. Immutable after
 /// construction — edits build new leaves.
-struct Leaf: Sendable {
+struct Leaf {
     static let maxBytes = 2048
     static let minBytes = 512
 
