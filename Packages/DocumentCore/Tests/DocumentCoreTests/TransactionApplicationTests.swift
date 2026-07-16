@@ -91,6 +91,23 @@ import Testing
     #expect(inverse.edits[0].range == ByteOffset(0) ..< ByteOffset(0))
 }
 
+@Test func touchingEditsApplyAndInvert() {
+    let base = TextBuffer("0123456789")
+    var buffer = base
+    let txn = EditTransaction(
+        baseVersion: base.version,
+        edits: [
+            Edit(range: ByteOffset(2) ..< ByteOffset(4), replacement: "AA"),
+            Edit(range: ByteOffset(4) ..< ByteOffset(6), replacement: "BBB"),
+        ],
+    )
+    let inverse = txn.inverted(base: base)
+    buffer.apply(txn)
+    #expect(buffer.string == "01AABBB6789")
+    buffer.apply(inverse)
+    #expect(buffer.string == "0123456789")
+}
+
 /// Property test: random multi-edit transactions on random buffers;
 /// apply ∘ apply(inverse) must be the identity on content.
 @Test func randomTransactionsInvertCleanly() {

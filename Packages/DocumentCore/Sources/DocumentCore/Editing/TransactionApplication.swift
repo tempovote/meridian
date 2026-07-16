@@ -57,7 +57,14 @@ public extension EditTransaction {
     /// `coalescingKey` is `nil` (an undo step is never coalesced into
     /// another edit); `origin` is preserved. The inverse's `baseVersion` is
     /// `base.version + 1` — the version `apply(self)` produces.
+    ///
+    /// - Precondition: `base.version == baseVersion`.
     func inverted(base: TextBuffer) -> EditTransaction {
+        precondition(
+            base.version == baseVersion,
+            "inverted(base:) requires the base buffer the transaction was computed against " +
+                "(base.version \(base.version.value) != baseVersion \(baseVersion.value))",
+        )
         var delta = 0
         var inverseEdits: [Edit] = []
         inverseEdits.reserveCapacity(edits.count)
