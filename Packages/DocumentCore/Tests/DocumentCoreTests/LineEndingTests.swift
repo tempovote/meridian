@@ -95,3 +95,12 @@ import Testing
         #expect(converted.lineEndingStats().lfCount == total)
     }
 }
+
+@Test func adjacentBreaksCountAndConvertCorrectly() {
+    let stats = TextBuffer("\r\r\n\r").lineEndingStats()
+    #expect(stats.crCount == 2)
+    #expect(stats.crlfCount == 1)
+    #expect(stats.lfCount == 0)
+    #expect(TextBuffer("\r\r").convertingLineEndings(to: .lf).string == "\n\n")
+    #expect(TextBuffer("a\r\r\nb").convertingLineEndings(to: .crlf).string == "a\r\n\r\nb")
+}

@@ -1,3 +1,5 @@
+import Foundation
+
 /// A line-break style. Raw value is the break's literal characters.
 public enum LineEnding: String, Hashable, Sendable, CaseIterable {
     case lf = "\n"
