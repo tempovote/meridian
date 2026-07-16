@@ -36,8 +36,7 @@ import Testing
 
 @Test func summariesAreAdditive() {
     let whole = Array("abc😀\ndef".utf8)
-    // 4 is a scalar boundary (after "abc" + before 😀's lead byte at index 3? no:
-    // "abc" = 3 bytes, 😀 = bytes 3..<7, so 7 is the boundary after it).
+    // 7 = length of "abc" + "😀" in UTF-8: a scalar boundary between the emoji and "\n".
     let split = 7
     let left = Summary(scanning: whole[..<split])
     let right = Summary(scanning: whole[split...])

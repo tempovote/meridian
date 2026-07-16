@@ -23,7 +23,10 @@ enum Node {
     }
 
     static func makeInner(_ children: [Node]) -> Node {
-        precondition(!children.isEmpty && children.count <= maxFanout)
+        precondition(
+            !children.isEmpty && children.count <= maxFanout,
+            "makeInner requires 1...\(maxFanout) children, got \(children.count)",
+        )
         let summary = children.reduce(Summary.zero) { $0 + $1.summary }
         return .inner(children, summary, height: children[0].height + 1)
     }

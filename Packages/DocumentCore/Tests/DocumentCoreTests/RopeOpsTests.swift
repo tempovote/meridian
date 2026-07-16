@@ -103,3 +103,25 @@ private func assertMinFanout(_ node: Node, isRoot: Bool) {
         #expect(node.checkInvariants().isEmpty)
     }
 }
+
+@Test func splitExactlyOnInterLeafBoundary() {
+    // Build a multi-leaf, multi-child tree of ASCII, then split precisely on
+    // every leaf edge — the descent must take the earlier child and produce
+    // exact left/right contents.
+    let bytes = Array(String(repeating: "x", count: Leaf.maxBytes * 5).utf8)
+    let node = Node.build(from: bytes)
+    var edges: [Int] = []
+    var acc = 0
+    node.forEachLeaf { leaf in
+        acc += leaf.bytes.count
+        edges.append(acc)
+    }
+    for edge in edges.dropLast() {
+        let (left, right) = node.split(at: edge)
+        #expect(left.summary.utf8 == edge)
+        #expect(right.summary.utf8 == bytes.count - edge)
+        #expect(left.checkInvariants().isEmpty)
+        #expect(right.checkInvariants().isEmpty)
+        #expect(Node.concat(left, right).allBytes == bytes)
+    }
+}

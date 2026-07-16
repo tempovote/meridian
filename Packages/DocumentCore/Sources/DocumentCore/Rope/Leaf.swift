@@ -28,7 +28,8 @@ struct Leaf {
     }
 
     /// Splits a byte string into leaves of at most `maxBytes`, never
-    /// splitting inside a scalar. Aims for evenly sized leaves.
+    /// splitting inside a scalar.
+    /// Greedy max-fill: every leaf but the last is near maxBytes; the final remainder may be small.
     static func leaves(from bytes: [UInt8]) -> [Leaf] {
         guard !bytes.isEmpty else { return [] }
         var result: [Leaf] = []

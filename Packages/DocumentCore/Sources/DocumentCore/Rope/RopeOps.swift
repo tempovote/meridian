@@ -69,6 +69,10 @@ extension Node {
     /// `maxFanout`. Every call site bounds `children.count` to at most
     /// `2 * maxFanout`, so a single midpoint split always suffices.
     private static func packChildren(_ children: [Node]) -> [Node] {
+        precondition(
+            children.count <= 2 * Node.maxFanout,
+            "packChildren invariant violated: \(children.count) children exceeds 2×maxFanout",
+        )
         if children.count <= maxFanout {
             return [makeInner(children)]
         }

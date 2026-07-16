@@ -10,8 +10,15 @@ jobs:
     runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
-      - name: Install linters
-        run: brew install swiftformat swiftlint
+      - name: Install linters (SwiftFormat pinned)
+        run: |
+          SWIFTFORMAT_VERSION=0.62.1  # keep in sync with README "Tooling"
+          curl -fsSL -o /tmp/swiftformat.zip \
+            "https://github.com/nicklockwood/SwiftFormat/releases/download/${SWIFTFORMAT_VERSION}/swiftformat.zip"
+          unzip -o /tmp/swiftformat.zip -d /tmp/swiftformat
+          install -m 755 "$(find /tmp/swiftformat -name swiftformat -type f | head -1)" /usr/local/bin/swiftformat
+          swiftformat --version
+          brew install swiftlint
       - name: SwiftFormat (lint mode)
         run: swiftformat --lint .
       - name: SwiftLint
