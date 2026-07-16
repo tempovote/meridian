@@ -47,7 +47,14 @@ public struct TextBuffer: Sendable {
 
     /// The version stamp of the buffer's current content. Bumped by every
     /// call to `replaceSubrange`; unaffected by copying.
-    public private(set) var version: BufferVersion
+    ///
+    /// Setter is `internal`, not `private`, so same-module extensions —
+    /// e.g. `TransactionApplication.swift`'s `apply(_:)`, which bumps the
+    /// version exactly once after mutating `root` for every edit in a
+    /// transaction — can update it without going through `replaceSubrange`
+    /// (which would bump once per edit). Mirrors `root`'s internal-not-private
+    /// visibility above.
+    public internal(set) var version: BufferVersion
 
     /// Creates an empty buffer at version 0.
     public init() {
