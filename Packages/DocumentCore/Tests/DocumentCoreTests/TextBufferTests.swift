@@ -63,6 +63,15 @@ import Testing
     #expect(buffer.slice(ByteOffset(6) ..< ByteOffset(10)) == "🌍")
 }
 
+@Test func scalarBoundaryOutOfRangeIsFalse() {
+    let buffer = TextBuffer("a😀b")
+    #expect(!buffer.isScalarBoundary(ByteOffset(-1)))
+    #expect(!buffer.isScalarBoundary(ByteOffset(100)))
+    #expect(buffer.isScalarBoundary(ByteOffset(6))) // == utf8Count is a boundary
+    #expect(TextBuffer().isScalarBoundary(ByteOffset(0))) // empty buffer
+    #expect(!TextBuffer().isScalarBoundary(ByteOffset(1)))
+}
+
 @Test func scalarBoundaryQuery() {
     let buffer = TextBuffer("a😀b")
     #expect(buffer.isScalarBoundary(ByteOffset(1)))

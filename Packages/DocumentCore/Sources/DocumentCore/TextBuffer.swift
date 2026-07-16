@@ -92,6 +92,10 @@ public struct TextBuffer: Sendable {
             range.lowerBound.value >= 0 && range.upperBound.value <= utf8Count,
             "slice range out of bounds",
         )
+        precondition(
+            isScalarBoundary(range.lowerBound) && isScalarBoundary(range.upperBound),
+            "slice range must fall on scalar boundaries",
+        )
         let (_, rest) = root.split(at: range.lowerBound.value)
         let (middle, _) = rest.split(at: range.upperBound.value - range.lowerBound.value)
         // Same false positive as `string` above: decoding `[UInt8]`, not `Data`.
@@ -134,10 +138,15 @@ public struct TextBuffer: Sendable {
     /// the buffer, the end of the buffer, or a scalar-leading UTF-8 byte —
     /// never inside a multi-byte scalar's continuation bytes).
     ///
+    /// Total over all inputs: offsets outside `0...utf8Count` return
+    /// `false` rather than trapping, so callers can validate untrusted
+    /// offsets with this method alone.
+    ///
     /// Descends directly to the leaf containing `offset` and tests locally,
     /// in O(log n): it never materializes the buffer's full byte content.
     public func isScalarBoundary(_ offset: ByteOffset) -> Bool {
-        Self.isScalarBoundary(in: root, localOffset: offset.value)
+        guard (0 ... utf8Count).contains(offset.value) else { return false }
+        return Self.isScalarBoundary(in: root, localOffset: offset.value)
     }
 
     private static func isScalarBoundary(in node: Node, localOffset: Int) -> Bool {
