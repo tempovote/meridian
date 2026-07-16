@@ -168,3 +168,41 @@ private func typing(_ buffer: TextBuffer, at offset: Int, _ text: String) -> Edi
     buffer.apply(second)
     #expect(stack.undoCount == 2, "no coalescing across an undo/redo boundary")
 }
+
+@Test func undoDuringOpenGroupClosesGroupSafely() throws {
+    var buffer = TextBuffer("")
+    var stack = UndoStack()
+    stack.beginGroup()
+    let txn = EditTransaction(
+        baseVersion: buffer.version,
+        edits: [Edit(range: ByteOffset(0) ..< ByteOffset(0), replacement: "a")],
+    )
+    stack.record(txn, base: buffer)
+    buffer.apply(txn)
+    let undoResult = stack.undo()
+    let undos = try #require(undoResult)
+    for undo in undos {
+        buffer.apply(undo)
+    }
+    #expect(buffer.string == "")
+    stack.endGroup() // no-op, must not trap
+    #expect(stack.canRedo)
+    // Stack remains fully usable:
+    stack.beginGroup() // must not trap either
+    stack.endGroup()
+    let txn2 = EditTransaction(
+        baseVersion: buffer.version,
+        edits: [Edit(range: ByteOffset(0) ..< ByteOffset(0), replacement: "b")],
+    )
+    stack.record(txn2, base: buffer)
+    buffer.apply(txn2)
+    #expect(stack.undoCount == 1)
+}
+
+@Test func undoOnEmptyOpenGroupReturnsNilAndRecovers() {
+    var stack = UndoStack()
+    stack.beginGroup()
+    #expect(stack.undo() == nil) // nothing recorded; must not return [] or trap
+    stack.endGroup()
+    #expect(!stack.canUndo)
+}

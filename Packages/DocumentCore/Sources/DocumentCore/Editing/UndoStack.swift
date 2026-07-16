@@ -182,12 +182,31 @@ public struct UndoStack: Sendable {
     /// while the group was open, no entry is retained; otherwise the
     /// group's entry is closed (no further coalescing into it).
     ///
-    /// - Precondition: a group is open.
+    /// Unlike `beginGroup()`, this is **not** a strict "a group must be
+    /// open" contract: `undo()`/`redo()` implicitly close an open group
+    /// (invoking undo mid-composite means the composite is over), so by the
+    /// time a caller's `endGroup()` runs, the group it opened may already
+    /// have been closed out from under it. Calling `endGroup()` with no
+    /// group open is therefore a harmless no-op rather than a precondition
+    /// failure — the alternative would let an intervening `undo()` leave
+    /// the stack in a state where the *only* legal next call traps.
     public mutating func endGroup() {
-        precondition(isGroupOpen, "endGroup() called with no group open")
+        guard isGroupOpen else { return }
+        closeOpenGroupIfNeeded()
+    }
+
+    /// If a group is open, closes it: clears `isGroupOpen`, then either
+    /// removes the group's entry (if it never received a `record`, i.e. its
+    /// `steps` is still empty) or marks it closed (so it stops accepting
+    /// more grouped/coalesced steps). Idempotent — a no-op when no group is
+    /// open. Shared by `endGroup()` and by `undo()`/`redo()`, which must
+    /// close any open group before touching `entries`/`redoEntries` (see
+    /// their doc comments).
+    private mutating func closeOpenGroupIfNeeded() {
+        guard isGroupOpen else { return }
         isGroupOpen = false
         guard let topIndex = entries.indices.last, entries[topIndex].isGroup, !entries[topIndex].isClosed else {
-            preconditionFailure("endGroup() found no open group entry")
+            return
         }
         if entries[topIndex].steps.isEmpty {
             entries.removeLast()
@@ -201,9 +220,17 @@ public struct UndoStack: Sendable {
     /// redo, closing it so a subsequent `record` cannot coalesce into it
     /// even if `redo()` restores it later.
     ///
+    /// If a group is currently open (`beginGroup()` without a matching
+    /// `endGroup()` yet), it is implicitly closed first: invoking undo
+    /// mid-composite means the composite is over. An open group with no
+    /// recorded steps is discarded entirely, so undoing with nothing ever
+    /// recorded — inside or outside a group — returns nil rather than an
+    /// empty transaction list.
+    ///
     /// Each returned transaction is rebased to the version the buffer will
     /// hold at the point the caller applies it — see the type header.
     public mutating func undo() -> [EditTransaction]? {
+        closeOpenGroupIfNeeded()
         guard var entry = entries.popLast() else { return nil }
         entry.isClosed = true
         var version = expectedVersion
@@ -222,9 +249,14 @@ public struct UndoStack: Sendable {
     /// The restored entry stays closed, so a subsequent `record` starts a
     /// fresh entry rather than coalescing into it.
     ///
+    /// If a group is currently open, it is implicitly closed first — see
+    /// `undo()`'s doc comment; the same reasoning applies symmetrically
+    /// here.
+    ///
     /// Each returned transaction is rebased to the version the buffer will
     /// hold at the point the caller applies it — see the type header.
     public mutating func redo() -> [EditTransaction]? {
+        closeOpenGroupIfNeeded()
         guard var entry = redoEntries.popLast() else { return nil }
         entry.isClosed = true
         var version = expectedVersion
@@ -256,6 +288,14 @@ public struct UndoStack: Sendable {
 
     /// Total byte cost currently retained across all undoable entries (for
     /// tests/diagnostics and for `byteBudget` eviction).
+    ///
+    /// Covers `entries` (undo history) only — `redoEntries` are **not**
+    /// counted. `evict()` only ever drops from `entries`, so budgeting
+    /// against a total that includes entries it can't touch would make the
+    /// budget unenforceable; redo history doesn't need its own budget
+    /// because it's inherently bounded by how many times the user has
+    /// undone (never larger than undo depth ever was) and is discarded
+    /// wholesale on the next `record()`.
     public var retainedCost: Int {
         entries.reduce(0) { total, entry in
             total + entry.steps.reduce(0) { $0 + $1.cost }
