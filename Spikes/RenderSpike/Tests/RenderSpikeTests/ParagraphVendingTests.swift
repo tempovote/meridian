@@ -102,3 +102,39 @@ import Testing
     }
     #expect(vended == [""], "empty buffer must vend exactly one paragraph whose string is empty")
 }
+
+/// After scripted edits through applyEdit, vended paragraphs must still
+/// match the mutated buffer exactly (reference model: apply the same edits
+/// to a plain String).
+@MainActor
+@Test func vendingStaysCorrectAfterEdits() throws {
+    var reference = "alpha\nbeta\ngamma\ndelta\nepsilon\n"
+    let manager = RopeContentManager(buffer: TextBuffer(reference))
+
+    // (byte range in CURRENT content, replacement) — applied sequentially.
+    let edits: [(Range<Int>, String)] = [
+        (6 ..< 10, "BETA"),          // replace "beta"
+        (0 ..< 0, "zero\n"),         // insert new first line
+        (5 ..< 11, ""),              // delete "alpha\n"
+        (5 ..< 5, "x😀y"),           // insert emoji mid-content
+    ]
+    for (range, replacement) in edits {
+        manager.applyEdit(
+            replacing: ByteOffset(range.lowerBound) ..< ByteOffset(range.upperBound),
+            with: replacement,
+        )
+        let start = reference.utf8.index(reference.startIndex, offsetBy: range.lowerBound)
+        let end = reference.utf8.index(reference.startIndex, offsetBy: range.upperBound)
+        reference.replaceSubrange(start ..< end, with: replacement)
+        #expect(manager.buffer.string == reference)
+    }
+
+    // Re-vend everything and compare per line.
+    var vended = ""
+    _ = manager.enumerateTextElements(from: manager.documentRange.location, options: []) { element in
+        guard let paragraph = element as? NSTextParagraph else { return false }
+        vended += paragraph.attributedString.string
+        return true
+    }
+    #expect(vended == reference, "full re-vend must equal reference after edits")
+}

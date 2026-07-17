@@ -178,8 +178,86 @@ final class RopeContentManager: NSTextContentManager {
         return buffer.utf16Offset(of: b.byte).value - buffer.utf16Offset(of: a.byte).value
     }
 
+    /// Single edit entry point: applies the replacement to the rope,
+    /// swaps the snapshot, and notifies layout managers so only affected
+    /// paragraphs re-lay out. Interactive typing (Task 4) and the typing
+    /// benchmark (Task 5) both call this.
+    ///
+    /// DEVIATION (spike finding): this is a NEW plain-Swift method, not an
+    /// override of an unisolated ObjC protocol member (unlike every method
+    /// above), so the class's `@MainActor` isolation applies to it directly
+    /// — no `nonisolated`/`assumeIsolated` bridging needed. It still calls
+    /// `Self.assertMainThreadContract()` for symmetry with the override
+    /// entry points and because `@MainActor` isolation is a compile-time
+    /// guarantee only for callers that are themselves actor-isolated;
+    /// `replaceContents` below calls in via `MainActor.assumeIsolated`
+    /// from a `nonisolated` context, so the runtime tripwire still earns
+    /// its keep there.
+    func applyEdit(replacing range: Range<ByteOffset>, with text: String) {
+        Self.assertMainThreadContract()
+        performEditingTransaction {
+            var next = buffer
+            next.replaceSubrange(range, with: text)
+            buffer = next
+        }
+        // Invalidate from the edited line's start — paragraph boundaries
+        // above the edit are unaffected (a paragraph = one line).
+        // SPIKE NOTE: with zero attached layout managers (headless tests),
+        // this loop never runs and invalidateLayout is a no-op — the
+        // correctness of re-layout on an actual on-screen layout manager
+        // is validated in Tasks 4-5, not here.
+        let editedLine = buffer.linePosition(of: range.lowerBound).line
+        let lineStart = buffer.byteRange(ofLine: editedLine).lowerBound
+        for layoutManager in textLayoutManagers {
+            if let invalid = NSTextRange(
+                location: RopeLocation(lineStart),
+                end: documentRange.endLocation,
+            ) {
+                layoutManager.invalidateLayout(for: invalid)
+            }
+        }
+    }
+
+    // DEVIATION (spike finding): `replaceContents(in:with:)` is, like the
+    // other NSTextElementProvider overrides above, `nonisolated` regardless
+    // of the class's `@MainActor` annotation. `applyEdit` above is
+    // `@MainActor`-isolated (it is a plain method, not an override), so it
+    // cannot be called directly from here. `NSTextRange`/`NSTextLocation`
+    // are non-Sendable, which rules out hopping actors with those values
+    // in flight — so this override extracts only `Sendable` primitives
+    // (`ByteOffset`, i.e. `Int`, and `String`) from the ranges/elements
+    // *before* entering the MainActor region, then uses
+    // `MainActor.assumeIsolated` to call `applyEdit` with only those
+    // Sendable values crossing the isolation boundary. This is sound
+    // under the same single-threaded-TextKit-contract argument documented
+    // at the type level: `replaceContents` is invoked synchronously on
+    // the thread that owns the layout manager (main, for app UI), so by
+    // the time this runs we are in fact already on the main thread even
+    // though the compiler cannot see that from `nonisolated` alone.
     override func replaceContents(in range: NSTextRange, with textElements: [NSTextElement]?) {
-        // Read-only until Task 3.
-        preconditionFailure("editing arrives in Task 3")
+        Self.assertMainThreadContract()
+        guard let start = range.location as? RopeLocation,
+              let end = range.endLocation as? RopeLocation else {
+            preconditionFailure("foreign range in replaceContents")
+        }
+        let replacement = (textElements ?? []).compactMap { element -> String? in
+            (element as? NSTextParagraph)?.attributedString.string
+        }.joined()
+        let startByte = start.byte
+        let endByte = end.byte
+        // `self` (a non-Sendable class reference) cannot be captured
+        // directly in the `@MainActor` closure below: even though
+        // `assumeIsolated` runs synchronously on the calling thread,
+        // Swift 6 still treats crossing from this `nonisolated` context
+        // into a `@MainActor` closure as "sending self", which is
+        // rejected because `RopeContentManager` isn't `Sendable`. Bind an
+        // explicitly-unsafe local alias to cross that boundary — sound
+        // for the same reason `nonisolated(unsafe) buffer` is sound: no
+        // concurrent access is actually possible under TextKit's
+        // single-thread calling contract (see the type-level DEVIATION).
+        nonisolated(unsafe) let unsafeSelf = self
+        MainActor.assumeIsolated {
+            unsafeSelf.applyEdit(replacing: startByte ..< endByte, with: replacement)
+        }
     }
 }
