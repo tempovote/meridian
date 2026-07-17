@@ -170,10 +170,34 @@ final class RopeContentManager: NSTextContentManager {
         return RopeLocation(buffer.byteOffset(of: UTF16Offset(utf16)))
     }
 
+    // DEVIATION (spike finding, Task 4 — first live NSTextLayoutManager
+    // exercise): headless enumeration (Task 2-3 tests) never attaches a real
+    // layout manager, so this path was never exercised against actual
+    // on-screen layout until now. With a real NSTextLayoutManager attached,
+    // NSTextLayoutFragment's internal layout (`-[NSTextLayoutFragment
+    // _layout]`, called from NSTextViewportLayoutController.layoutViewport)
+    // calls `offset(from:to:)` with literal Objective-C `nil` for BOTH
+    // parameters in at least one internal call path, despite
+    // NSTextContentManager.h declaring both nonnull. Confirmed via raw
+    // pointer diagnostics (`unsafeBitCast` to `UnsafeRawPointer?`, avoiding
+    // `type(of:)`/`as?` machinery that itself crashes on a nil ObjC
+    // existential with EXC_BAD_ACCESS at 0x0): two calls during the same
+    // layout pass carried genuine RopeLocation instances, one carried
+    // rawFrom=nil rawTo=nil. The original brief code (`preconditionFailure`
+    // on any non-RopeLocation) traps hard on this — a SIGTRAP crash on the
+    // very first rendered frame, blocking Step 5 entirely. Fix: treat any
+    // non-RopeLocation location (including nil) as coincident and return 0
+    // instead of trapping, so layout can proceed. Open question for
+    // ADR 0009: whether this nil/nil call represents expected AppKit
+    // behavior (e.g. a defensive length check against an empty/degenerate
+    // range) that any conforming NSTextContentManager must tolerate, or a
+    // symptom of this implementation vending element/location identity
+    // TextKit doesn't expect across relayout passes — not resolved by this
+    // spike; flagged for follow-up before this shape ships to EditorUI.
     override func offset(from: NSTextLocation, to: NSTextLocation) -> Int {
         Self.assertMainThreadContract()
         guard let a = from as? RopeLocation, let b = to as? RopeLocation else {
-            preconditionFailure("foreign locations in offset(from:to:)")
+            return 0
         }
         return buffer.utf16Offset(of: b.byte).value - buffer.utf16Offset(of: a.byte).value
     }

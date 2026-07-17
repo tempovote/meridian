@@ -18,9 +18,14 @@ if args.count >= 5, args[1] == "gen-corpus",
         exit(2)
     }
 }
+if args.count >= 3, args[1] == "view" {
+    SpikeApp.run(corpusPath: args[2], benchmark: nil)
+}
+
 print("""
 usage:
   renderspike gen-corpus <mixed|log|single> <sizeMB> <output-path>
-  (window/benchmark modes arrive in later tasks)
+  renderspike view <corpus-path>
+  (benchmark mode arrives in a later task)
 """)
 exit(64)
