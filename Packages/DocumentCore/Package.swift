@@ -16,5 +16,6 @@ let package = Package(
             dependencies: [.product(name: "Collections", package: "swift-collections")],
         ),
         .testTarget(name: "DocumentCoreTests", dependencies: ["DocumentCore"]),
+        .testTarget(name: "PerformanceTests", dependencies: ["DocumentCore"]),
     ],
 )
