@@ -13,56 +13,29 @@ enum FuzzConfig {
     }
 }
 
-/// Walks the rope and verifies the documented B-tree invariants: uniform
-/// leaf depth; inner fanout within 1...maxFanout, and >= minFanout for
-/// inner nodes below the root (the root is exempt from `minFanout` — see
-/// `Node.build`'s doc comment and `RopeOpsTests.assertMinFanout`, which
-/// documents the same root exemption). Returns a violation description, or
-/// nil.
+/// Verifies the documented B-tree invariants by delegating to
+/// `Node.checkInvariants()` (per-node summary == sum of children, fanout
+/// within 1...maxFanout, uniform leaf depth via the height field, leaf byte
+/// count <= `Leaf.maxBytes`, leaf not starting mid-scalar) and adding the one
+/// check `checkInvariants()` doesn't cover: inner fanout >= minFanout for
+/// nodes below the root (the root is exempt — see `Node.build`'s doc comment
+/// and `RopeOpsTests.assertMinFanout`, which documents the same exemption).
+/// Returns a combined violation description, or nil if the tree is healthy.
 func validateTree(_ root: Node) -> String? {
-    // `Result`'s `Failure` must be `Error`; `String` isn't, so violations
-    // are wrapped in this trivial carrier.
-    struct Violation: Error { let message: String }
+    let violations = root.checkInvariants() + minFanoutViolations(root, isRoot: true)
+    return violations.isEmpty ? nil : violations.joined(separator: "; ")
+}
 
-    func walk(_ node: Node, depth: Int, isRoot: Bool) -> Result<Int, Violation> {
-        switch node {
-        case .leaf:
-            return .success(depth)
-        case let .inner(children, _, _):
-            if children.isEmpty || children.count > Node.maxFanout {
-                return .failure(Violation(
-                    message: "inner fanout \(children.count) outside 1...\(Node.maxFanout) at depth \(depth)",
-                ))
-            }
-            if !isRoot, children.count < Node.minFanout {
-                return .failure(Violation(
-                    message: "non-root inner fanout \(children.count) below \(Node.minFanout) at depth \(depth)",
-                ))
-            }
-            return walkChildren(children, depth: depth)
-        }
+/// Recursively collects non-root inner-fanout-below-`minFanout` violations;
+/// the root is exempt (see `validateTree`'s doc comment).
+private func minFanoutViolations(_ node: Node, isRoot: Bool) -> [String] {
+    guard case let .inner(children, _, _) = node else { return [] }
+    var violations: [String] = []
+    if !isRoot, children.count < Node.minFanout {
+        violations.append("non-root inner fanout \(children.count) below \(Node.minFanout)")
     }
-
-    func walkChildren(_ children: [Node], depth: Int) -> Result<Int, Violation> {
-        var leafDepth: Int?
-        for child in children {
-            switch walk(child, depth: depth + 1, isRoot: false) {
-            case let .failure(violation):
-                return .failure(violation)
-            case let .success(childLeafDepth):
-                if let expected = leafDepth, expected != childLeafDepth {
-                    return .failure(Violation(message: "leaf depth mismatch \(expected) vs \(childLeafDepth)"))
-                }
-                leafDepth = childLeafDepth
-            }
-        }
-        return .success(leafDepth ?? depth)
-    }
-
-    switch walk(root, depth: 0, isRoot: true) {
-    case let .failure(violation): return violation.message
-    case .success: return nil
-    }
+    violations.append(contentsOf: children.flatMap { minFanoutViolations($0, isRoot: false) })
+    return violations
 }
 
 /// Drives random scalar-boundary edits against a `TextBuffer` and a
