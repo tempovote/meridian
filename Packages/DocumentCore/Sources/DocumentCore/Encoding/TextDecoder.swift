@@ -63,14 +63,8 @@ public enum TextDecoder {
     }
 
     /// Decodes bytes already known to be strict, well-formed UTF-8.
-    ///
-    /// `String(bytes:encoding:)` is used instead of the equivalent
-    /// `String(decoding:as:)` because SwiftLint's `optional_data_string_conversion`
-    /// matches on that call's syntax alone, with no way to tell an `ArraySlice<UInt8>`
-    /// source apart from `Data`; the fallback empty string is unreachable here since
-    /// the caller has already validated `bytes` as strict UTF-8.
     private static func strictUTF8String(_ bytes: ArraySlice<UInt8>) -> String {
-        String(bytes: bytes, encoding: .utf8) ?? ""
+        Transcoder.wellFormedUTF8String(bytes)
     }
 
     /// Decodes bytes that may contain ill-formed UTF-8, substituting U+FFFD

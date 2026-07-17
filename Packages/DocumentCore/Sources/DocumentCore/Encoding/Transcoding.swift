@@ -61,6 +61,24 @@ public enum Transcoder {
         return finish(units, UTF32.self, hadRepairs: repairs)
     }
 
+    /// Converts well-formed UTF-8 bytes to `String`. Traps if `bytes` is
+    /// not valid UTF-8 — every call site in this module guarantees
+    /// well-formedness before calling this (either via the standard
+    /// library's `transcode`, which always emits well-formed UTF-8, or via
+    /// prior explicit validation), so this is a loud signal of a real bug
+    /// rather than a silent empty-string fallback.
+    ///
+    /// `String(bytes:encoding:)` is used instead of the equivalent
+    /// `String(decoding:as:)` because SwiftLint's
+    /// `optional_data_string_conversion` matches on that call's syntax
+    /// alone, with no way to tell a raw byte source apart from `Data`.
+    static func wellFormedUTF8String(_ bytes: some Sequence<UInt8>) -> String {
+        guard let string = String(bytes: bytes, encoding: .utf8) else {
+            preconditionFailure("bytes were not valid UTF-8, but the caller guaranteed well-formedness")
+        }
+        return string
+    }
+
     /// Runs the standard-library `transcode` from `codec` to UTF-8, folding
     /// its own U+FFFD substitution flag together with `hadRepairs` (repairs
     /// already detected while assembling `units`, e.g. truncated trailing
@@ -69,18 +87,12 @@ public enum Transcoder {
         _ units: [Codec.CodeUnit], _ codec: Codec.Type, hadRepairs: Bool,
     ) -> TranscodingResult {
         var utf8Bytes = [UInt8]()
-        utf8Bytes.reserveCapacity(units.count * 3)
+        utf8Bytes.reserveCapacity(units.count * 4)
         let hadErrors = transcode(
             units.makeIterator(), from: codec, to: UTF8.self, stoppingOnError: false,
         ) { utf8Bytes.append($0) }
-        // `transcode` above always emits well-formed UTF-8 (ill-formed input
-        // units are substituted with U+FFFD before encoding), so this never
-        // fails; `String(bytes:encoding:)` is used instead of the equivalent
-        // `String(decoding:as:)` because SwiftLint's `optional_data_string_conversion`
-        // matches on that call's syntax alone, with no way to tell a `[UInt8]` source
-        // apart from `Data`.
         return TranscodingResult(
-            text: String(bytes: utf8Bytes, encoding: .utf8) ?? "",
+            text: wellFormedUTF8String(utf8Bytes),
             repairsMade: hadRepairs || hadErrors,
         )
     }
