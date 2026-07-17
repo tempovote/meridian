@@ -49,6 +49,10 @@ public struct Edit: Equatable, Sendable {
         self.replacement = TextBuffer(replacement)
     }
 
+    /// Compares two edits by `range` and by `replacement`'s content — an
+    /// O(n) comparison in the replacement's byte length (see the type's
+    /// DocC for why `Edit` opts into this cost while `TextBuffer` itself
+    /// does not).
     public static func == (lhs: Edit, rhs: Edit) -> Bool {
         lhs.range == rhs.range && lhs.replacement.contentEquals(rhs.replacement)
     }

@@ -2,8 +2,11 @@ import Foundation
 
 /// A line-break style. Raw value is the break's literal characters.
 public enum LineEnding: String, Hashable, Sendable, CaseIterable {
+    /// Line feed (`\n`) — Unix/macOS convention.
     case lf = "\n"
+    /// Carriage return + line feed (`\r\n`) — Windows convention.
     case crlf = "\r\n"
+    /// Carriage return (`\r`) — classic Mac OS convention.
     case cr = "\r"
 }
 
