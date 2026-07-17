@@ -65,3 +65,40 @@ import Testing
         #expect(manager.offset(from: start, to: moved) == step)
     }
 }
+
+/// Regression: forward enumeration starting at `documentRange.endLocation`
+/// on a non-empty buffer must vend nothing. Before the fix, the clamp in
+/// `enumerateTextElements` re-derived the last line from the clamped
+/// (last valid) byte and re-vended it instead of recognizing "start is at
+/// or past the end" as exhausted.
+@MainActor
+@Test func forwardEnumerationFromEndVendsNothing() throws {
+    let buffer = TextBuffer("line one\nline two\nline three")
+    let manager = RopeContentManager(buffer: buffer)
+    var vended = 0
+    _ = manager.enumerateTextElements(from: manager.documentRange.endLocation, options: []) { _ in
+        vended += 1
+        return true
+    }
+    #expect(vended == 0, "enumerating from documentRange.endLocation must vend nothing")
+}
+
+/// Regression: an empty buffer (`TextBuffer("")`, `lineCount == 1`) must
+/// still vend exactly one paragraph, per the class's "one paragraph per
+/// line" contract — a bare `guard buffer.utf8Count > 0` used to short-circuit
+/// and vend zero paragraphs instead.
+@MainActor
+@Test func emptyBufferVendsOneEmptyParagraph() throws {
+    let buffer = TextBuffer("")
+    let manager = RopeContentManager(buffer: buffer)
+    var vended: [String] = []
+    _ = manager.enumerateTextElements(from: manager.documentRange.location, options: []) { element in
+        guard let paragraph = element as? NSTextParagraph else {
+            Issue.record("vended element is not NSTextParagraph")
+            return false
+        }
+        vended.append(paragraph.attributedString.string)
+        return true
+    }
+    #expect(vended == [""], "empty buffer must vend exactly one paragraph whose string is empty")
+}

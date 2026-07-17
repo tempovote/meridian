@@ -8,44 +8,37 @@ import DocumentCore
 /// SPIKE CONTRACT: every place the real TextKit 2 API forces a deviation
 /// from this starting shape is a finding for ADR 0009. Log it.
 ///
-/// DEVIATION (spike finding, the single biggest one in this file — see
-/// the Task 2 report for the full trace): the brief specified this class
-/// as `@MainActor`. That does not work. Every `NSTextElementProvider`
-/// requirement being overridden here (`documentRange`, `enumerateTextElements`,
-/// `location(_:offsetBy:)`, `offset(from:to:)`, `replaceContents`) comes
-/// from an Objective-C protocol/superclass with no actor-isolation
-/// annotation, so Swift keeps each override `nonisolated` regardless of
-/// the class-level `@MainActor` — a class annotation does not propagate
-/// onto overrides of an unisolated superclass member. Bridging those
-/// `nonisolated` overrides back to the isolated `buffer` property via
-/// `MainActor.assumeIsolated` compiles for `Sendable`-returning closures,
-/// but two more walls appear immediately: (1) `assumeIsolated`'s closure
-/// result type must be `Sendable`, and `NSTextRange`/`NSTextLocation` are
-/// not (`NSTextRange`'s Sendable conformance is explicitly marked
-/// unavailable), so the closure can only extract Sendable primitives, not
-/// build TextKit objects inline; (2) even after fixing that, capturing
-/// `self` (a non-Sendable `NSObject` subclass) into the `@MainActor`
-/// closure trips Swift 6's region-based "sending 'self' risks causing
-/// data races" check, which `@unchecked Sendable` on the class did *not*
-/// silence — the region checker flags it regardless of the Sendable
-/// conformance actually declared.
-///
-/// None of this reflects a real data race: TextKit 2 invokes
+/// DEVIATION (spike finding — see the Task 2 report for the full trace,
+/// revised after code review): the class is `@MainActor`, as the brief
+/// specified, but that annotation cannot be enforced at the
+/// `NSTextElementProvider` override points. Every requirement overridden
+/// here (`documentRange`, `enumerateTextElements`, `location(_:offsetBy:)`,
+/// `offset(from:to:)`, `replaceContents`) comes from an Objective-C
+/// protocol/superclass with no actor-isolation annotation, so Swift keeps
+/// each override `nonisolated` regardless of the class-level `@MainActor`
+/// — a class annotation does not propagate onto overrides of an
+/// unisolated superclass member — and `NSTextRange`/`NSTextLocation` are
+/// non-`Sendable` (`NSTextRange`'s `Sendable` conformance is explicitly
+/// marked unavailable), which rules out bridging those overrides back to
+/// actor isolation via `MainActor.assumeIsolated`. `@MainActor` still
+/// governs any future non-override methods added to this class (e.g.
+/// Task 3's mutation entry points, if they aren't themselves protocol
+/// overrides). The `buffer` property is `nonisolated(unsafe)` so the
+/// `nonisolated` overrides can read it directly; the private plain-Swift
+/// helpers they call (`paragraphByteRange(forLine:)`, `paragraph(forLine:)`,
+/// `assertMainThreadContract()`) are marked `nonisolated` to match. None
+/// of this reflects a real data race: TextKit 2 invokes
 /// `NSTextElementProvider` synchronously, on whatever thread owns the
 /// associated `NSTextLayoutManager` (the main thread, for app UI), and
 /// this spike's own tests call every method directly from `@MainActor`
-/// test functions. The type system just has no way to express "isolated
-/// to whatever thread happens to be calling me, consistently" for an
-/// `NSObject` subclass satisfying an un-isolated ObjC protocol — so
-/// fighting it with `@MainActor` + `assumeIsolated` adds real complexity
-/// for a static guarantee it never actually delivers. The class is left
-/// **not** globally actor-isolated; thread-safety is the documented
-/// calling-convention contract TextKit itself relies on, backed by a
-/// `Thread.isMainThread` assertion in every mutating/reading entry point
-/// as a cheap runtime tripwire. Task 3's `applyEdit` should keep this
-/// same pattern rather than reintroducing `@MainActor`.
+/// test functions. Thread-safety is the documented calling-convention
+/// contract TextKit itself relies on, backed by a `Thread.isMainThread`
+/// assertion in every mutating/reading entry point as a cheap runtime
+/// tripwire — note that assertion strips out of release builds, so it is
+/// a debug-time guard, not a production safety net.
+@MainActor
 final class RopeContentManager: NSTextContentManager {
-    private(set) var buffer: TextBuffer
+    nonisolated(unsafe) private(set) var buffer: TextBuffer
 
     /// Monospace rendering attributes shared by every paragraph.
     ///
@@ -75,7 +68,7 @@ final class RopeContentManager: NSTextContentManager {
     /// NSTextElementProvider entry point is expected to run on the same
     /// thread TextKit itself uses for layout (main, for app UI). This
     /// traps loudly instead of silently racing if that's ever violated.
-    private static func assertMainThreadContract() {
+    private nonisolated static func assertMainThreadContract() {
         assert(Thread.isMainThread, "RopeContentManager accessed off the main thread — TextKit's own single-thread contract was violated")
     }
 
@@ -94,13 +87,13 @@ final class RopeContentManager: NSTextContentManager {
 
     /// Element range for the line containing `byte` (or starting at it):
     /// line content plus trailing newline; the final line has none.
-    private func paragraphByteRange(forLine line: Int) -> Range<ByteOffset> {
+    private nonisolated func paragraphByteRange(forLine line: Int) -> Range<ByteOffset> {
         let content = buffer.byteRange(ofLine: line)
         let end = min(content.upperBound.value + 1, buffer.utf8Count)
         return content.lowerBound ..< ByteOffset(end)
     }
 
-    private func paragraph(forLine line: Int) -> NSTextParagraph {
+    private nonisolated func paragraph(forLine line: Int) -> NSTextParagraph {
         let range = paragraphByteRange(forLine: line)
         let content = buffer.slice(range.lowerBound ..< range.upperBound)
         let attributed = NSAttributedString(string: content, attributes: Self.attributes)
@@ -123,7 +116,18 @@ final class RopeContentManager: NSTextContentManager {
             preconditionFailure("foreign location \(String(describing: textLocation))")
         }
         let reverse = options.contains(.reverse)
-        guard buffer.utf8Count > 0 else { return textLocation }
+
+        // Forward enumeration starting at or beyond the end of a
+        // non-empty buffer has nothing left to vend — return immediately
+        // rather than falling into the clamp below, which would
+        // otherwise re-derive a line from the clamped (last valid) byte
+        // and re-vend it. On an empty buffer, start == end == 0 is also
+        // the start of its one empty paragraph (see below), so this must
+        // not fire there — the `buffer.utf8Count > 0` guard keeps that
+        // case falling through to the loop.
+        if !reverse, buffer.utf8Count > 0, startByte.value >= buffer.utf8Count {
+            return textLocation
+        }
 
         // Clamp: enumeration may start at documentRange.end.
         let clamped = min(startByte.value, max(buffer.utf8Count - 1, 0))
