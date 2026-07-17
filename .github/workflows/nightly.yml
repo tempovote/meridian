@@ -1,0 +1,55 @@
+name: Nightly
+
+on:
+  schedule:
+    - cron: "0 3 * * *"
+  workflow_dispatch:
+    inputs:
+      fuzz_ops:
+        description: "Fuzz operation count (10000000 for the M1 exit review)"
+        default: "1000000"
+      perf_scale:
+        description: "Benchmark workload/budget multiplier"
+        default: "10"
+
+jobs:
+  fuzz:
+    runs-on: macos-15
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fuzz (buffer + undo)
+        run: |
+          SEED=$(od -An -N8 -tu8 /dev/urandom | tr -d ' ')
+          echo "MERIDIAN_FUZZ_SEED=${SEED} ops=${{ inputs.fuzz_ops || '1000000' }} (repro: export both env vars locally)"
+          export MERIDIAN_FUZZ_SEED="${SEED}"
+          export MERIDIAN_FUZZ_OPS="${{ inputs.fuzz_ops || '1000000' }}"
+          swift test --package-path Packages/DocumentCore --filter 'bufferFuzz|undoFuzz'
+
+  corpus:
+    runs-on: macos-15
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - name: Unicode corpus at full scale (100 MB single line)
+        run: |
+          export MERIDIAN_CORPUS_SCALE=full
+          swift test --package-path Packages/DocumentCore --filter UnicodeCorpus
+
+  perf:
+    runs-on: macos-15
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - name: Benchmarks at scale (release)
+        run: |
+          export MERIDIAN_PERF_SCALE="${{ inputs.perf_scale || '10' }}"
+          swift test -c release --package-path Packages/DocumentCore --filter RopeBenchmarks
+
+  tsan:
+    runs-on: macos-15
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - name: Thread Sanitizer pass (default scales)
+        run: swift test --package-path Packages/DocumentCore --sanitize=thread

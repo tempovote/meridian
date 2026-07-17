@@ -79,3 +79,18 @@ jobs:
         run: >
           xcodebuild build -project Meridian.xcodeproj -scheme Meridian
           -destination 'platform=macOS' CODE_SIGNING_ALLOWED=NO
+
+  perf-smoke:
+    runs-on: macos-15
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Cache SPM
+        uses: actions/cache@v4
+        with:
+          path: Packages/DocumentCore/.build
+          key: spm-${{ runner.os }}-DocumentCore-release-${{ hashFiles('Packages/DocumentCore/Package.swift', 'Packages/DocumentCore/Package.resolved') }}
+          restore-keys: |
+            spm-${{ runner.os }}-DocumentCore-release-
+      - name: Release perf smoke (RopeBenchmarks, default scale)
+        run: swift test -c release --package-path Packages/DocumentCore --filter RopeBenchmarks
