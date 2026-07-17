@@ -16,6 +16,19 @@ private struct GroupState {
     var pushed = false
 }
 
+/// Content size above which `recordRandomFuzzEdit` switches to delete-biased
+/// edits, mirroring `BufferFuzzEngine.sizeCap`'s role: unlike that engine,
+/// this fuzz has no built-in delete bias, and `fuzzCorpus` includes a
+/// 3000-byte snippet, so uncapped growth makes every op's `buffer.string`
+/// materialization (and the underlying rope work) increasingly expensive —
+/// this cap keeps wall time roughly linear in operation count instead of
+/// superlinear. 64 KiB matches `BufferFuzzEngine`'s own choice of "small
+/// enough to stay cheap, large enough to still exercise multi-leaf ropes".
+private let undoFuzzSizeCap = 64 * 1024
+
+/// Maximum span of a size-cap delete edit, in bytes.
+private let undoFuzzMaxDeleteSpan = 512
+
 /// Records a random edit transaction against `buffer`/`stack`: applies the
 /// transaction to both, and — mirroring `UndoStack.record`'s own
 /// group/coalescing rule — pushes the pre-apply content onto the model's
@@ -23,7 +36,18 @@ private struct GroupState {
 /// A fresh edit always invalidates redo. Factored out of `undoFuzz`'s body
 /// (rather than inlined as the brief specifies) purely to keep the enclosing
 /// test function's cyclomatic complexity under the repo's SwiftLint
-/// threshold; the branch logic and RNG call order are unchanged.
+/// threshold; the branch logic is otherwise unchanged from the brief.
+///
+/// Above `undoFuzzSizeCap`, the edit is forced delete-biased (a random
+/// scalar-boundary range up to `undoFuzzMaxDeleteSpan` bytes, replaced with
+/// empty content) instead of the normal insert/replace-with-corpus-snippet,
+/// to keep the buffer's content size — and thus each op's `buffer.string`
+/// materialization cost — bounded. This skips the corpus-index RNG draw
+/// while over the cap (there's no snippet to pick), so the exact RNG draw
+/// sequence differs from an uncapped run once the cap is first reached; the
+/// `at`-boundary draw itself is always made first, uncapped or not, so
+/// sub-cap runs (including the whole small-budget/8 KiB case, which evicts
+/// long before content could reach 64 KiB) are byte-for-byte unaffected.
 private func recordRandomFuzzEdit(
     stack: inout UndoStack,
     buffer: inout TextBuffer,
@@ -33,12 +57,21 @@ private func recordRandomFuzzEdit(
 ) {
     let bytes = Array(buffer.string.utf8)
     let at = randomScalarBoundary(in: bytes, using: &rng)
-    let upper = scalarBoundary(in: bytes, notAfter: min(at + 32, bytes.count))
-    let snippet = fuzzCorpus[Int.random(in: 0 ..< fuzzCorpus.count, using: &rng)]
-    let txn = EditTransaction(
-        baseVersion: buffer.version,
-        edits: [Edit(range: ByteOffset(at) ..< ByteOffset(max(at, upper)), replacement: snippet)],
-    )
+    let txn: EditTransaction
+    if bytes.count > undoFuzzSizeCap {
+        let upper = scalarBoundary(in: bytes, notAfter: min(at + undoFuzzMaxDeleteSpan, bytes.count))
+        txn = EditTransaction(
+            baseVersion: buffer.version,
+            edits: [Edit(range: ByteOffset(at) ..< ByteOffset(max(at, upper)), replacement: "")],
+        )
+    } else {
+        let upper = scalarBoundary(in: bytes, notAfter: min(at + 32, bytes.count))
+        let snippet = fuzzCorpus[Int.random(in: 0 ..< fuzzCorpus.count, using: &rng)]
+        txn = EditTransaction(
+            baseVersion: buffer.version,
+            edits: [Edit(range: ByteOffset(at) ..< ByteOffset(max(at, upper)), replacement: snippet)],
+        )
+    }
     let before = buffer.string
     stack.record(txn, base: buffer)
     buffer.apply(txn)
