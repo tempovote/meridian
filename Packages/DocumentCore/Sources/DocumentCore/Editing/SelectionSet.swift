@@ -3,7 +3,12 @@
 public struct SelectionSet: Hashable, Sendable {
     /// The selection ranges, in ascending order and pairwise non-overlapping.
     /// Adjacent ranges may touch (one's `upperBound` equals the next's
-    /// `lowerBound`).
+    /// `lowerBound`) — this includes two zero-width ranges (carets) at the
+    /// same offset, since an empty range's `lowerBound` and `upperBound`
+    /// are equal: `init(ranges:)` permits duplicate carets at the same
+    /// position by design. Callers that need distinct caret positions
+    /// (e.g. a multi-cursor editing feature) must deduplicate before
+    /// constructing a `SelectionSet`.
     public var ranges: [Range<ByteOffset>]
 
     /// Creates a selection set from `ranges`.

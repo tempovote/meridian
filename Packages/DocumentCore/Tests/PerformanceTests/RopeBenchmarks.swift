@@ -46,6 +46,13 @@ struct RopeBenchmarks {
             positions.append(Int.random(in: 0 ... buffer.utf8Count, using: &rng))
         }
         var cursor = 0
+        // `buffer` keeps growing across all sample runs (each run inserts
+        // into whatever the previous run left behind), so `median` mixes
+        // measurements taken at different buffer sizes rather than
+        // measuring a single stable operation cost. That's fine for this
+        // benchmark's purpose — an order-of-magnitude regression tripwire,
+        // not a precise cost measurement — but don't read the number as
+        // "the cost of one random insert."
         let median = medianDuration {
             for _ in 0 ..< (lineCount * scale) {
                 let at = min(positions[cursor % positions.count], buffer.utf8Count)
