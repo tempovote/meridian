@@ -31,11 +31,25 @@ if args.count >= 3, args[1] == "benchmark" {
     }
     SpikeApp.run(corpusPath: args[2], benchmark: plan)
 }
+// EXPERIMENT 1 (control group, task-5-report.md "## Differentiation
+// experiments"): scroll-only benchmark on Apple's own NSTextContentStorage,
+// to tell whether Task 5's scroll crash implicates RopeContentManager's
+// custom NSTextLocation or TextKit 2 itself. Temporary mode — see
+// ControlBenchmark.swift.
+if args.count >= 3, args[1] == "benchmark-control" {
+    var velocity = 8.0
+    if let velocityArg = args.first(where: { $0.hasPrefix("--scroll-velocity=") }),
+       let value = Double(velocityArg.dropFirst("--scroll-velocity=".count)) {
+        velocity = value
+    }
+    ControlSpikeApp.run(corpusPath: args[2], scrollVelocityMultiplier: velocity)
+}
 
 print("""
 usage:
   renderspike gen-corpus <mixed|log|single> <sizeMB> <output-path>
   renderspike view <corpus-path>
   renderspike benchmark <corpus-path> [--edit-only|--scroll-only] [--scroll-velocity=<viewport-heights/sec>]
+  renderspike benchmark-control <corpus-path> [--scroll-velocity=<viewport-heights/sec>]  (EXPERIMENT: NSTextContentStorage control group)
 """)
 exit(64)
