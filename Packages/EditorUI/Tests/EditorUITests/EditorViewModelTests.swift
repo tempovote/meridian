@@ -115,4 +115,23 @@ struct EditorViewModelTests {
         vm.undo()
         #expect(vm.buffer.string == "x")
     }
+
+    @Test func canUndoObservationFiresOnEdit() {
+        let engine = MockLayoutEngine()
+        let vm = EditorViewModel(buffer: TextBuffer(""), engine: engine)
+        final class ObservationState: @unchecked Sendable { var fired = false }
+        let obsState = ObservationState()
+        // Track observation of canUndo across the edit.
+        let _ = withObservationTracking {
+            _ = vm.canUndo
+        } onChange: {
+            obsState.fired = true
+        }
+        // Simulate a user edit, which should update canUndo via undoStack
+        _ = engine.simulateUserEdit(
+            range: ByteOffset(0) ..< ByteOffset(0), replacement: "x", base: vm.buffer
+        )
+        #expect(obsState.fired)
+        #expect(vm.canUndo)
+    }
 }

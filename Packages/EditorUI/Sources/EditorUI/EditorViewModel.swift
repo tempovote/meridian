@@ -15,9 +15,18 @@ public final class EditorViewModel {
     /// Fired when a NEW undo entry is created (coalesced appends do not
     /// fire). The document layer registers one thin `NSUndoManager`
     /// action per callback so menu Undo granularity matches the stack's.
+    ///
+    /// **Edge case:** If the undo stack evicts the oldest entries to stay
+    /// within the 64 MB retained byte budget (which occurs only after ~64 MB
+    /// of undo history has accumulated in one session), `undoCount` may
+    /// remain unchanged even though a new entry is recorded, suppressing this
+    /// callback. This is benign-degraded: `undo()` and `redo()` guard on nil
+    /// and no-op when there's nothing to undo, so a missed callback simply
+    /// means one `NSUndoManager` registration is skipped (no functional
+    /// impact on undo/redo behavior, only menu state after eviction).
     public var onNewUndoEntry: (() -> Void)?
 
-    @ObservationIgnored private var undoStack = UndoStack()
+    private var undoStack = UndoStack()
     @ObservationIgnored private let engine: any TextLayoutEngine
 
     /// Loads `buffer` into `engine` and starts observing its user edits.
