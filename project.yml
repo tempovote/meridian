@@ -54,6 +54,9 @@ targets:
         com.apple.security.app-sandbox: true
         com.apple.security.files.user-selected.read-write: true
 
+  # MeridianUITests requires ad-hoc signing for `xcodebuild test` (via
+  # CODE_SIGN_IDENTITY="-" CODE_SIGNING_REQUIRED=YES CODE_SIGNING_ALLOWED=YES).
+  # An unsigned test runner is killed by Gatekeeper on launch.
   MeridianUITests:
     type: bundle.ui-testing
     platform: macOS

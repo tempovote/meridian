@@ -8,3 +8,4 @@ CLAUDE.md
 .superpowers/
 App/Resources/Info.plist
 App/Resources/Meridian.entitlements
+Tests/UITests/MeridianUITests.entitlements
