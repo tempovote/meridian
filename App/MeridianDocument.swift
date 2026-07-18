@@ -26,9 +26,9 @@ enum DocumentOpenError: LocalizedError {
 /// rope's UndoStack (spec decision 3).
 final class MeridianDocument: NSDocument {
     /// Huge-file threshold: at or above this size, refuse to open.
-    static let maxFileSize = 64 * 1024 * 1024
+    nonisolated static let maxFileSize = 64 * 1024 * 1024
     /// Pathological-line threshold, in UTF-8 bytes.
-    static let maxLineLength = 1_000_000
+    nonisolated static let maxLineLength = 1_000_000
 
     private var viewModel: EditorViewModel?
     private var engine: TextKit2Engine?
