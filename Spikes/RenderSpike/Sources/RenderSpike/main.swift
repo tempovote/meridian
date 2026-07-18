@@ -21,6 +21,13 @@ if args.count >= 5, args[1] == "gen-corpus",
 if args.count >= 3, args[1] == "view" {
     SpikeApp.run(corpusPath: args[2], benchmark: nil)
 }
+// Interactive counterpart to `benchmark-control`: the mandatory manual
+// feel-check needs a window on a working path (the primary `view` mode
+// crashes on scroll), and NSTextContentStorage is the only proven-working
+// TextKit 2 path so far. See ControlBenchmark.swift's `runInteractive`.
+if args.count >= 3, args[1] == "view-control" {
+    ControlSpikeApp.runInteractive(corpusPath: args[2])
+}
 if args.count >= 3, args[1] == "benchmark" {
     var plan = BenchmarkPlan()
     plan.editOnly = args.contains("--edit-only")
@@ -42,14 +49,17 @@ if args.count >= 3, args[1] == "benchmark-control" {
        let value = Double(velocityArg.dropFirst("--scroll-velocity=".count)) {
         velocity = value
     }
-    ControlSpikeApp.run(corpusPath: args[2], scrollVelocityMultiplier: velocity)
+    let editOnly = args.contains("--edit-only")
+    let scrollOnly = args.contains("--scroll-only")
+    ControlSpikeApp.run(corpusPath: args[2], scrollVelocityMultiplier: velocity, editOnly: editOnly, scrollOnly: scrollOnly)
 }
 
 print("""
 usage:
   renderspike gen-corpus <mixed|log|single> <sizeMB> <output-path>
   renderspike view <corpus-path>
+  renderspike view-control <corpus-path>  (interactive NSTextContentStorage feel-check — scrolling + basic typing at a fixed caret)
   renderspike benchmark <corpus-path> [--edit-only|--scroll-only] [--scroll-velocity=<viewport-heights/sec>]
-  renderspike benchmark-control <corpus-path> [--scroll-velocity=<viewport-heights/sec>]  (EXPERIMENT: NSTextContentStorage control group)
+  renderspike benchmark-control <corpus-path> [--edit-only|--scroll-only] [--scroll-velocity=<viewport-heights/sec>]  (EXPERIMENT: NSTextContentStorage control group; default runs typing + scroll)
 """)
 exit(64)
