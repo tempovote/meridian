@@ -50,11 +50,11 @@ final class MeridianDocument: NSDocument {
         guard file.longestLineUTF8Length < Self.maxLineLength else {
             throw DocumentOpenError.lineTooLong(utf8Length: file.longestLineUTF8Length)
         }
-        loadedMetadata = (file.encoding, file.hadBOM)
-        pendingBuffer = file.buffer
-        // Re-opened into an existing window (revert): reload the model.
-        if let viewModel, let engine {
-            MainActor.assumeIsolated {
+        MainActor.assumeIsolated {
+            loadedMetadata = (file.encoding, file.hadBOM)
+            pendingBuffer = file.buffer
+            // Re-opened into an existing window (revert): reload the model.
+            if let viewModel, let engine {
                 // Rebuild rather than diff — P1 has no revert UI; this
                 // path only runs for NSDocument's built-in revert.
                 _ = viewModel  // old model discarded with its undo history
