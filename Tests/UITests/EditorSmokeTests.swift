@@ -43,6 +43,39 @@ final class EditorSmokeTests: XCTestCase {
         textView.click()
         app.typeKey(.upArrow, modifierFlags: .command)  // caret to document start
         app.typeText("xin chào ")
+
+        // Cmd+Z must reach the document's NSUndoManager (TextKit2Engine
+        // hands NSTextView's own -undo:/-undoManager machinery the
+        // document's manager via NSTextViewDelegate.undoManager(for:); a
+        // hand-built NSWindow with no delegate would otherwise leave
+        // Cmd+Z resolving to nothing useful — see MeridianDocument's
+        // windowWillReturnUndoManager). TextKit2Engine sets allowsUndo =
+        // false so the text view never auto-registers its own edits; if
+        // the document's manager weren't wired in, Cmd+Z would be a
+        // silent no-op for end users.
+        //
+        // Typing composed diacritics (à, chào's combining accent) can
+        // arrive as more than one coalesced undo group, so repeatedly
+        // press Cmd+Z (bounded) until the text view is back to the
+        // pre-typing content, rather than assuming a single keystroke
+        // undoes the whole typed string.
+        var undoPresses = 0
+        while textView.value as? String != "hello\n", undoPresses < 10 {
+            app.typeKey("z", modifierFlags: .command)
+            undoPresses += 1
+        }
+        XCTAssertEqual(
+            textView.value as? String, "hello\n",
+            "Cmd+Z did not revert the typed text; undo is not reaching document.undoManager",
+        )
+        XCTAssertGreaterThan(undoPresses, 0, "expected at least one Cmd+Z to be needed")
+
+        // Redo the same number of steps, then continue with the original
+        // save flow.
+        for _ in 0 ..< undoPresses {
+            app.typeKey("Z", modifierFlags: [.command, .shift])
+        }
+        XCTAssertEqual(textView.value as? String, "xin chào hello\n")
         app.typeKey("s", modifierFlags: .command)
 
         // Poll the file on disk for the saved content.

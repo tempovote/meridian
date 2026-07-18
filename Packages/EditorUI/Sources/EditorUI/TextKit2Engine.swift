@@ -22,6 +22,18 @@ public final class TextKit2Engine: NSObject, TextLayoutEngine {
 
     public var onUserEdit: ((EditTransaction) -> Void)?
 
+    /// The undo manager Cmd+Z/Cmd+Shift+Z should resolve to. `NSTextView`
+    /// implements `-undo:`/`-redo:`/`-undoManager` itself and answers them
+    /// directly (against its own private undo manager if no delegate
+    /// supplies one) rather than forwarding up the responder chain —
+    /// `allowsUndo = false` only suppresses its *automatic registration* of
+    /// edits, it does not stop it from intercepting the menu actions. So
+    /// without this, Cmd+Z is silently swallowed by an empty manager the
+    /// text view owns, and never reaches whatever the host (e.g.
+    /// `NSDocument`) wires up as the real undo manager. Set by the host via
+    /// this property; wired to `NSTextViewDelegate.undoManager(for:)`.
+    public var documentUndoManager: UndoManager?
+
     public var view: NSView { scrollView }
     public var keyView: NSView { textView }
 
@@ -47,6 +59,7 @@ public final class TextKit2Engine: NSObject, TextLayoutEngine {
         scrollView.hasVerticalScroller = true
 
         storage.delegate = self
+        textView.delegate = self
     }
 
     /// The TextKit 2 backing store. Trapping here is correct: a nil
@@ -170,6 +183,15 @@ public final class TextKit2Engine: NSObject, TextLayoutEngine {
         buffer.apply(transaction)
         assertMirrorInvariant()
         onUserEdit?(transaction)
+    }
+}
+
+extension TextKit2Engine: NSTextViewDelegate {
+    /// See `documentUndoManager`'s doc comment: this is what actually
+    /// routes Cmd+Z/Cmd+Shift+Z to the host's undo manager instead of the
+    /// text view's own (empty, since `allowsUndo = false`) one.
+    public func undoManager(for view: NSTextView) -> UndoManager? {
+        documentUndoManager
     }
 }
 
