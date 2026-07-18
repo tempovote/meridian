@@ -18,6 +18,8 @@ packages:
   FileKit: { path: Packages/FileKit }
   PluginHost: { path: Packages/PluginHost }
   SettingsKit: { path: Packages/SettingsKit }
+  EditorUI: { path: Packages/EditorUI }
+  DocumentCore: { path: Packages/DocumentCore }
 
 targets:
   Meridian:
@@ -30,6 +32,8 @@ targets:
       - package: FileKit
       - package: PluginHost
       - package: SettingsKit
+      - package: EditorUI
+      - package: DocumentCore
     info:
       path: App/Resources/Info.plist
       properties:
@@ -38,6 +42,12 @@ targets:
         LSMinimumSystemVersion: "15.0"
         NSPrincipalClass: NSApplication
         NSHumanReadableCopyright: ""
+        CFBundleDocumentTypes:
+          - CFBundleTypeName: Plain Text
+            LSItemContentTypes: [public.plain-text]
+            CFBundleTypeRole: Editor
+            NSDocumentClass: Meridian.MeridianDocument
+            LSHandlerRank: Alternate
     entitlements:
       path: App/Resources/Meridian.entitlements
       properties:
