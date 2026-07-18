@@ -87,25 +87,16 @@ final class MeridianDocument: NSDocument {
             window.center()
             window.contentView = engine.view
             window.makeFirstResponder(engine.keyView)
-            // Two undo-routing gaps confirmed empirically via
-            // EditorSmokeTests (Cmd+Z was a silent no-op before both of
-            // these were wired):
-            //  1. NSTextView implements -undo:/-redo:/-undoManager itself
-            //     and answers them directly rather than forwarding up the
-            //     responder chain (allowsUndo = false only stops it from
-            //     *auto-registering* edits, not from intercepting the
-            //     actions against its own empty undo manager). Fixed by
-            //     handing the document's undo manager to the engine, which
-            //     serves it via NSTextViewDelegate.undoManager(for:).
+            // Undo-routing gap confirmed empirically via EditorSmokeTests
+            // (Cmd+Z was a silent no-op before this was wired): NSTextView
+            // implements -undo:/-redo:/-undoManager itself and answers them
+            // directly rather than forwarding up the responder chain
+            // (allowsUndo = false only stops it from *auto-registering*
+            // edits, not from intercepting the actions against its own
+            // empty undo manager). Fixed by handing the document's undo
+            // manager to the engine, which serves it via
+            // NSTextViewDelegate.undoManager(for:).
             engine.documentUndoManager = undoManager
-            //  2. Belt-and-suspenders: the window is built by hand (no
-            //     nib/storyboard), so it never goes through the
-            //     nib-loading path that normally splices
-            //     windowController -> document into the responder chain.
-            //     Without this delegate, anything that *does* walk the
-            //     chain up to the window (unlike NSTextView, which does
-            //     not) would find no undo manager there either.
-            window.delegate = self
             addWindowController(NSWindowController(window: window))
         }
     }
@@ -133,16 +124,5 @@ final class MeridianDocument: NSDocument {
                 document.registerUndoReplay()
             }
         }
-    }
-}
-
-extension MeridianDocument: NSWindowDelegate {
-    /// Without this, a hand-built `NSWindow` (no nib/storyboard) never gets
-    /// spliced to its document's undo manager, so anything that *does*
-    /// walk the responder chain up to the window (unlike `NSTextView`,
-    /// which answers `-undo:`/`-undoManager` itself — see
-    /// `TextKit2Engine.documentUndoManager`) would find nothing there.
-    func windowWillReturnUndoManager(_ window: NSWindow) -> UndoManager? {
-        undoManager
     }
 }

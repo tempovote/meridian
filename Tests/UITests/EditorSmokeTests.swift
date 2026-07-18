@@ -46,13 +46,12 @@ final class EditorSmokeTests: XCTestCase {
 
         // Cmd+Z must reach the document's NSUndoManager (TextKit2Engine
         // hands NSTextView's own -undo:/-undoManager machinery the
-        // document's manager via NSTextViewDelegate.undoManager(for:); a
-        // hand-built NSWindow with no delegate would otherwise leave
-        // Cmd+Z resolving to nothing useful — see MeridianDocument's
-        // windowWillReturnUndoManager). TextKit2Engine sets allowsUndo =
-        // false so the text view never auto-registers its own edits; if
-        // the document's manager weren't wired in, Cmd+Z would be a
-        // silent no-op for end users.
+        // document's manager via NSTextViewDelegate.undoManager(for:) —
+        // see MeridianDocument.makeWindowControllers, which wires
+        // engine.documentUndoManager = undoManager). TextKit2Engine sets
+        // allowsUndo = false so the text view never auto-registers its own
+        // edits; if the document's manager weren't wired in, Cmd+Z would be
+        // a silent no-op for end users.
         //
         // Typing composed diacritics (à, chào's combining accent) can
         // arrive as more than one coalesced undo group, so repeatedly
@@ -93,5 +92,50 @@ final class EditorSmokeTests: XCTestCase {
         app.typeKey("q", modifierFlags: .command)
         let gone = app.wait(for: .notRunning, timeout: 10)
         XCTAssertTrue(gone, "app did not terminate after Cmd+Q")
+    }
+
+    /// Regression guard for the window-delegate removal: with no explicit
+    /// `NSWindowDelegate` on `MeridianDocument`, `NSWindowController`'s
+    /// default `windowShouldClose:` must still route Cmd+W on a dirty
+    /// document through the standard "unsaved changes" review sheet,
+    /// rather than closing silently. Only asserts the sheet appears, then
+    /// backs out via Cancel — never exercises Save/Don't Save, so no file
+    /// or app state is left behind.
+    @MainActor
+    func testDirtyDocumentCmdWPromptsToSave() throws {
+        let app = XCUIApplication()
+        app.launch()
+
+        // Untitled window appears at launch, already a dirty-able target.
+        let window = app.windows.firstMatch
+        XCTAssertTrue(window.waitForExistence(timeout: 10))
+        let textView = window.textViews.firstMatch
+        XCTAssertTrue(textView.waitForExistence(timeout: 10))
+
+        textView.click()
+        app.typeText("unsaved change")
+
+        app.typeKey("w", modifierFlags: .command)
+
+        let unsavedSheet = app.sheets.firstMatch
+        XCTAssertTrue(
+            unsavedSheet.waitForExistence(timeout: 10),
+            "Cmd+W on a dirty document did not present an unsaved-changes review sheet",
+        )
+
+        // Back out without saving or discarding.
+        app.typeKey(.escape, modifierFlags: [])
+        XCTAssertTrue(
+            waitForDisappearance(of: unsavedSheet, timeout: 10),
+            "unsaved-changes sheet did not dismiss after Escape",
+        )
+
+        app.terminate()
+    }
+
+    private func waitForDisappearance(of element: XCUIElement, timeout: TimeInterval) -> Bool {
+        let predicate = NSPredicate(format: "exists == false")
+        let expectation = XCTNSPredicateExpectation(predicate: predicate, object: element)
+        return XCTWaiter().wait(for: [expectation], timeout: timeout) == .completed
     }
 }
