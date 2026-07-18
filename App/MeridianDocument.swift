@@ -14,9 +14,11 @@ enum DocumentOpenError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case let .tooLarge(byteSize):
-            "This file is \(byteSize / (1024 * 1024)) MB. Files of 64 MB or more need huge-file mode, which arrives in a later release."
+            "This file is \(byteSize / (1024 * 1024)) MB. Files of 64 MB or more need "
+                + "huge-file mode, which arrives in a later release."
         case .lineTooLong:
-            "This file contains an extremely long line, which this version cannot display safely. Support arrives with huge-file mode in a later release."
+            "This file contains an extremely long line, which this version cannot "
+                + "display safely. Support arrives with huge-file mode in a later release."
         }
     }
 }
@@ -38,6 +40,7 @@ final class MeridianDocument: NSDocument {
     /// Buffer read before window controllers exist.
     private var pendingBuffer = TextBuffer()
 
+    // swiftlint:disable:next static_over_final_class
     override class var autosavesInPlace: Bool {
         false
     }
