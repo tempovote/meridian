@@ -56,8 +56,13 @@ final class ViewportView: NSView {
         layoutManager.textViewportLayoutController.layoutViewport()
     }
 
-    /// Scroll so `line` is at the viewport top, relocating the layout
-    /// viewport directly (the whole point: never lay out intervening text).
+    /// ⚠️ CRASHES — DO NOT CALL. `relocateViewport(to:)` (and every tested
+    /// alternative) throws an uncatchable NSInvalidArgumentException inside
+    /// AppKit's private `NSCountableTextLocation.compare:` when the content
+    /// manager uses a custom NSTextLocation. Proven impossible in the Task 4
+    /// jump investigation (see task-4-report.md / ADR 0009); kept only as
+    /// evidence of the attempted approach. Task 5's benchmark drops its
+    /// jump phase because of this.
     func jump(toLine line: Int) {
         let clamped = max(0, min(line, contentManager.buffer.lineCount - 1))
         let byte = contentManager.buffer.byteRange(ofLine: clamped).lowerBound
