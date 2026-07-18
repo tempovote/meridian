@@ -21,11 +21,21 @@ if args.count >= 5, args[1] == "gen-corpus",
 if args.count >= 3, args[1] == "view" {
     SpikeApp.run(corpusPath: args[2], benchmark: nil)
 }
+if args.count >= 3, args[1] == "benchmark" {
+    var plan = BenchmarkPlan()
+    plan.editOnly = args.contains("--edit-only")
+    plan.scrollOnly = args.contains("--scroll-only")
+    if let velocityArg = args.first(where: { $0.hasPrefix("--scroll-velocity=") }),
+       let value = Double(velocityArg.dropFirst("--scroll-velocity=".count)) {
+        plan.scrollVelocityMultiplier = value
+    }
+    SpikeApp.run(corpusPath: args[2], benchmark: plan)
+}
 
 print("""
 usage:
   renderspike gen-corpus <mixed|log|single> <sizeMB> <output-path>
   renderspike view <corpus-path>
-  (benchmark mode arrives in a later task)
+  renderspike benchmark <corpus-path> [--edit-only|--scroll-only] [--scroll-velocity=<viewport-heights/sec>]
 """)
 exit(64)

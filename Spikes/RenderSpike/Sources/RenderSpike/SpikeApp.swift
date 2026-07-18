@@ -1,8 +1,16 @@
 import AppKit
 import DocumentCore
 
-/// Task 5 fills this with the benchmark phases; empty until then.
-struct BenchmarkPlan {}
+/// Benchmark CLI options. `scrollVelocityMultiplier` defaults to the
+/// brief's 8×; Task 5's controller amendment exposes it as a tunable so a
+/// crash at 8× can be bisected down without editing source (see
+/// `BenchmarkDriver`'s doc comment and `main.swift`'s
+/// `--scroll-velocity=<n>` flag).
+struct BenchmarkPlan {
+    var editOnly = false
+    var scrollOnly = false
+    var scrollVelocityMultiplier = 8.0
+}
 
 @MainActor
 enum SpikeApp {
@@ -18,7 +26,11 @@ enum SpikeApp {
             exit(2)
         }
         let buffer = TextBuffer(text)
-        print("corpus loaded: \(buffer.utf8Count) bytes, \(buffer.lineCount) lines, in \(Date().timeIntervalSince(loadStart))s")
+        // Captured here — corpus read + rope build only — so window
+        // creation below (unrelated to corpus load cost) never inflates
+        // load_seconds in the benchmark report.
+        let loadSeconds = Date().timeIntervalSince(loadStart)
+        print("corpus loaded: \(buffer.utf8Count) bytes, \(buffer.lineCount) lines, in \(loadSeconds)s")
 
         let manager = RopeContentManager(buffer: buffer)
         let view = ViewportView(contentManager: manager)
@@ -40,7 +52,18 @@ enum SpikeApp {
         view.startDisplayLink()
         _ = window.makeFirstResponder(view)
 
-        // benchmark wiring arrives in Task 5; interactive mode just runs.
+        if let benchmark {
+            let driver = BenchmarkDriver(
+                view: view, scrollView: scrollView,
+                corpusName: (corpusPath as NSString).lastPathComponent,
+                loadSeconds: loadSeconds,
+            )
+            driver.editOnly = benchmark.editOnly
+            driver.scrollOnly = benchmark.scrollOnly
+            driver.scrollVelocityMultiplier = benchmark.scrollVelocityMultiplier
+            driver.start()
+        }
+
         app.run()
         exit(0)
     }
