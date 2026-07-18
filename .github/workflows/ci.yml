@@ -80,6 +80,14 @@ jobs:
           xcodebuild build -project Meridian.xcodeproj -scheme Meridian
           -destination 'platform=macOS' CODE_SIGNING_ALLOWED=NO
       - name: UI smoke tests
+        # Non-blocking: xcodebuild test on a real (non-simulator) macOS
+        # destination needs Developer Mode enabled and can require
+        # interactive Automation Mode / accessibility authorization that a
+        # hosted GitHub Actions runner may not grant non-interactively (see
+        # Task 6's local setup notes and the tracking issue for this risk).
+        # Until a real runner pass is confirmed, a failure here must not
+        # block the app job / branch protection.
+        continue-on-error: true
         run: >
           xcodebuild test -project Meridian.xcodeproj -scheme Meridian
           -destination 'platform=macOS' CODE_SIGN_IDENTITY="-"
