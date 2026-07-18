@@ -20,16 +20,22 @@ final class EditorSmokeTests: XCTestCase {
         XCTAssertTrue(app.windows.firstMatch.waitForExistence(timeout: 10))
 
         // Open the fixture: ⌘O → ⇧⌘G → path → Return → Return.
+        // NSOpenPanel is neither a sheet nor a dialog in the accessibility
+        // tree here — it's a top-level Window with AppKit's stable internal
+        // identifier "open-panel" (confirmed via the accessibility hierarchy
+        // dump on a real run), not app.sheets/app.dialogs as first guessed.
         app.typeKey("o", modifierFlags: .command)
-        let openPanel = app.sheets.firstMatch.exists ? app.sheets.firstMatch : app.dialogs.firstMatch
+        let openPanel = app.windows["open-panel"]
         XCTAssertTrue(openPanel.waitForExistence(timeout: 10))
         app.typeKey("g", modifierFlags: [.command, .shift])
         app.typeText(fileURL.path)
         app.typeKey(.return, modifierFlags: [])
         app.typeKey(.return, modifierFlags: [])
 
-        // The document window shows the fixture content.
-        let textView = app.windows["smoke.txt"].textViews.firstMatch
+        // The document window shows the fixture content. Match on title, not
+        // identifier: app.windows["smoke.txt"] looks up accessibilityIdentifier
+        // (unset on NSWindow), not the title text, so it never matches.
+        let textView = app.windows.matching(NSPredicate(format: "title CONTAINS 'smoke.txt'")).firstMatch.textViews.firstMatch
         XCTAssertTrue(textView.waitForExistence(timeout: 10))
         XCTAssertEqual(textView.value as? String, "hello\n")
 

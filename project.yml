@@ -58,6 +58,12 @@ targets:
     type: bundle.ui-testing
     platform: macOS
     sources: [Tests/UITests]
+    settings:
+      GENERATE_INFOPLIST_FILE: YES
+    entitlements:
+      path: Tests/UITests/MeridianUITests.entitlements
+      properties:
+        com.apple.security.cs.disable-library-validation: true
     dependencies:
       - target: Meridian
 
