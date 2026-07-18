@@ -71,3 +71,57 @@ struct TextFileIOLoadTests {
         }
     }
 }
+
+@Suite("TextFileIO saving")
+struct TextFileIOSaveTests {
+    private func tempDir() throws -> URL {
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("filekit-tests-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        return dir
+    }
+
+    @Test func roundTripsUTF8() throws {
+        let url = try tempDir().appendingPathComponent("out.txt")
+        let buffer = TextBuffer("xin chào 🎉\r\nline2\n")
+        try TextFileIO.saveTextFile(buffer, as: .utf8, includeBOM: false, to: url)
+        let reloaded = try TextFileIO.loadTextFile(at: url)
+        #expect(reloaded.buffer.string == buffer.string)
+        #expect(reloaded.encoding == .utf8)
+        #expect(reloaded.hadBOM == false)
+    }
+
+    @Test func roundTripsUTF16BEWithBOM() throws {
+        let url = try tempDir().appendingPathComponent("out.txt")
+        let buffer = TextBuffer("ab\ncd")
+        try TextFileIO.saveTextFile(buffer, as: .utf16BigEndian, includeBOM: true, to: url)
+        let reloaded = try TextFileIO.loadTextFile(at: url)
+        #expect(reloaded.buffer.string == "ab\ncd")
+        #expect(reloaded.encoding == .utf16BigEndian)
+        #expect(reloaded.hadBOM == true)
+    }
+
+    @Test func overwriteReplacesContent() throws {
+        let url = try tempDir().appendingPathComponent("out.txt")
+        try TextFileIO.saveTextFile(TextBuffer("old"), as: .utf8, includeBOM: false, to: url)
+        try TextFileIO.saveTextFile(TextBuffer("new"), as: .utf8, includeBOM: false, to: url)
+        #expect(try TextFileIO.loadTextFile(at: url).buffer.string == "new")
+    }
+
+    @Test func lossyLegacyEncodingThrowsUnencodable() throws {
+        let url = try tempDir().appendingPathComponent("out.txt")
+        // ASCII cannot represent "é" — encode must refuse, not corrupt.
+        #expect(throws: FileKitError.self) {
+            try TextFileIO.saveTextFile(
+                TextBuffer("café"), as: .legacy(.ascii), includeBOM: false, to: url,
+            )
+        }
+    }
+
+    @Test func unwritableDirectoryThrowsUnwritable() throws {
+        let url = URL(fileURLWithPath: "/nonexistent-dir-\(UUID().uuidString)/out.txt")
+        #expect(throws: FileKitError.self) {
+            try TextFileIO.saveTextFile(TextBuffer("x"), as: .utf8, includeBOM: false, to: url)
+        }
+    }
+}

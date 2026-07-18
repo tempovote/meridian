@@ -56,6 +56,32 @@ public enum TextFileIO {
         )
     }
 
+    /// Encodes `buffer` for on-disk storage in `encoding`.
+    ///
+    /// - Throws: ``FileKitError/unencodable(encoding:)`` when a legacy
+    ///   encoding cannot represent the content losslessly.
+    public static func encode(
+        _ buffer: TextBuffer, as encoding: TextEncoding, includeBOM: Bool,
+    ) throws -> Data {
+        guard let bytes = encoding.encode(buffer.string, includeBOM: includeBOM) else {
+            throw FileKitError.unencodable(encoding: encoding)
+        }
+        return Data(bytes)
+    }
+
+    /// Encodes and writes `buffer` to `url` atomically (write-to-temp +
+    /// rename — a crash mid-save never leaves a truncated file).
+    public static func saveTextFile(
+        _ buffer: TextBuffer, as encoding: TextEncoding, includeBOM: Bool, to url: URL,
+    ) throws {
+        let data = try encode(buffer, as: encoding, includeBOM: includeBOM)
+        do {
+            try data.write(to: url, options: .atomic)
+        } catch {
+            throw FileKitError.unwritable(url: url, underlying: error)
+        }
+    }
+
     /// One O(n) chunk-wise pass; line length counts bytes strictly between
     /// breaks (CR, LF, and CRLF all terminate; break bytes never counted).
     /// Byte-level scanning is safe: UTF-8 continuation bytes are ≥ 0x80,
