@@ -3,6 +3,7 @@ import AppKit
 /// Programmatic main menu (ARCHITECTURE §23: menus are AppKit's domain).
 /// All items use standard responder-chain selectors so NSDocument,
 /// NSTextView, and NSUndoManager handle them without app-level glue.
+@MainActor
 enum MainMenu {
     static func build() -> NSMenu {
         let main = NSMenu()

@@ -2,6 +2,7 @@ import AppKit
 
 @main
 final class AppDelegate: NSObject, NSApplicationDelegate {
+    @MainActor
     static func main() {
         let app = NSApplication.shared
         let delegate = AppDelegate()
