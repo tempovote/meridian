@@ -1,0 +1,83 @@
+import DocumentCore
+import Observation
+
+/// Owns the authoritative document state: the current ``TextBuffer``
+/// snapshot and its ``UndoStack``. Bridges the two mutation paths
+/// (ADR 0009): user edits arrive FROM the engine (view led — apply to
+/// buffer, record undo, never mirror back); programmatic edits go
+/// rope-first THEN mirror into the engine.
+@MainActor
+@Observable
+public final class EditorViewModel {
+    /// The authoritative document content.
+    public private(set) var buffer: TextBuffer
+
+    /// Fired when a NEW undo entry is created (coalesced appends do not
+    /// fire). The document layer registers one thin `NSUndoManager`
+    /// action per callback so menu Undo granularity matches the stack's.
+    public var onNewUndoEntry: (() -> Void)?
+
+    @ObservationIgnored private var undoStack = UndoStack()
+    @ObservationIgnored private let engine: any TextLayoutEngine
+
+    /// Loads `buffer` into `engine` and starts observing its user edits.
+    public init(buffer: TextBuffer, engine: any TextLayoutEngine) {
+        self.buffer = buffer
+        self.engine = engine
+        engine.load(buffer: buffer)
+        engine.onUserEdit = { [weak self] transaction in
+            self?.userEdited(transaction)
+        }
+    }
+
+    /// Whether ``undo()`` would change anything.
+    public var canUndo: Bool { undoStack.canUndo }
+    /// Whether ``redo()`` would change anything.
+    public var canRedo: Bool { undoStack.canRedo }
+
+    /// Applies a programmatic transaction: rope first, then mirror into
+    /// the engine. `transaction.baseVersion` must equal the current
+    /// buffer version.
+    public func perform(_ transaction: EditTransaction) {
+        let base = buffer
+        buffer.apply(transaction)
+        record(transaction, base: base)
+        engine.apply(transaction, base: base)
+    }
+
+    /// Undoes the newest undo entry, mirroring each inverse into the engine.
+    public func undo() {
+        guard let transactions = undoStack.undo() else { return }
+        replay(transactions)
+    }
+
+    /// Redoes the most recently undone entry.
+    public func redo() {
+        guard let transactions = undoStack.redo() else { return }
+        replay(transactions)
+    }
+
+    /// Handles an engine-reported user edit: the engine's mirror already
+    /// changed, so only the buffer and undo stack advance here.
+    private func userEdited(_ transaction: EditTransaction) {
+        let base = buffer
+        buffer.apply(transaction)
+        record(transaction, base: base)
+    }
+
+    private func record(_ transaction: EditTransaction, base: TextBuffer) {
+        let entriesBefore = undoStack.undoCount
+        undoStack.record(transaction, base: base)
+        if undoStack.undoCount > entriesBefore {
+            onNewUndoEntry?()
+        }
+    }
+
+    private func replay(_ transactions: [EditTransaction]) {
+        for transaction in transactions {
+            let base = buffer
+            buffer.apply(transaction)
+            engine.apply(transaction, base: base)
+        }
+    }
+}
