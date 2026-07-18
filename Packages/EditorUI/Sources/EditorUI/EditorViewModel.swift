@@ -40,9 +40,14 @@ public final class EditorViewModel {
     }
 
     /// Whether ``undo()`` would change anything.
-    public var canUndo: Bool { undoStack.canUndo }
+    public var canUndo: Bool {
+        undoStack.canUndo
+    }
+
     /// Whether ``redo()`` would change anything.
-    public var canRedo: Bool { undoStack.canRedo }
+    public var canRedo: Bool {
+        undoStack.canRedo
+    }
 
     /// Applies a programmatic transaction: rope first, then mirror into
     /// the engine. `transaction.baseVersion` must equal the current

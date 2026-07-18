@@ -34,8 +34,13 @@ public final class TextKit2Engine: NSObject, TextLayoutEngine {
     /// this property; wired to `NSTextViewDelegate.undoManager(for:)`.
     public var documentUndoManager: UndoManager?
 
-    public var view: NSView { scrollView }
-    public var keyView: NSView { textView }
+    public var view: NSView {
+        scrollView
+    }
+
+    public var keyView: NSView {
+        textView
+    }
 
     /// Builds the scroll view + TextKit 2 text view, plain-text config.
     override public init() {
@@ -44,7 +49,7 @@ public final class TextKit2Engine: NSObject, TextLayoutEngine {
         super.init()
 
         textView.isRichText = false
-        textView.allowsUndo = false  // UndoStack owns undo (spec decision 3)
+        textView.allowsUndo = false // UndoStack owns undo (spec decision 3)
         textView.isAutomaticQuoteSubstitutionEnabled = false
         textView.isAutomaticDashSubstitutionEnabled = false
         textView.isAutomaticTextReplacementEnabled = false
@@ -222,16 +227,24 @@ extension TextKit2Engine: NSTextStorageDelegate {
 }
 
 #if DEBUG
-extension TextKit2Engine {
-    /// Test hooks — compiled out of release builds.
-    var storageStringForTesting: String { storage.string }
-    var snapshotStringForTesting: String { buffer.string }
-    var snapshotForTesting: TextBuffer { buffer }
+    extension TextKit2Engine {
+        /// Test hooks — compiled out of release builds.
+        var storageStringForTesting: String {
+            storage.string
+        }
 
-    /// Simulates user typing by mutating the storage directly, exactly as
-    /// NSTextView's insertText path does (delegate fires → user-edit path).
-    func simulateUserTypingForTesting(replacing range: NSRange, with string: String) {
-        storage.replaceCharacters(in: range, with: string)
+        var snapshotStringForTesting: String {
+            buffer.string
+        }
+
+        var snapshotForTesting: TextBuffer {
+            buffer
+        }
+
+        /// Simulates user typing by mutating the storage directly, exactly as
+        /// NSTextView's insertText path does (delegate fires → user-edit path).
+        func simulateUserTypingForTesting(replacing range: NSRange, with string: String) {
+            storage.replaceCharacters(in: range, with: string)
+        }
     }
-}
 #endif

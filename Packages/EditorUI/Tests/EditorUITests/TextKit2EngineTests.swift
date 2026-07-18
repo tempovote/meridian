@@ -6,7 +6,10 @@ import Testing
 /// Deterministic RNG so the round-trip fuzz case is reproducible.
 private struct SplitMix64: RandomNumberGenerator {
     var state: UInt64
-    init(seed: UInt64) { state = seed }
+    init(seed: UInt64) {
+        state = seed
+    }
+
     mutating func next() -> UInt64 {
         state &+= 0x9E37_79B9_7F4A_7C15
         var z = state
@@ -50,7 +53,7 @@ struct TextKit2EngineTests {
         )
         engine.apply(transaction, base: buffer)
         #expect(engine.storageStringForTesting == "hello brave world")
-        #expect(fired == 0)  // programmatic — no echo
+        #expect(fired == 0) // programmatic — no echo
     }
 
     @Test func applyMirrorsMultiEditInOneTransaction() {
@@ -80,7 +83,7 @@ struct TextKit2EngineTests {
     }
 
     @Test func simulatedTypingFiresOnUserEditWithRopeCoordinates() throws {
-        let (engine, _) = makeEngine("héllo")  // é at UTF-16 1, bytes 1..<3
+        let (engine, _) = makeEngine("héllo") // é at UTF-16 1, bytes 1..<3
         var received: [EditTransaction] = []
         engine.onUserEdit = { received.append($0) }
         // User types "X" after the "é" (UTF-16 index 2 == byte offset 3).
@@ -110,17 +113,23 @@ struct TextKit2EngineTests {
     @Test func randomRoundTripKeepsRopeAndStorageInLockstep() {
         var rng = SplitMix64(seed: 0xED170)
         let (engine, initial) = makeEngine("start 🎉 çontent\nline two\n")
-        var model = initial  // reference: what the authoritative buffer would hold
+        var model = initial // reference: what the authoritative buffer would hold
         engine.onUserEdit = { model.apply($0) }
         let alphabet = ["a", "é", "🎉", "\n", "xin chào", ""]
         for _ in 0 ..< 200 {
             let current = engine.snapshotForTesting
             // Pick a random scalar-aligned byte range in the CURRENT content.
             var start = Int.random(in: 0 ... current.utf8Count, using: &rng)
-            while !current.isScalarBoundary(ByteOffset(start)) { start -= 1 }
+            while !current.isScalarBoundary(ByteOffset(start)) {
+                start -= 1
+            }
             var end = Int.random(in: start ... current.utf8Count, using: &rng)
-            while !current.isScalarBoundary(ByteOffset(end)) { end -= 1 }
-            if end < start { end = start }
+            while !current.isScalarBoundary(ByteOffset(end)) {
+                end -= 1
+            }
+            if end < start {
+                end = start
+            }
             let byteRange = ByteOffset(start) ..< ByteOffset(end)
             let replacement = alphabet[Int.random(in: 0 ..< alphabet.count, using: &rng)]
             if Bool.random(using: &rng) {
@@ -141,7 +150,9 @@ struct TextKit2EngineTests {
             }
             #expect(engine.storageStringForTesting == model.string)
             #expect(engine.snapshotStringForTesting == model.string)
-            if engine.storageStringForTesting != model.string { break }
+            if engine.storageStringForTesting != model.string {
+                break
+            }
         }
     }
 }

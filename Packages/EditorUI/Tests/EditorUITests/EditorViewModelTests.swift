@@ -7,21 +7,32 @@ import Testing
 /// without a real NSTextView.
 @MainActor
 final class MockLayoutEngine: TextLayoutEngine {
-    let view: NSView = NSView()
-    var keyView: NSView { view }
+    let view: NSView = .init()
+    var keyView: NSView {
+        view
+    }
+
     var onUserEdit: ((EditTransaction) -> Void)?
     var loaded: [TextBuffer] = []
     var applied: [(transaction: EditTransaction, base: TextBuffer)] = []
     var selectionsSet: [SelectionSet] = []
 
-    func load(buffer: TextBuffer) { loaded.append(buffer) }
+    func load(buffer: TextBuffer) {
+        loaded.append(buffer)
+    }
+
     func apply(_ transaction: EditTransaction, base: TextBuffer) {
         applied.append((transaction, base))
     }
-    func selection(in buffer: TextBuffer) -> SelectionSet { .empty }
+
+    func selection(in buffer: TextBuffer) -> SelectionSet {
+        .empty
+    }
+
     func setSelection(_ selection: SelectionSet, in buffer: TextBuffer) {
         selectionsSet.append(selection)
     }
+
     func scrollTo(_ offset: ByteOffset, in buffer: TextBuffer) {}
 
     /// Simulates the user typing `replacement` over `range`: mimics
@@ -58,7 +69,7 @@ struct EditorViewModelTests {
             range: ByteOffset(5) ..< ByteOffset(5), replacement: "!", base: vm.buffer,
         )
         #expect(vm.buffer.string == "hello!")
-        #expect(engine.applied.isEmpty)  // view led — no echo back
+        #expect(engine.applied.isEmpty) // view led — no echo back
     }
 
     @Test func performAppliesAndMirrors() {
@@ -105,7 +116,7 @@ struct EditorViewModelTests {
         _ = engine.simulateUserEdit(range: ByteOffset(2) ..< ByteOffset(2), replacement: "c", base: vm.buffer)
         #expect(callbacks == 1)
         vm.undo()
-        #expect(vm.buffer.string == "")  // whole burst undone as one entry
+        #expect(vm.buffer.string == "") // whole burst undone as one entry
     }
 
     @Test func undoWithNothingRecordedIsANoOp() {
@@ -122,14 +133,14 @@ struct EditorViewModelTests {
         final class ObservationState: @unchecked Sendable { var fired = false }
         let obsState = ObservationState()
         // Track observation of canUndo across the edit.
-        let _ = withObservationTracking {
+        withObservationTracking {
             _ = vm.canUndo
         } onChange: {
             obsState.fired = true
         }
         // Simulate a user edit, which should update canUndo via undoStack
         _ = engine.simulateUserEdit(
-            range: ByteOffset(0) ..< ByteOffset(0), replacement: "x", base: vm.buffer
+            range: ByteOffset(0) ..< ByteOffset(0), replacement: "x", base: vm.buffer,
         )
         #expect(obsState.fired)
         #expect(vm.canUndo)

@@ -35,13 +35,14 @@ final class EditorSmokeTests: XCTestCase {
         // The document window shows the fixture content. Match on title, not
         // identifier: app.windows["smoke.txt"] looks up accessibilityIdentifier
         // (unset on NSWindow), not the title text, so it never matches.
-        let textView = app.windows.matching(NSPredicate(format: "title CONTAINS 'smoke.txt'")).firstMatch.textViews.firstMatch
+        let textView = app.windows.matching(NSPredicate(format: "title CONTAINS 'smoke.txt'")).firstMatch.textViews
+            .firstMatch
         XCTAssertTrue(textView.waitForExistence(timeout: 10))
         XCTAssertEqual(textView.value as? String, "hello\n")
 
         // Type at the start of the document, then save in place.
         textView.click()
-        app.typeKey(.upArrow, modifierFlags: .command)  // caret to document start
+        app.typeKey(.upArrow, modifierFlags: .command) // caret to document start
         app.typeText("xin chào ")
 
         // Cmd+Z must reach the document's NSUndoManager (TextKit2Engine
@@ -83,7 +84,9 @@ final class EditorSmokeTests: XCTestCase {
         var onDisk = ""
         while Date() < deadline {
             onDisk = (try? String(contentsOf: fileURL, encoding: .utf8)) ?? ""
-            if onDisk == expected { break }
+            if onDisk == expected {
+                break
+            }
             Thread.sleep(forTimeInterval: 0.2)
         }
         XCTAssertEqual(onDisk, expected)
@@ -102,7 +105,7 @@ final class EditorSmokeTests: XCTestCase {
     /// backs out via Cancel — never exercises Save/Don't Save, so no file
     /// or app state is left behind.
     @MainActor
-    func testDirtyDocumentCmdWPromptsToSave() throws {
+    func testDirtyDocumentCmdWPromptsToSave() {
         let app = XCUIApplication()
         app.launch()
 

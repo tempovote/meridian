@@ -38,7 +38,9 @@ final class MeridianDocument: NSDocument {
     /// Buffer read before window controllers exist.
     private var pendingBuffer = TextBuffer()
 
-    override class var autosavesInPlace: Bool { false }
+    override class var autosavesInPlace: Bool {
+        false
+    }
 
     override func read(from url: URL, ofType typeName: String) throws {
         let values = try url.resourceValues(forKeys: [.fileSizeKey])
@@ -57,7 +59,7 @@ final class MeridianDocument: NSDocument {
             if let viewModel, let engine {
                 // Rebuild rather than diff — P1 has no revert UI; this
                 // path only runs for NSDocument's built-in revert.
-                _ = viewModel  // old model discarded with its undo history
+                _ = viewModel // old model discarded with its undo history
                 self.viewModel = EditorViewModel(buffer: file.buffer, engine: engine)
                 self.wireUndoCallback()
             }
