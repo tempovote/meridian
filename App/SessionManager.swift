@@ -4,19 +4,11 @@ import Foundation
 /// Recorded session state for a single document.
 struct DocumentSessionState: Codable, Sendable {
     let fileURL: URL
-
-    init(fileURL: URL) {
-        self.fileURL = fileURL
-    }
 }
 
 /// Recorded application session state across restarts.
 struct ApplicationSessionState: Codable, Sendable {
     let openDocuments: [DocumentSessionState]
-
-    init(openDocuments: [DocumentSessionState]) {
-        self.openDocuments = openDocuments
-    }
 }
 
 /// Manages application session saving & restoration.
