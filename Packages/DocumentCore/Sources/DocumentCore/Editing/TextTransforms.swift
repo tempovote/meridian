@@ -27,6 +27,7 @@ public enum TextTransforms {
 
         let prevLineStart = buffer.byteOffset(of: lineStartOffset(in: buffer, line: startLine - 1))
         let currentEnd = lineEndByteOffset(in: buffer, line: endLine)
+        let fullRange = prevLineStart ..< currentEnd
 
         let prevLineText = buffer.slice(prevLineStart ..< buffer.byteOffset(of: lineStartOffset(
             in: buffer,
@@ -35,10 +36,15 @@ public enum TextTransforms {
         let currentLinesText = buffer
             .slice(buffer.byteOffset(of: lineStartOffset(in: buffer, line: startLine)) ..< currentEnd)
 
-        let newBlock = currentLinesText + (currentLinesText.hasSuffix("\n") ? "" : "\n") + prevLineText
-        let fullRange = prevLineStart ..< currentEnd
+        let hadTrailingNewline = buffer.slice(fullRange).hasSuffix("\n")
+        var rawBlock = currentLinesText + (currentLinesText.hasSuffix("\n") ? "" : "\n") + prevLineText
+        if hadTrailingNewline, !rawBlock.hasSuffix("\n") {
+            rawBlock.append("\n")
+        } else if !hadTrailingNewline, rawBlock.hasSuffix("\n") {
+            rawBlock.removeLast()
+        }
 
-        let edit = Edit(range: fullRange, replacement: newBlock)
+        let edit = Edit(range: fullRange, replacement: rawBlock)
         return EditTransaction(
             baseVersion: buffer.version,
             edits: [edit],
@@ -57,15 +63,21 @@ public enum TextTransforms {
 
         let currentStart = buffer.byteOffset(of: lineStartOffset(in: buffer, line: startLine))
         let nextLineEnd = lineEndByteOffset(in: buffer, line: endLine + 1)
+        let fullRange = currentStart ..< nextLineEnd
 
         let currentLinesEnd = buffer.byteOffset(of: lineStartOffset(in: buffer, line: endLine + 1))
         let currentLinesText = buffer.slice(currentStart ..< currentLinesEnd)
         let nextLineText = buffer.slice(currentLinesEnd ..< nextLineEnd)
 
-        let newBlock = nextLineText + (nextLineText.hasSuffix("\n") ? "" : "\n") + currentLinesText
-        let fullRange = currentStart ..< nextLineEnd
+        let hadTrailingNewline = buffer.slice(fullRange).hasSuffix("\n")
+        var rawBlock = nextLineText + (nextLineText.hasSuffix("\n") ? "" : "\n") + currentLinesText
+        if hadTrailingNewline, !rawBlock.hasSuffix("\n") {
+            rawBlock.append("\n")
+        } else if !hadTrailingNewline, rawBlock.hasSuffix("\n") {
+            rawBlock.removeLast()
+        }
 
-        let edit = Edit(range: fullRange, replacement: newBlock)
+        let edit = Edit(range: fullRange, replacement: rawBlock)
         return EditTransaction(
             baseVersion: buffer.version,
             edits: [edit],
