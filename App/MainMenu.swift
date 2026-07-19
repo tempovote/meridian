@@ -10,6 +10,7 @@ enum MainMenu {
         main.addItem(appMenuItem())
         main.addItem(fileMenuItem())
         main.addItem(editMenuItem())
+        main.addItem(viewMenuItem())
         main.addItem(windowMenuItem())
         return main
     }
@@ -62,6 +63,35 @@ enum MainMenu {
         menu.addItem(withTitle: "Paste", action: #selector(NSText.paste(_:)), keyEquivalent: "v")
         menu.addItem(withTitle: "Select All",
                      action: #selector(NSText.selectAll(_:)), keyEquivalent: "a")
+        return wrapped(menu)
+    }
+
+    private static func viewMenuItem() -> NSMenuItem {
+        let menu = NSMenu(title: "View")
+
+        let lineNumbers = NSMenuItem(
+            title: "Line Numbers",
+            action: Selector(("toggleLineNumbers:")),
+            keyEquivalent: "l",
+        )
+        lineNumbers.keyEquivalentModifierMask = [.command, .option]
+        menu.addItem(lineNumbers)
+
+        let softWrap = NSMenuItem(
+            title: "Soft Wrap",
+            action: Selector(("toggleSoftWrap:")),
+            keyEquivalent: "w",
+        )
+        softWrap.keyEquivalentModifierMask = [.command, .option]
+        menu.addItem(softWrap)
+
+        let statusBar = NSMenuItem(
+            title: "Status Bar",
+            action: Selector(("toggleStatusBar:")),
+            keyEquivalent: "",
+        )
+        menu.addItem(statusBar)
+
         return wrapped(menu)
     }
 

@@ -19,6 +19,18 @@ public enum TextEncoding: Hashable, Sendable {
 }
 
 public extension TextEncoding {
+    /// Human-readable display name (e.g. "UTF-8", "UTF-16 LE", "Shift-JIS").
+    var displayName: String {
+        switch self {
+        case .utf8: "UTF-8"
+        case .utf16LittleEndian: "UTF-16 LE"
+        case .utf16BigEndian: "UTF-16 BE"
+        case .utf32LittleEndian: "UTF-32 LE"
+        case .utf32BigEndian: "UTF-32 BE"
+        case let .legacy(encoding): String.localizedName(of: encoding)
+        }
+    }
+
     /// This encoding's byte-order mark; empty for legacy encodings.
     var byteOrderMark: [UInt8] {
         switch self {

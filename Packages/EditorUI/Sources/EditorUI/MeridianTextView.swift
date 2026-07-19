@@ -1,0 +1,60 @@
+import AppKit
+
+/// Custom `NSTextView` subclass for Meridian's editor view.
+/// Overrides background drawing to render the current-line highlight
+/// behind the active caret line.
+@MainActor
+public final class MeridianTextView: NSTextView {
+    /// Whether the current line highlight background is drawn.
+    public var isCurrentLineHighlightEnabled: Bool = true {
+        didSet {
+            if oldValue != isCurrentLineHighlightEnabled {
+                needsDisplay = true
+            }
+        }
+    }
+
+    /// The color used for the current-line background highlight.
+    public var currentLineHighlightColor: NSColor = .quaternaryLabelColor {
+        didSet {
+            needsDisplay = true
+        }
+    }
+
+    override public func drawBackground(in rect: NSRect) {
+        super.drawBackground(in: rect)
+
+        guard isCurrentLineHighlightEnabled else { return }
+
+        // Only highlight when selection is a caret (empty range), not a selection range.
+        let selectedRanges = selectedRanges.map(\.rangeValue)
+        guard selectedRanges.count == 1, selectedRanges[0].length == 0 else { return }
+
+        let caretLocation = selectedRanges[0].location
+
+        guard let textLayoutManager,
+              let docStart = textLayoutManager.documentRange.location as NSTextLocation?,
+              let location = textLayoutManager.location(docStart, offsetBy: caretLocation),
+              let fragment = textLayoutManager.textLayoutFragment(for: location)
+        else { return }
+
+        let originY = fragment.layoutFragmentFrame.origin.y + textContainerOrigin.y
+        let fragmentHeight = fragment.layoutFragmentFrame.height
+
+        guard fragmentHeight > 0 else { return }
+
+        let lineRect = NSRect(
+            x: 0,
+            y: originY,
+            width: bounds.width,
+            height: fragmentHeight,
+        )
+
+        guard lineRect.intersects(rect) else { return }
+
+        NSGraphicsContext.saveGraphicsState()
+        currentLineHighlightColor.setFill()
+        lineRect.fill(using: .sourceOver)
+        NSGraphicsContext.restoreGraphicsState()
+    }
+}

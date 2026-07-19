@@ -9,7 +9,8 @@ import DocumentCore
 @MainActor
 public final class TextKit2Engine: NSObject, TextLayoutEngine {
     private let scrollView: NSScrollView
-    private let textView: NSTextView
+    private let textView: MeridianTextView
+    private var rulerView: LineNumberRulerView?
     /// The engine-local mirror snapshot. Invariant: equals the storage's
     /// string after every load/apply/user edit. Only ever touched from
     /// within `MainActor.assumeIsolated` (directly, or via the `@MainActor`
@@ -44,7 +45,7 @@ public final class TextKit2Engine: NSObject, TextLayoutEngine {
 
     /// Builds the scroll view + TextKit 2 text view, plain-text config.
     override public init() {
-        textView = NSTextView(usingTextLayoutManager: true)
+        textView = MeridianTextView(usingTextLayoutManager: true)
         scrollView = NSScrollView()
         super.init()
 
@@ -62,6 +63,13 @@ public final class TextKit2Engine: NSObject, TextLayoutEngine {
 
         scrollView.documentView = textView
         scrollView.hasVerticalScroller = true
+
+        let ruler = LineNumberRulerView(scrollView: scrollView, textView: textView) { [weak self] in
+            self?.buffer ?? TextBuffer()
+        }
+        scrollView.verticalRulerView = ruler
+        scrollView.rulersVisible = true
+        rulerView = ruler
 
         storage.delegate = self
         textView.delegate = self
@@ -148,6 +156,31 @@ public final class TextKit2Engine: NSObject, TextLayoutEngine {
         textView.scrollRangeToVisible(NSRange(location: location, length: 0))
     }
 
+    public func setSoftWrap(_ enabled: Bool) {
+        if enabled {
+            textView.isHorizontallyResizable = false
+            textView.autoresizingMask = [.width]
+            textView.textContainer?.widthTracksTextView = true
+            scrollView.hasHorizontalScroller = false
+        } else {
+            textView.isHorizontallyResizable = true
+            textView.autoresizingMask = []
+            textView.textContainer?.widthTracksTextView = false
+            textView.textContainer?.containerSize = NSSize(
+                width: CGFloat.greatestFiniteMagnitude,
+                height: CGFloat.greatestFiniteMagnitude,
+            )
+            scrollView.hasHorizontalScroller = true
+        }
+        textView.needsLayout = true
+        textView.needsDisplay = true
+        rulerView?.needsDisplay = true
+    }
+
+    public func setGutterVisible(_ enabled: Bool) {
+        scrollView.rulersVisible = enabled
+    }
+
     private var typingAttributes: [NSAttributedString.Key: Any] {
         [
             .font: NSFont.monospacedSystemFont(ofSize: 13, weight: .regular),
@@ -197,6 +230,11 @@ extension TextKit2Engine: NSTextViewDelegate {
     /// text view's own (empty, since `allowsUndo = false`) one.
     public func undoManager(for view: NSTextView) -> UndoManager? {
         documentUndoManager
+    }
+
+    public func textViewDidChangeSelection(_ notification: Notification) {
+        textView.needsDisplay = true
+        rulerView?.needsDisplay = true
     }
 }
 

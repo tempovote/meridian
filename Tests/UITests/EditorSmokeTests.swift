@@ -136,6 +136,22 @@ final class EditorSmokeTests: XCTestCase {
         app.terminate()
     }
 
+    /// UI smoke test for Phase 2 chrome menu bar shortcuts (Line Numbers, Soft Wrap).
+    @MainActor
+    func testChromeToggles() {
+        let app = XCUIApplication()
+        app.launch()
+
+        let window = app.windows.firstMatch
+        XCTAssertTrue(window.waitForExistence(timeout: 10))
+
+        // Exercise View menu shortcuts (Cmd+Alt+L for line numbers, Cmd+Alt+W for soft wrap)
+        app.typeKey("l", modifierFlags: [.command, .option])
+        app.typeKey("w", modifierFlags: [.command, .option])
+
+        app.terminate()
+    }
+
     private func waitForDisappearance(of element: XCUIElement, timeout: TimeInterval) -> Bool {
         let predicate = NSPredicate(format: "exists == false")
         let expectation = XCTNSPredicateExpectation(predicate: predicate, object: element)
