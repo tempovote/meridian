@@ -26,6 +26,22 @@ public final class EditorViewModel {
     /// impact on undo/redo behavior, only menu state after eviction).
     public var onNewUndoEntry: (() -> Void)?
 
+    /// Whether the line number gutter is visible.
+    public var isGutterVisible: Bool = true {
+        didSet { engine.setGutterVisible(isGutterVisible) }
+    }
+
+    /// Whether soft wrap (line wrapping) is enabled.
+    public var isSoftWrapEnabled: Bool = true {
+        didSet { engine.setSoftWrap(isSoftWrapEnabled) }
+    }
+
+    /// Whether the current caret line background highlight is enabled.
+    public var isCurrentLineHighlightEnabled: Bool = true
+
+    /// Whether the status bar at the bottom of the window is visible.
+    public var isStatusBarVisible: Bool = true
+
     private var undoStack = UndoStack()
     @ObservationIgnored private let engine: any TextLayoutEngine
 
@@ -34,9 +50,37 @@ public final class EditorViewModel {
         self.buffer = buffer
         self.engine = engine
         engine.load(buffer: buffer)
+        engine.setSoftWrap(isSoftWrapEnabled)
+        engine.setGutterVisible(isGutterVisible)
         engine.onUserEdit = { [weak self] transaction in
             self?.userEdited(transaction)
         }
+    }
+
+    /// The current selection in rope coordinates.
+    public var selection: SelectionSet {
+        engine.selection(in: buffer)
+    }
+
+    /// 1-based (line, column) position of the primary cursor caret.
+    public var currentCaretLineColumn: (line: Int, column: Int) {
+        let offset = selection.ranges.first?.lowerBound ?? ByteOffset(0)
+        let pos = buffer.linePosition(of: offset)
+        return (line: pos.line + 1, column: pos.utf16Column + 1)
+    }
+
+    /// Total number of UTF-16 code units across all active selection ranges.
+    public var selectionCharacterCount: Int {
+        selection.ranges.reduce(0) { sum, range in
+            let start = buffer.utf16Offset(of: range.lowerBound).value
+            let end = buffer.utf16Offset(of: range.upperBound).value
+            return sum + (end - start)
+        }
+    }
+
+    /// Total line count in the document.
+    public var lineCount: Int {
+        buffer.lineCount
     }
 
     /// Whether ``undo()`` would change anything.

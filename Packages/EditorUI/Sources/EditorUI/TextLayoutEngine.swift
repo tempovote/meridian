@@ -45,4 +45,15 @@ public protocol TextLayoutEngine: AnyObject {
 
     /// Scrolls so `offset` is visible.
     func scrollTo(_ offset: ByteOffset, in buffer: TextBuffer)
+
+    /// Toggles soft wrap mode on the renderer.
+    func setSoftWrap(_ enabled: Bool)
+
+    /// Toggles visibility of the line number gutter.
+    func setGutterVisible(_ enabled: Bool)
+}
+
+public extension TextLayoutEngine {
+    func setSoftWrap(_ enabled: Bool) {}
+    func setGutterVisible(_ enabled: Bool) {}
 }

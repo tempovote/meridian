@@ -2,6 +2,8 @@ import AppKit
 import DocumentCore
 import EditorUI
 import FileKit
+import SwiftUI
+import WorkspaceUI
 
 /// Errors that block opening a document, with user-facing text.
 enum DocumentOpenError: LocalizedError {
@@ -34,6 +36,7 @@ final class MeridianDocument: NSDocument {
 
     private var viewModel: EditorViewModel?
     private var engine: TextKit2Engine?
+    private var statusBarHost: NSHostingView<StatusBarView>?
     /// Metadata from the loaded file (encoding/BOM for faithful save);
     /// nil for untitled documents (saved as UTF-8, no BOM, LF).
     private var loadedMetadata: (encoding: TextEncoding, hadBOM: Bool)?
@@ -83,27 +86,66 @@ final class MeridianDocument: NSDocument {
             self.viewModel = viewModel
             wireUndoCallback()
 
+            let encodingName = loadedMetadata?.encoding.displayName ?? "UTF-8"
+            let statusBar = StatusBarView(
+                viewModel: viewModel,
+                encodingName: encodingName,
+                lineEndingName: "LF",
+            )
+            let host = NSHostingView(rootView: statusBar)
+            self.statusBarHost = host
+
+            let containerStack = NSStackView(views: [engine.view, host])
+            containerStack.orientation = .vertical
+            containerStack.spacing = 0
+            containerStack.alignment = .width
+            engine.view.setContentHuggingPriority(.defaultLow, for: .vertical)
+            host.setContentHuggingPriority(.required, for: .vertical)
+
+            NSWindow.allowsAutomaticWindowTabbing = true
             let window = NSWindow(
                 contentRect: NSRect(x: 0, y: 0, width: 900, height: 600),
                 styleMask: [.titled, .closable, .miniaturizable, .resizable],
                 backing: .buffered,
                 defer: false,
             )
+            window.tabbingMode = .preferred
             window.center()
-            window.contentView = engine.view
+            window.contentView = containerStack
             window.makeFirstResponder(engine.keyView)
-            // Undo-routing gap confirmed empirically via EditorSmokeTests
-            // (Cmd+Z was a silent no-op before this was wired): NSTextView
-            // implements -undo:/-redo:/-undoManager itself and answers them
-            // directly rather than forwarding up the responder chain
-            // (allowsUndo = false only stops it from *auto-registering*
-            // edits, not from intercepting the actions against its own
-            // empty undo manager). Fixed by handing the document's undo
-            // manager to the engine, which serves it via
-            // NSTextViewDelegate.undoManager(for:).
             engine.documentUndoManager = undoManager
             addWindowController(NSWindowController(window: window))
         }
+    }
+
+    @objc func toggleLineNumbers(_ sender: Any?) {
+        viewModel?.isGutterVisible.toggle()
+    }
+
+    @objc func toggleSoftWrap(_ sender: Any?) {
+        viewModel?.isSoftWrapEnabled.toggle()
+    }
+
+    @objc func toggleStatusBar(_ sender: Any?) {
+        guard let viewModel else { return }
+        viewModel.isStatusBarVisible.toggle()
+        statusBarHost?.isHidden = !viewModel.isStatusBarVisible
+    }
+
+    override func validateMenuItem(_ menuItem: NSMenuItem) -> Bool {
+        if menuItem.action == #selector(toggleLineNumbers(_:)) {
+            menuItem.state = (viewModel?.isGutterVisible == true) ? .on : .off
+            return true
+        }
+        if menuItem.action == #selector(toggleSoftWrap(_:)) {
+            menuItem.state = (viewModel?.isSoftWrapEnabled == true) ? .on : .off
+            return true
+        }
+        if menuItem.action == #selector(toggleStatusBar(_:)) {
+            menuItem.state = (viewModel?.isStatusBarVisible == true) ? .on : .off
+            return true
+        }
+        return super.validateMenuItem(menuItem)
     }
 
     /// One NSUndoManager registration per new UndoStack entry, replayed
