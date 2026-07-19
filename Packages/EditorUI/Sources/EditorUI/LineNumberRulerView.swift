@@ -49,6 +49,18 @@ public final class LineNumberRulerView: NSRulerView {
         }
     }
 
+    private func drawBackgroundAndSeparator() {
+        NSColor.controlBackgroundColor.setFill()
+        bounds.fill()
+
+        separatorColor.setStroke()
+        let sepPath = NSBezierPath()
+        sepPath.move(to: NSPoint(x: bounds.maxX - 0.5, y: bounds.minY))
+        sepPath.line(to: NSPoint(x: bounds.maxX - 0.5, y: bounds.maxY))
+        sepPath.lineWidth = 1.0
+        sepPath.stroke()
+    }
+
     override public func drawHashMarksAndLabels(in rect: NSRect) {
         guard let textView,
               let textLayoutManager = textView.textLayoutManager,
@@ -57,18 +69,8 @@ public final class LineNumberRulerView: NSRulerView {
 
         updateThickness()
 
-        // Background
         NSGraphicsContext.saveGraphicsState()
-        NSColor.controlBackgroundColor.setFill()
-        bounds.fill()
-
-        // Separator line on right edge
-        separatorColor.setStroke()
-        let sepPath = NSBezierPath()
-        sepPath.move(to: NSPoint(x: bounds.maxX - 0.5, y: bounds.minY))
-        sepPath.line(to: NSPoint(x: bounds.maxX - 0.5, y: bounds.maxY))
-        sepPath.lineWidth = 1.0
-        sepPath.stroke()
+        drawBackgroundAndSeparator()
 
         let textContainerOrigin = textView.textContainerOrigin
         let textAttributes: [NSAttributedString.Key: Any] = [
