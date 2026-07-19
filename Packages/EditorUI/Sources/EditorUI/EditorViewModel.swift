@@ -62,6 +62,11 @@ public final class EditorViewModel {
         engine.selection(in: buffer)
     }
 
+    /// Sets the current selection in the layout engine.
+    public func setSelection(_ selection: SelectionSet) {
+        engine.setSelection(selection, in: buffer)
+    }
+
     /// 1-based (line, column) position of the primary cursor caret.
     public var currentCaretLineColumn: (line: Int, column: Int) {
         let offset = selection.ranges.first?.lowerBound ?? ByteOffset(0)
