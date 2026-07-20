@@ -53,6 +53,30 @@ targets:
             CFBundleTypeRole: Editor
             NSDocumentClass: Meridian.MeridianDocument
             LSHandlerRank: Alternate
+          - CFBundleTypeName: Source Code
+            LSItemContentTypes: [dev.meridian.source-code]
+            CFBundleTypeRole: Editor
+            NSDocumentClass: Meridian.MeridianDocument
+            LSHandlerRank: Alternate
+        # Many of M4 Phase 2's grammar-bundled languages (rust, toml, yaml,
+        # typescript, go, php, css, markdown, ...) have no macOS-provided
+        # system UTI conforming to public.plain-text, so the Open panel
+        # would refuse to let the user pick them despite SyntaxKit fully
+        # supporting the grammar — declare our own UTI covering every
+        # extension EditorUI's languageID(forFileExtension:) recognizes
+        # (see Packages/EditorUI/Sources/EditorUI/LanguageExtensionMap.swift)
+        # beyond the two (json, swift) already covered by system UTIs above.
+        UTExportedTypeDeclarations:
+          - UTTypeIdentifier: dev.meridian.source-code
+            UTTypeDescription: Source Code
+            UTTypeConformsTo: [public.plain-text]
+            UTTypeTagSpecification:
+              public.filename-extension:
+                [
+                  js, mjs, cjs, ts, tsx, html, htm, css, py, yml, yaml, toml,
+                  sh, bash, c, h, cpp, cc, hpp, cxx, rs, go, java, rb, php,
+                  md, markdown, xml,
+                ]
     entitlements:
       path: App/Resources/Meridian.entitlements
       properties:
