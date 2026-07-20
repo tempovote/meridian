@@ -66,6 +66,7 @@ final class MeridianDocument: NSDocument {
                 // Rebuild rather than diff — P1 has no revert UI; this
                 // path only runs for NSDocument's built-in revert.
                 _ = viewModel // old model discarded with its undo history
+                engine.languageID = languageID(forFileExtension: url.pathExtension)
                 self.viewModel = EditorViewModel(buffer: file.buffer, engine: engine)
                 self.wireUndoCallback()
             }
@@ -81,6 +82,7 @@ final class MeridianDocument: NSDocument {
     override func makeWindowControllers() {
         MainActor.assumeIsolated {
             let engine = TextKit2Engine()
+            engine.languageID = fileURL.flatMap { languageID(forFileExtension: $0.pathExtension) }
             let viewModel = EditorViewModel(buffer: pendingBuffer, engine: engine)
             self.engine = engine
             self.viewModel = viewModel

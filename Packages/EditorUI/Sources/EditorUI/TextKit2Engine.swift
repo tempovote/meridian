@@ -1,5 +1,6 @@
 import AppKit
 import DocumentCore
+import SyntaxKit
 
 /// TextKit 2 conformer of ``TextLayoutEngine``: a standard `NSTextView`
 /// backed by Apple's `NSTextContentStorage` (ADR 0009 verdict), with the
@@ -20,6 +21,32 @@ public final class TextKit2Engine: NSObject, TextLayoutEngine {
     /// True while `load`/`apply` mutate the storage, so the delegate does
     /// not report our own mirroring as a user edit.
     private var isMirroring = false
+
+    private let syntaxService = SyntaxService()
+    private let syntaxDocumentID = DocumentID()
+    /// Detected once at `load(buffer:)` time from the document's file
+    /// extension (set externally — see `languageID(forFileExtension:)`
+    /// below); `nil` means "don't highlight" (any extension besides
+    /// json/swift, or no extension known yet).
+    public var languageID: String?
+
+    /// Temporary hardcoded palette (design spec Decision 5) — replaced
+    /// wholesale by real `ThemeKit` resolution in a later M4 phase. Do
+    /// not extend this table; it exists only to prove the pipeline
+    /// paints real color end-to-end.
+    private static let temporaryColors: [TokenType: NSColor] = [
+        .keyword: .systemPurple,
+        .string: .systemGreen,
+        .comment: .systemGray,
+        .function: .systemBlue,
+        .type: .systemTeal,
+        .variable: .textColor,
+        .property: .systemBlue,
+        .number: .systemOrange,
+        .constant: .systemOrange,
+        .punctuation: .textColor,
+        .plain: .textColor,
+    ]
 
     public var onUserEdit: ((EditTransaction) -> Void)?
 
@@ -104,6 +131,48 @@ public final class TextKit2Engine: NSObject, TextLayoutEngine {
                 typingAttributes, range: NSRange(location: 0, length: storage.length),
             )
         }
+        highlightCurrentBuffer()
+    }
+
+    /// Kicks off a background reparse + repaint for the current buffer.
+    /// Fire-and-forget: discards the result if `buffer.version` has
+    /// already moved on by the time the actor call returns (stale-result
+    /// drop, ARCHITECTURE §3.4).
+    private func highlightCurrentBuffer() {
+        guard let languageID else { return }
+        let snapshot = buffer
+        let requestedVersion = snapshot.version
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            let runs: [TokenRun]
+            do {
+                runs = try await self.syntaxService.reparse(
+                    documentID: self.syntaxDocumentID,
+                    languageID: languageID,
+                    snapshot: snapshot,
+                    version: requestedVersion,
+                    edit: nil,
+                )
+            } catch {
+                return
+            }
+            guard self.buffer.version == requestedVersion else { return }
+            self.applyHighlighting(runs, against: snapshot)
+        }
+    }
+
+    private func applyHighlighting(_ runs: [TokenRun], against snapshot: TextBuffer) {
+        isMirroring = true
+        defer { isMirroring = false }
+        contentStorage.performEditingTransaction {
+            for run in runs {
+                let color = Self.temporaryColors[run.type] ?? .textColor
+                let location = snapshot.utf16Offset(of: run.range.lowerBound).value
+                let length = snapshot.utf16Offset(of: run.range.upperBound).value - location
+                guard location >= 0, length >= 0, location + length <= storage.length else { continue }
+                storage.addAttribute(.foregroundColor, value: color, range: NSRange(location: location, length: length))
+            }
+        }
     }
 
     public func apply(_ transaction: EditTransaction, base: TextBuffer) {
@@ -127,6 +196,7 @@ public final class TextKit2Engine: NSObject, TextLayoutEngine {
         }
         buffer.apply(transaction)
         assertMirrorInvariant()
+        highlightCurrentBuffer()
         if !transaction.selectionAfter.ranges.isEmpty {
             setSelection(transaction.selectionAfter, in: buffer)
         }
@@ -221,6 +291,14 @@ public final class TextKit2Engine: NSObject, TextLayoutEngine {
         buffer.apply(transaction)
         assertMirrorInvariant()
         onUserEdit?(transaction)
+    }
+}
+
+public func languageID(forFileExtension fileExtension: String) -> String? {
+    switch fileExtension.lowercased() {
+    case "json": "json"
+    case "swift": "swift"
+    default: nil
     }
 }
 
