@@ -312,31 +312,6 @@ public final class TextKit2Engine: NSObject, TextLayoutEngine {
     }
 }
 
-public func languageID(forFileExtension fileExtension: String) -> String? {
-    switch fileExtension.lowercased() {
-    case "json": "json"
-    case "swift": "swift"
-    case "js", "mjs", "cjs": "javascript"
-    case "ts", "tsx": "typescript"
-    case "html", "htm": "html"
-    case "css": "css"
-    case "py": "python"
-    case "yml", "yaml": "yaml"
-    case "toml": "toml"
-    case "sh", "bash": "bash"
-    case "c", "h": "c"
-    case "cpp", "cc", "hpp", "cxx": "cpp"
-    case "rs": "rust"
-    case "go": "go"
-    case "java": "java"
-    case "rb": "ruby"
-    case "php": "php"
-    case "md", "markdown": "markdown"
-    case "xml": "xml"
-    default: nil
-    }
-}
-
 extension TextKit2Engine: NSTextViewDelegate {
     /// See `documentUndoManager`'s doc comment: this is what actually
     /// routes Cmd+Z/Cmd+Shift+Z to the host's undo manager instead of the

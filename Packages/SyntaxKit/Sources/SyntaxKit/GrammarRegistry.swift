@@ -37,108 +37,36 @@ public actor GrammarRegistry {
         return loaded
     }
 
-    private static func loadGrammar(languageID: String) throws -> (language: Language, query: Query) {
-        let language: Language
+    /// Maps a `languageID` to its vendored grammar's C entry point. Add one
+    /// entry here (and a matching `import TreeSitter<Lang>` above) to wire
+    /// up a new grammar — no `switch` case needed.
+    private static let languageLoaders: [String: @Sendable () -> OpaquePointer?] = [
+        "json": tree_sitter_json,
+        "swift": tree_sitter_swift,
+        "javascript": tree_sitter_javascript,
+        "typescript": tree_sitter_typescript,
+        "html": tree_sitter_html,
+        "css": tree_sitter_css,
+        "python": tree_sitter_python,
+        "yaml": tree_sitter_yaml,
+        "toml": tree_sitter_toml,
+        "bash": tree_sitter_bash,
+        "c": tree_sitter_c,
+        "cpp": tree_sitter_cpp,
+        "rust": tree_sitter_rust,
+        "go": tree_sitter_go,
+        "java": tree_sitter_java,
+        "ruby": tree_sitter_ruby,
+        "php": tree_sitter_php,
+        "markdown": tree_sitter_markdown,
+        "xml": tree_sitter_xml,
+    ]
 
-        switch languageID {
-        case "json":
-            guard let tsLanguage = tree_sitter_json() else {
-                throw SyntaxKitError.grammarLoadFailed(languageID: languageID)
-            }
-            language = Language(tsLanguage)
-        case "swift":
-            guard let tsLanguage = tree_sitter_swift() else {
-                throw SyntaxKitError.grammarLoadFailed(languageID: languageID)
-            }
-            language = Language(tsLanguage)
-        case "javascript":
-            guard let tsLanguage = tree_sitter_javascript() else {
-                throw SyntaxKitError.grammarLoadFailed(languageID: languageID)
-            }
-            language = Language(tsLanguage)
-        case "typescript":
-            guard let tsLanguage = tree_sitter_typescript() else {
-                throw SyntaxKitError.grammarLoadFailed(languageID: languageID)
-            }
-            language = Language(tsLanguage)
-        case "html":
-            guard let tsLanguage = tree_sitter_html() else {
-                throw SyntaxKitError.grammarLoadFailed(languageID: languageID)
-            }
-            language = Language(tsLanguage)
-        case "css":
-            guard let tsLanguage = tree_sitter_css() else {
-                throw SyntaxKitError.grammarLoadFailed(languageID: languageID)
-            }
-            language = Language(tsLanguage)
-        case "python":
-            guard let tsLanguage = tree_sitter_python() else {
-                throw SyntaxKitError.grammarLoadFailed(languageID: languageID)
-            }
-            language = Language(tsLanguage)
-        case "yaml":
-            guard let tsLanguage = tree_sitter_yaml() else {
-                throw SyntaxKitError.grammarLoadFailed(languageID: languageID)
-            }
-            language = Language(tsLanguage)
-        case "toml":
-            guard let tsLanguage = tree_sitter_toml() else {
-                throw SyntaxKitError.grammarLoadFailed(languageID: languageID)
-            }
-            language = Language(tsLanguage)
-        case "bash":
-            guard let tsLanguage = tree_sitter_bash() else {
-                throw SyntaxKitError.grammarLoadFailed(languageID: languageID)
-            }
-            language = Language(tsLanguage)
-        case "c":
-            guard let tsLanguage = tree_sitter_c() else {
-                throw SyntaxKitError.grammarLoadFailed(languageID: languageID)
-            }
-            language = Language(tsLanguage)
-        case "cpp":
-            guard let tsLanguage = tree_sitter_cpp() else {
-                throw SyntaxKitError.grammarLoadFailed(languageID: languageID)
-            }
-            language = Language(tsLanguage)
-        case "rust":
-            guard let tsLanguage = tree_sitter_rust() else {
-                throw SyntaxKitError.grammarLoadFailed(languageID: languageID)
-            }
-            language = Language(tsLanguage)
-        case "go":
-            guard let tsLanguage = tree_sitter_go() else {
-                throw SyntaxKitError.grammarLoadFailed(languageID: languageID)
-            }
-            language = Language(tsLanguage)
-        case "java":
-            guard let tsLanguage = tree_sitter_java() else {
-                throw SyntaxKitError.grammarLoadFailed(languageID: languageID)
-            }
-            language = Language(tsLanguage)
-        case "ruby":
-            guard let tsLanguage = tree_sitter_ruby() else {
-                throw SyntaxKitError.grammarLoadFailed(languageID: languageID)
-            }
-            language = Language(tsLanguage)
-        case "php":
-            guard let tsLanguage = tree_sitter_php() else {
-                throw SyntaxKitError.grammarLoadFailed(languageID: languageID)
-            }
-            language = Language(tsLanguage)
-        case "markdown":
-            guard let tsLanguage = tree_sitter_markdown() else {
-                throw SyntaxKitError.grammarLoadFailed(languageID: languageID)
-            }
-            language = Language(tsLanguage)
-        case "xml":
-            guard let tsLanguage = tree_sitter_xml() else {
-                throw SyntaxKitError.grammarLoadFailed(languageID: languageID)
-            }
-            language = Language(tsLanguage)
-        default:
+    private static func loadGrammar(languageID: String) throws -> (language: Language, query: Query) {
+        guard let loadTSLanguage = languageLoaders[languageID], let tsLanguage = loadTSLanguage() else {
             throw SyntaxKitError.grammarLoadFailed(languageID: languageID)
         }
+        let language = Language(tsLanguage)
 
         guard let queryURL = Bundle.module.url(
             forResource: "highlights",
