@@ -161,8 +161,8 @@ public final class TextKit2Engine: NSObject, TextLayoutEngine {
             guard let self else { return }
             let runs: [TokenRun]
             do {
-                runs = try await self.syntaxService.reparse(
-                    documentID: self.syntaxDocumentID,
+                runs = try await syntaxService.reparse(
+                    documentID: syntaxDocumentID,
                     languageID: languageID,
                     snapshot: snapshot,
                     version: requestedVersion,
@@ -171,10 +171,10 @@ public final class TextKit2Engine: NSObject, TextLayoutEngine {
             } catch {
                 return
             }
-            guard self.loadGeneration == requestedGeneration,
-                  self.buffer.version == requestedVersion
+            guard loadGeneration == requestedGeneration,
+                  buffer.version == requestedVersion
             else { return }
-            self.applyHighlighting(runs, against: snapshot)
+            applyHighlighting(runs, against: snapshot)
         }
     }
 
