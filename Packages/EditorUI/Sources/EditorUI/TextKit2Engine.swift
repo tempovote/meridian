@@ -320,6 +320,10 @@ public func languageID(forFileExtension fileExtension: String) -> String? {
     case "ts", "tsx": "typescript"
     case "html", "htm": "html"
     case "css": "css"
+    case "py": "python"
+    case "yml", "yaml": "yaml"
+    case "toml": "toml"
+    case "sh", "bash": "bash"
     default: nil
     }
 }
