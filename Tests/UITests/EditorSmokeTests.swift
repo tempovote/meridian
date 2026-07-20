@@ -30,7 +30,21 @@ final class EditorSmokeTests: XCTestCase {
         app.typeKey("g", modifierFlags: [.command, .shift])
         app.typeText(fileURL.path)
         app.typeKey(.return, modifierFlags: [])
-        app.typeKey(.return, modifierFlags: [])
+
+        // Confirming Open can race the Go-to-Folder sheet's dismissal animation
+        // on slower CI hardware: a Return sent while that sheet is still closing
+        // is swallowed instead of reaching the panel's default Open button,
+        // leaving open-panel open indefinitely. Root-caused via CI diagnostic
+        // capture (see #15): "open-panel still open: true" after exactly one
+        // confirm Return. Retry, bounded, until the panel actually closes
+        // rather than trusting a single keystroke to land.
+        var openConfirmPresses = 0
+        while openPanel.exists, openConfirmPresses < 10 {
+            app.typeKey(.return, modifierFlags: [])
+            openConfirmPresses += 1
+            _ = waitForDisappearance(of: openPanel, timeout: 1)
+        }
+        XCTAssertFalse(openPanel.exists, "open-panel did not close after \(openConfirmPresses) confirm Return presses")
 
         // The document window shows the fixture content. Match on title, not
         // identifier: app.windows["smoke.txt"] looks up accessibilityIdentifier
