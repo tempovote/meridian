@@ -68,6 +68,22 @@ jobs:
       - name: Test
         run: swift test --package-path Packages/${{ matrix.package }} -Xswiftc -warnings-as-errors
 
+  test-grammars:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Cache SPM
+        uses: actions/cache@v4
+        with:
+          path: Grammars/.build
+          key: spm-${{ runner.os }}-Grammars-${{ hashFiles('Grammars/Package.swift', 'Grammars/Package.resolved') }}
+          restore-keys: |
+            spm-${{ runner.os }}-Grammars-
+      - name: Build (warnings as errors)
+        run: swift build --package-path Grammars -Xswiftc -warnings-as-errors
+      - name: Test
+        run: swift test --package-path Grammars -Xswiftc -warnings-as-errors
+
   app:
     runs-on: macos-15
     timeout-minutes: 60

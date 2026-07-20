@@ -48,6 +48,11 @@ targets:
             CFBundleTypeRole: Editor
             NSDocumentClass: Meridian.MeridianDocument
             LSHandlerRank: Alternate
+          - CFBundleTypeName: JSON
+            LSItemContentTypes: [public.json]
+            CFBundleTypeRole: Editor
+            NSDocumentClass: Meridian.MeridianDocument
+            LSHandlerRank: Alternate
     entitlements:
       path: App/Resources/Meridian.entitlements
       properties:
