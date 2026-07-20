@@ -324,6 +324,10 @@ public func languageID(forFileExtension fileExtension: String) -> String? {
     case "yml", "yaml": "yaml"
     case "toml": "toml"
     case "sh", "bash": "bash"
+    case "c", "h": "c"
+    case "cpp", "cc", "hpp", "cxx": "cpp"
+    case "rs": "rust"
+    case "go": "go"
     default: nil
     }
 }

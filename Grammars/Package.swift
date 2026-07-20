@@ -15,6 +15,10 @@ let package = Package(
         .library(name: "TreeSitterYaml", targets: ["TreeSitterYaml"]),
         .library(name: "TreeSitterToml", targets: ["TreeSitterToml"]),
         .library(name: "TreeSitterBash", targets: ["TreeSitterBash"]),
+        .library(name: "TreeSitterC", targets: ["TreeSitterC"]),
+        .library(name: "TreeSitterCpp", targets: ["TreeSitterCpp"]),
+        .library(name: "TreeSitterRust", targets: ["TreeSitterRust"]),
+        .library(name: "TreeSitterGo", targets: ["TreeSitterGo"]),
     ],
     targets: [
         .target(
@@ -67,5 +71,25 @@ let package = Package(
             cSettings: [.headerSearchPath(".")],
         ),
         .testTarget(name: "TreeSitterBashTests", dependencies: ["TreeSitterBash"]),
+        .target(
+            name: "TreeSitterC",
+            cSettings: [.headerSearchPath(".")],
+        ),
+        .testTarget(name: "TreeSitterCTests", dependencies: ["TreeSitterC"]),
+        .target(
+            name: "TreeSitterCpp",
+            cSettings: [.headerSearchPath(".")],
+        ),
+        .testTarget(name: "TreeSitterCppTests", dependencies: ["TreeSitterCpp"]),
+        .target(
+            name: "TreeSitterRust",
+            cSettings: [.headerSearchPath(".")],
+        ),
+        .testTarget(name: "TreeSitterRustTests", dependencies: ["TreeSitterRust"]),
+        .target(
+            name: "TreeSitterGo",
+            cSettings: [.headerSearchPath(".")],
+        ),
+        .testTarget(name: "TreeSitterGoTests", dependencies: ["TreeSitterGo"]),
     ],
 )

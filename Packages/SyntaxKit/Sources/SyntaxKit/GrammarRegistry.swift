@@ -1,11 +1,15 @@
 import Foundation
 import SwiftTreeSitter
 import TreeSitterBash
+import TreeSitterC
+import TreeSitterCpp
 import TreeSitterCss
+import TreeSitterGo
 import TreeSitterHtml
 import TreeSitterJavascript
 import TreeSitterJSON
 import TreeSitterPython
+import TreeSitterRust
 import TreeSitterSwift
 import TreeSitterToml
 import TreeSitterTypescript
@@ -79,6 +83,26 @@ public actor GrammarRegistry {
             language = Language(tsLanguage)
         case "bash":
             guard let tsLanguage = tree_sitter_bash() else {
+                throw SyntaxKitError.grammarLoadFailed(languageID: languageID)
+            }
+            language = Language(tsLanguage)
+        case "c":
+            guard let tsLanguage = tree_sitter_c() else {
+                throw SyntaxKitError.grammarLoadFailed(languageID: languageID)
+            }
+            language = Language(tsLanguage)
+        case "cpp":
+            guard let tsLanguage = tree_sitter_cpp() else {
+                throw SyntaxKitError.grammarLoadFailed(languageID: languageID)
+            }
+            language = Language(tsLanguage)
+        case "rust":
+            guard let tsLanguage = tree_sitter_rust() else {
+                throw SyntaxKitError.grammarLoadFailed(languageID: languageID)
+            }
+            language = Language(tsLanguage)
+        case "go":
+            guard let tsLanguage = tree_sitter_go() else {
                 throw SyntaxKitError.grammarLoadFailed(languageID: languageID)
             }
             language = Language(tsLanguage)
