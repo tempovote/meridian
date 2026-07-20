@@ -42,9 +42,20 @@ public actor SyntaxService {
             parser = newParser
         }
 
-        let oldTree = trees[documentID]
-        if let edit, let oldTree {
-            oldTree.edit(edit)
+        // `edit` is the only thing that tells tree-sitter what changed
+        // between the previous parse and `snapshot`. Without it, a cached
+        // tree is not a valid incremental base for these (possibly wholly
+        // different) bytes — `Tree.edit(_:)` must be called before reuse,
+        // per tree-sitter's incremental-parse contract. So: only reuse the
+        // cached tree when we actually just edited it; otherwise force a
+        // full, from-scratch parse (unconditionally correct, if slower).
+        let cachedTree = trees[documentID]
+        let treeForParse: MutableTree?
+        if let edit, let cachedTree {
+            cachedTree.edit(edit)
+            treeForParse = cachedTree
+        } else {
+            treeForParse = nil
         }
 
         let bytes = Array(snapshot.string.utf8)
@@ -53,7 +64,7 @@ public actor SyntaxService {
             return Data(bytes[byteIndex...])
         }
 
-        guard let newTree = parser.parse(tree: oldTree, encoding: TSInputEncodingUTF8, readBlock: readBlock) else {
+        guard let newTree = parser.parse(tree: treeForParse, encoding: TSInputEncodingUTF8, readBlock: readBlock) else {
             throw SyntaxKitError.parseFailed(languageID: languageID)
         }
         trees[documentID] = newTree
