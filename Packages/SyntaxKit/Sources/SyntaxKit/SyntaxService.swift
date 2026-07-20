@@ -70,13 +70,56 @@ public actor SyntaxService {
         trees[documentID] = newTree
 
         let cursor = query.execute(in: newTree)
-        let namedRanges = cursor.highlights()
+        let namedRanges = cursor
+            .filter { Self.predicatesPass(for: $0, snapshot: snapshot) }
+            .highlights()
         return namedRanges.map { namedRange in
             TokenRun(
                 range: ByteOffset(Int(namedRange.tsRange.bytes.lowerBound)) ..<
                     ByteOffset(Int(namedRange.tsRange.bytes.upperBound)),
                 type: TokenType(captureName: namedRange.name),
             )
+        }
+    }
+
+    /// Evaluates `match`'s `#match?`/`#eq?`/... predicates against `snapshot`.
+    ///
+    /// This *cannot* use `QueryMatch.allowed(in:)` + `Predicate.Context`
+    /// (SwiftTreeSitter's built-in path): that path slices predicate text
+    /// using `Node.range` (`NSRange`), which `Range<UInt32>.range`
+    /// (SwiftTreeSitter's `Encoding+Helpers.swift`) computes by
+    /// unconditionally halving the tree's raw byte offsets — an assumption
+    /// that only holds when the tree was parsed as UTF-16. This service
+    /// parses with `TSInputEncodingUTF8` (required so `tsRange.bytes`
+    /// above yields true UTF-8 `ByteOffset`s, per ARCHITECTURE's typed
+    /// coordinate spaces), so that halving corrupts every predicate's
+    /// source range and silently evaluates predicates against the wrong
+    /// substring. Bypassing it and reading `Node.byteRange` (the raw,
+    /// uncorrupted UTF-8 byte range) plus `TextBuffer.slice` avoids the bug
+    /// entirely and keeps the byte-offset conversion inside `TextBuffer`,
+    /// per the "raw Int offsets never cross a module boundary" rule.
+    private static func predicatesPass(for match: QueryMatch, snapshot: TextBuffer) -> Bool {
+        match.predicates.allSatisfy { predicate in
+            switch predicate {
+            case .set, .generic:
+                // Directives / unrecognized predicates never gate the match
+                // (mirrors SwiftTreeSitter's own `allowsMatch` behavior).
+                true
+            case .isNot:
+                // Would need `locals.scm` group-membership tracking, which
+                // this phase doesn't implement; SwiftTreeSitter's own
+                // default `groupMembershipProvider` always returns `false`
+                // too, so `#is-not?` is unconditionally satisfied either way.
+                true
+            case .eq, .notEq, .anyOf, .notAnyOf, .match, .notMatch:
+                predicate.captures(in: match).allSatisfy { capture in
+                    let byteRange = capture.node.byteRange
+                    let text = snapshot.slice(
+                        ByteOffset(Int(byteRange.lowerBound)) ..< ByteOffset(Int(byteRange.upperBound)),
+                    )
+                    return predicate.evalulate(with: text)
+                }
+            }
         }
     }
 }
