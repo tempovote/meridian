@@ -7,6 +7,6 @@ public struct DocumentID: Hashable, Sendable {
     private let id: UUID
 
     public init() {
-        self.id = UUID()
+        id = UUID()
     }
 }
