@@ -83,6 +83,20 @@ enum MainMenu {
         let lowerCase = NSMenuItem(title: "Make Lower Case", action: Selector(("makeLowerCase:")), keyEquivalent: "")
         menu.addItem(lowerCase)
 
+        let convertToLF = NSMenuItem(
+            title: "Convert Line Endings to LF",
+            action: Selector(("convertLineEndingsToLF:")),
+            keyEquivalent: "",
+        )
+        menu.addItem(convertToLF)
+
+        let convertToCRLF = NSMenuItem(
+            title: "Convert Line Endings to CRLF",
+            action: Selector(("convertLineEndingsToCRLF:")),
+            keyEquivalent: "",
+        )
+        menu.addItem(convertToCRLF)
+
         return wrapped(menu)
     }
 

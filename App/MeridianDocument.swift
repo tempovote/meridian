@@ -171,6 +171,16 @@ final class MeridianDocument: NSDocument {
                 .transformCase(in: viewModel.buffer, selection: viewModel.selection) { $0.lowercased() })
     }
 
+    @objc func convertLineEndingsToLF(_ sender: Any?) {
+        guard let viewModel else { return }
+        viewModel.perform(TextTransforms.convertLineEndings(in: viewModel.buffer, to: .lf))
+    }
+
+    @objc func convertLineEndingsToCRLF(_ sender: Any?) {
+        guard let viewModel else { return }
+        viewModel.perform(TextTransforms.convertLineEndings(in: viewModel.buffer, to: .crlf))
+    }
+
     private func showFindBar() {
         guard let viewModel, findBarHost == nil else { return }
         let findView = FindBarView(viewModel: viewModel) { [weak self] in

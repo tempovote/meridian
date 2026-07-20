@@ -57,4 +57,36 @@ struct TextTransformTests {
         buffer.apply(txLower)
         #expect(buffer.string == "hello world")
     }
+
+    @Test func convertLineEndingsLFToCRLF() {
+        var buffer = TextBuffer("Line 1\nLine 2\nLine 3")
+        let tx = TextTransforms.convertLineEndings(in: buffer, to: .crlf)
+        buffer.apply(tx)
+
+        #expect(buffer.string == "Line 1\r\nLine 2\r\nLine 3")
+    }
+
+    @Test func convertLineEndingsCRLFToLF() {
+        var buffer = TextBuffer("Line 1\r\nLine 2\r\nLine 3")
+        let tx = TextTransforms.convertLineEndings(in: buffer, to: .lf)
+        buffer.apply(tx)
+
+        #expect(buffer.string == "Line 1\nLine 2\nLine 3")
+    }
+
+    @Test func convertLineEndingsMixedToLF() {
+        var buffer = TextBuffer("Line 1\r\nLine 2\nLine 3\rLine 4")
+        let tx = TextTransforms.convertLineEndings(in: buffer, to: .lf)
+        buffer.apply(tx)
+
+        #expect(buffer.string == "Line 1\nLine 2\nLine 3\nLine 4")
+    }
+
+    @Test func convertLineEndingsNoOpWhenAlreadyTarget() {
+        var buffer = TextBuffer("Line 1\nLine 2")
+        let tx = TextTransforms.convertLineEndings(in: buffer, to: .lf)
+        buffer.apply(tx)
+
+        #expect(buffer.string == "Line 1\nLine 2")
+    }
 }
