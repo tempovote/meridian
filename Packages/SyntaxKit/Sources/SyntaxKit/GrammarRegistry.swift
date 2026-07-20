@@ -1,7 +1,11 @@
 import Foundation
 import SwiftTreeSitter
+import TreeSitterCss
+import TreeSitterHtml
+import TreeSitterJavascript
 import TreeSitterJSON
 import TreeSitterSwift
+import TreeSitterTypescript
 
 /// Loads and caches (Language, Query) pairs by language identifier.
 /// Independently testable/instantiable; owned by `SyntaxService` in
@@ -31,6 +35,26 @@ public actor GrammarRegistry {
             language = Language(tsLanguage)
         case "swift":
             guard let tsLanguage = tree_sitter_swift() else {
+                throw SyntaxKitError.grammarLoadFailed(languageID: languageID)
+            }
+            language = Language(tsLanguage)
+        case "javascript":
+            guard let tsLanguage = tree_sitter_javascript() else {
+                throw SyntaxKitError.grammarLoadFailed(languageID: languageID)
+            }
+            language = Language(tsLanguage)
+        case "typescript":
+            guard let tsLanguage = tree_sitter_typescript() else {
+                throw SyntaxKitError.grammarLoadFailed(languageID: languageID)
+            }
+            language = Language(tsLanguage)
+        case "html":
+            guard let tsLanguage = tree_sitter_html() else {
+                throw SyntaxKitError.grammarLoadFailed(languageID: languageID)
+            }
+            language = Language(tsLanguage)
+        case "css":
+            guard let tsLanguage = tree_sitter_css() else {
                 throw SyntaxKitError.grammarLoadFailed(languageID: languageID)
             }
             language = Language(tsLanguage)

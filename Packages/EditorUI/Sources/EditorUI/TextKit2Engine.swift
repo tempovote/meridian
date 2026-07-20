@@ -316,6 +316,10 @@ public func languageID(forFileExtension fileExtension: String) -> String? {
     switch fileExtension.lowercased() {
     case "json": "json"
     case "swift": "swift"
+    case "js", "mjs", "cjs": "javascript"
+    case "ts", "tsx": "typescript"
+    case "html", "htm": "html"
+    case "css": "css"
     default: nil
     }
 }
