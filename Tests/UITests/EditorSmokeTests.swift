@@ -43,7 +43,15 @@ final class EditorSmokeTests: XCTestCase {
         // identical local run resolves it in ~1s.
         let textView = app.windows.matching(NSPredicate(format: "title CONTAINS 'smoke.txt'")).firstMatch.textViews
             .firstMatch
-        XCTAssertTrue(textView.waitForExistence(timeout: 25))
+        XCTAssertTrue(
+            textView.waitForExistence(timeout: 25),
+            // Diagnostic only (evaluated lazily, zero cost on pass): disambiguates
+            // "open-panel never actually closed" (second Return raced its dismissal)
+            // from "panel closed but no correctly-titled document window appeared".
+            "open-panel still open: \(openPanel.exists); "
+                + "window titles: \(app.windows.allElementsBoundByIndex.map(\.title)); "
+                + "sheet count: \(app.sheets.count)",
+        )
         XCTAssertEqual(textView.value as? String, "hello\n")
 
         // Type at the start of the document, then save in place.
