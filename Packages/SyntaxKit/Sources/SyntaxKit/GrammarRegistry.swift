@@ -6,9 +6,12 @@ import TreeSitterCpp
 import TreeSitterCss
 import TreeSitterGo
 import TreeSitterHtml
+import TreeSitterJava
 import TreeSitterJavascript
 import TreeSitterJSON
+import TreeSitterPhp
 import TreeSitterPython
+import TreeSitterRuby
 import TreeSitterRust
 import TreeSitterSwift
 import TreeSitterToml
@@ -103,6 +106,21 @@ public actor GrammarRegistry {
             language = Language(tsLanguage)
         case "go":
             guard let tsLanguage = tree_sitter_go() else {
+                throw SyntaxKitError.grammarLoadFailed(languageID: languageID)
+            }
+            language = Language(tsLanguage)
+        case "java":
+            guard let tsLanguage = tree_sitter_java() else {
+                throw SyntaxKitError.grammarLoadFailed(languageID: languageID)
+            }
+            language = Language(tsLanguage)
+        case "ruby":
+            guard let tsLanguage = tree_sitter_ruby() else {
+                throw SyntaxKitError.grammarLoadFailed(languageID: languageID)
+            }
+            language = Language(tsLanguage)
+        case "php":
+            guard let tsLanguage = tree_sitter_php() else {
                 throw SyntaxKitError.grammarLoadFailed(languageID: languageID)
             }
             language = Language(tsLanguage)
