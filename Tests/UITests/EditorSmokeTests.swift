@@ -35,9 +35,15 @@ final class EditorSmokeTests: XCTestCase {
         // The document window shows the fixture content. Match on title, not
         // identifier: app.windows["smoke.txt"] looks up accessibilityIdentifier
         // (unset on NSWindow), not the title text, so it never matches.
+        //
+        // Timeout is generous (not the suite's usual 10s): confirmed via CI log
+        // timing comparison (see issue #15) that creating a *new* document window
+        // via the Open panel is the one AX-heavy path in this suite slow enough
+        // to occasionally exceed 10s on GitHub Actions' macOS runners, while an
+        // identical local run resolves it in ~1s.
         let textView = app.windows.matching(NSPredicate(format: "title CONTAINS 'smoke.txt'")).firstMatch.textViews
             .firstMatch
-        XCTAssertTrue(textView.waitForExistence(timeout: 10))
+        XCTAssertTrue(textView.waitForExistence(timeout: 25))
         XCTAssertEqual(textView.value as? String, "hello\n")
 
         // Type at the start of the document, then save in place.
