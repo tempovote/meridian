@@ -6,6 +6,7 @@ let package = Package(
     platforms: [.macOS(.v15)],
     products: [
         .library(name: "TreeSitterJSON", targets: ["TreeSitterJSON"]),
+        .library(name: "TreeSitterSwift", targets: ["TreeSitterSwift"]),
     ],
     targets: [
         .target(
@@ -13,5 +14,10 @@ let package = Package(
             cSettings: [.headerSearchPath(".")],
         ),
         .testTarget(name: "TreeSitterJSONTests", dependencies: ["TreeSitterJSON"]),
+        .target(
+            name: "TreeSitterSwift",
+            cSettings: [.headerSearchPath(".")],
+        ),
+        .testTarget(name: "TreeSitterSwiftTests", dependencies: ["TreeSitterSwift"]),
     ],
 )
