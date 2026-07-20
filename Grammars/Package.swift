@@ -63,6 +63,7 @@ let package = Package(
         .testTarget(name: "TreeSitterPythonTests", dependencies: ["TreeSitterPython"]),
         .target(
             name: "TreeSitterYaml",
+            exclude: ["schema.core.c"],
             cSettings: [.headerSearchPath(".")],
         ),
         .testTarget(name: "TreeSitterYamlTests", dependencies: ["TreeSitterYaml"]),
