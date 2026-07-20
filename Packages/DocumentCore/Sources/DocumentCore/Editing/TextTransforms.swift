@@ -153,6 +153,21 @@ public enum TextTransforms {
         )
     }
 
+    /// Rewrites every line break in `buffer` to `target`.
+    public static func convertLineEndings(in buffer: TextBuffer, to target: LineEnding) -> EditTransaction {
+        let convertedText = buffer.convertingLineEndings(to: target).string
+        if convertedText == buffer.string {
+            return emptyTransaction(in: buffer)
+        }
+
+        let edit = Edit(range: ByteOffset(0) ..< ByteOffset(buffer.utf8Count), replacement: convertedText)
+        return EditTransaction(
+            baseVersion: buffer.version,
+            edits: [edit],
+            origin: .user,
+        )
+    }
+
     // MARK: - Private Helpers
 
     private static func emptyTransaction(in buffer: TextBuffer, selection: SelectionSet = .empty) -> EditTransaction {
