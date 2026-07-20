@@ -30,14 +30,42 @@ final class EditorSmokeTests: XCTestCase {
         app.typeKey("g", modifierFlags: [.command, .shift])
         app.typeText(fileURL.path)
         app.typeKey(.return, modifierFlags: [])
-        app.typeKey(.return, modifierFlags: [])
+
+        // Confirming Open can race the Go-to-Folder sheet's dismissal animation
+        // on slower CI hardware: a Return sent while that sheet is still closing
+        // is swallowed instead of reaching the panel's default Open button,
+        // leaving open-panel open indefinitely. Root-caused via CI diagnostic
+        // capture (see #15): "open-panel still open: true" after exactly one
+        // confirm Return. Retry, bounded, until the panel actually closes
+        // rather than trusting a single keystroke to land.
+        var openConfirmPresses = 0
+        while openPanel.exists, openConfirmPresses < 10 {
+            app.typeKey(.return, modifierFlags: [])
+            openConfirmPresses += 1
+            _ = waitForDisappearance(of: openPanel, timeout: 1)
+        }
+        XCTAssertFalse(openPanel.exists, "open-panel did not close after \(openConfirmPresses) confirm Return presses")
 
         // The document window shows the fixture content. Match on title, not
         // identifier: app.windows["smoke.txt"] looks up accessibilityIdentifier
         // (unset on NSWindow), not the title text, so it never matches.
+        //
+        // Timeout is generous (not the suite's usual 10s): confirmed via CI log
+        // timing comparison (see issue #15) that creating a *new* document window
+        // via the Open panel is the one AX-heavy path in this suite slow enough
+        // to occasionally exceed 10s on GitHub Actions' macOS runners, while an
+        // identical local run resolves it in ~1s.
         let textView = app.windows.matching(NSPredicate(format: "title CONTAINS 'smoke.txt'")).firstMatch.textViews
             .firstMatch
-        XCTAssertTrue(textView.waitForExistence(timeout: 10))
+        XCTAssertTrue(
+            textView.waitForExistence(timeout: 25),
+            // Diagnostic only (evaluated lazily, zero cost on pass): disambiguates
+            // "open-panel never actually closed" (second Return raced its dismissal)
+            // from "panel closed but no correctly-titled document window appeared".
+            "open-panel still open: \(openPanel.exists); "
+                + "window titles: \(app.windows.allElementsBoundByIndex.map(\.title)); "
+                + "sheet count: \(app.sheets.count)",
+        )
         XCTAssertEqual(textView.value as? String, "hello\n")
 
         // Type at the start of the document, then save in place.
