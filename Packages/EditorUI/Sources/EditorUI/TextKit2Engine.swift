@@ -307,6 +307,7 @@ public final class TextKit2Engine: NSObject, TextLayoutEngine {
         )
         buffer.apply(transaction)
         assertMirrorInvariant()
+        highlightCurrentBuffer()
         onUserEdit?(transaction)
     }
 }
