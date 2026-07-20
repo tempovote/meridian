@@ -37,6 +37,8 @@ let package = Package(
                 .product(name: "TreeSitterJava", package: "Grammars"),
                 .product(name: "TreeSitterRuby", package: "Grammars"),
                 .product(name: "TreeSitterPhp", package: "Grammars"),
+                .product(name: "TreeSitterMarkdown", package: "Grammars"),
+                .product(name: "TreeSitterXml", package: "Grammars"),
             ],
             resources: [.copy("Resources")],
         ),

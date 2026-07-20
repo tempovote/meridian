@@ -331,6 +331,8 @@ public func languageID(forFileExtension fileExtension: String) -> String? {
     case "java": "java"
     case "rb": "ruby"
     case "php": "php"
+    case "md", "markdown": "markdown"
+    case "xml": "xml"
     default: nil
     }
 }

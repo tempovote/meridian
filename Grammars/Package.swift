@@ -22,6 +22,8 @@ let package = Package(
         .library(name: "TreeSitterJava", targets: ["TreeSitterJava"]),
         .library(name: "TreeSitterRuby", targets: ["TreeSitterRuby"]),
         .library(name: "TreeSitterPhp", targets: ["TreeSitterPhp"]),
+        .library(name: "TreeSitterMarkdown", targets: ["TreeSitterMarkdown"]),
+        .library(name: "TreeSitterXml", targets: ["TreeSitterXml"]),
     ],
     targets: [
         .target(
@@ -109,5 +111,15 @@ let package = Package(
             cSettings: [.headerSearchPath(".")],
         ),
         .testTarget(name: "TreeSitterPhpTests", dependencies: ["TreeSitterPhp"]),
+        .target(
+            name: "TreeSitterMarkdown",
+            cSettings: [.headerSearchPath(".")],
+        ),
+        .testTarget(name: "TreeSitterMarkdownTests", dependencies: ["TreeSitterMarkdown"]),
+        .target(
+            name: "TreeSitterXml",
+            cSettings: [.headerSearchPath(".")],
+        ),
+        .testTarget(name: "TreeSitterXmlTests", dependencies: ["TreeSitterXml"]),
     ],
 )
