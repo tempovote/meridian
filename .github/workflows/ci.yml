@@ -8,6 +8,7 @@ on:
 jobs:
   lint:
     runs-on: macos-15
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - name: Install linters (SwiftFormat pinned)
@@ -69,6 +70,7 @@ jobs:
 
   app:
     runs-on: macos-15
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
       - name: Install XcodeGen

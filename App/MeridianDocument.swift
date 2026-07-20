@@ -132,6 +132,65 @@ final class MeridianDocument: NSDocument {
         statusBarHost?.isHidden = !viewModel.isStatusBarVisible
     }
 
+    private var findBarHost: NSHostingView<FindBarView>?
+
+    @objc func performFind(_ sender: Any?) {
+        showFindBar()
+    }
+
+    @objc func performFindAndReplace(_ sender: Any?) {
+        showFindBar()
+    }
+
+    @objc func duplicateLine(_ sender: Any?) {
+        guard let viewModel else { return }
+        viewModel.perform(TextTransforms.duplicateLines(in: viewModel.buffer, selection: viewModel.selection))
+    }
+
+    @objc func deleteLine(_ sender: Any?) {
+        guard let viewModel else { return }
+        viewModel.perform(TextTransforms.deleteLines(in: viewModel.buffer, selection: viewModel.selection))
+    }
+
+    @objc func trimTrailingWhitespace(_ sender: Any?) {
+        guard let viewModel else { return }
+        viewModel.perform(TextTransforms.trimTrailingWhitespace(in: viewModel.buffer))
+    }
+
+    @objc func makeUpperCase(_ sender: Any?) {
+        guard let viewModel else { return }
+        viewModel
+            .perform(TextTransforms
+                .transformCase(in: viewModel.buffer, selection: viewModel.selection) { $0.uppercased() })
+    }
+
+    @objc func makeLowerCase(_ sender: Any?) {
+        guard let viewModel else { return }
+        viewModel
+            .perform(TextTransforms
+                .transformCase(in: viewModel.buffer, selection: viewModel.selection) { $0.lowercased() })
+    }
+
+    private func showFindBar() {
+        guard let viewModel, findBarHost == nil else { return }
+        let findView = FindBarView(viewModel: viewModel) { [weak self] in
+            self?.hideFindBar()
+        }
+        let host = NSHostingView(rootView: findView)
+        findBarHost = host
+
+        if let window = windowControllers.first?.window, let containerStack = window.contentView as? NSStackView {
+            containerStack.insertView(host, at: 0, in: .top)
+        }
+    }
+
+    private func hideFindBar() {
+        if let host = findBarHost {
+            host.removeFromSuperview()
+            findBarHost = nil
+        }
+    }
+
     override func validateMenuItem(_ menuItem: NSMenuItem) -> Bool {
         if menuItem.action == #selector(toggleLineNumbers(_:)) {
             menuItem.state = (viewModel?.isGutterVisible == true) ? .on : .off

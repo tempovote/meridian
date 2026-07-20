@@ -10,6 +10,7 @@ enum MainMenu {
         main.addItem(appMenuItem())
         main.addItem(fileMenuItem())
         main.addItem(editMenuItem())
+        main.addItem(findMenuItem())
         main.addItem(viewMenuItem())
         main.addItem(windowMenuItem())
         return main
@@ -39,9 +40,6 @@ enum MainMenu {
         menu.addItem(withTitle: "Close",
                      action: #selector(NSWindow.performClose(_:)),
                      keyEquivalent: "w")
-        // String selectors: these are the canonical responder-chain
-        // actions NSDocument implements; their Swift-renamed forms vary
-        // by SDK, the ObjC selector names do not.
         menu.addItem(withTitle: "Save…",
                      action: Selector(("saveDocument:")),
                      keyEquivalent: "s")
@@ -63,6 +61,51 @@ enum MainMenu {
         menu.addItem(withTitle: "Paste", action: #selector(NSText.paste(_:)), keyEquivalent: "v")
         menu.addItem(withTitle: "Select All",
                      action: #selector(NSText.selectAll(_:)), keyEquivalent: "a")
+        menu.addItem(.separator())
+
+        // Line & Transform Submenu items
+        let dupLine = NSMenuItem(title: "Duplicate Line", action: Selector(("duplicateLine:")), keyEquivalent: "D")
+        menu.addItem(dupLine)
+
+        let deleteLine = NSMenuItem(title: "Delete Line", action: Selector(("deleteLine:")), keyEquivalent: "K")
+        menu.addItem(deleteLine)
+
+        let trimWhitespace = NSMenuItem(
+            title: "Trim Trailing Whitespace",
+            action: Selector(("trimTrailingWhitespace:")),
+            keyEquivalent: "",
+        )
+        menu.addItem(trimWhitespace)
+
+        let upperCase = NSMenuItem(title: "Make Upper Case", action: Selector(("makeUpperCase:")), keyEquivalent: "")
+        menu.addItem(upperCase)
+
+        let lowerCase = NSMenuItem(title: "Make Lower Case", action: Selector(("makeLowerCase:")), keyEquivalent: "")
+        menu.addItem(lowerCase)
+
+        return wrapped(menu)
+    }
+
+    private static func findMenuItem() -> NSMenuItem {
+        let menu = NSMenu(title: "Find")
+
+        let find = NSMenuItem(title: "Find…", action: Selector(("performFind:")), keyEquivalent: "f")
+        menu.addItem(find)
+
+        let replace = NSMenuItem(
+            title: "Find and Replace…",
+            action: Selector(("performFindAndReplace:")),
+            keyEquivalent: "f",
+        )
+        replace.keyEquivalentModifierMask = [.command, .option]
+        menu.addItem(replace)
+
+        let findNext = NSMenuItem(title: "Find Next", action: Selector(("findNext:")), keyEquivalent: "g")
+        menu.addItem(findNext)
+
+        let findPrev = NSMenuItem(title: "Find Previous", action: Selector(("findPrevious:")), keyEquivalent: "G")
+        menu.addItem(findPrev)
+
         return wrapped(menu)
     }
 
