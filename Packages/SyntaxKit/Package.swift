@@ -10,7 +10,7 @@ let package = Package(
     dependencies: [
         .package(path: "../DocumentCore"),
         .package(path: "../../Grammars"),
-        .package(url: "https://github.com/ChimeHQ/SwiftTreeSitter", from: "0.9.0"),
+        .package(name: "SwiftTreeSitter", url: "https://github.com/tree-sitter/swift-tree-sitter", from: "0.9.0"),
         .package(url: "https://github.com/tree-sitter/tree-sitter", .upToNextMinor(from: "0.25.0")),
     ],
     targets: [
@@ -23,6 +23,7 @@ let package = Package(
                 .product(name: "TreeSitterJSON", package: "Grammars"),
                 .product(name: "TreeSitterSwift", package: "Grammars"),
             ],
+            resources: [.copy("Resources")],
         ),
         .testTarget(name: "SyntaxKitTests", dependencies: ["SyntaxKit"]),
     ],

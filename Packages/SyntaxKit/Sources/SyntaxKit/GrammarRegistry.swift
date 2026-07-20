@@ -22,7 +22,6 @@ public actor GrammarRegistry {
 
     private static func loadGrammar(languageID: String) throws -> (language: Language, query: Query) {
         let language: Language
-        let queryText: String
 
         switch languageID {
         case "json":
@@ -30,25 +29,25 @@ public actor GrammarRegistry {
                 throw SyntaxKitError.grammarLoadFailed(languageID: languageID)
             }
             language = Language(tsLanguage)
-            queryText = HighlightQueries.json
         case "swift":
             guard let tsLanguage = tree_sitter_swift() else {
                 throw SyntaxKitError.grammarLoadFailed(languageID: languageID)
             }
             language = Language(tsLanguage)
-            queryText = HighlightQueries.swift
         default:
             throw SyntaxKitError.grammarLoadFailed(languageID: languageID)
         }
 
-        guard let queryData = queryText.data(using: .utf8) else {
-            throw SyntaxKitError.queryCompilationFailed(
-                languageID: languageID,
-                underlying: SyntaxKitError.grammarLoadFailed(languageID: languageID),
-            )
+        guard let queryURL = Bundle.module.url(
+            forResource: "highlights",
+            withExtension: "scm",
+            subdirectory: "Resources/\(languageID)",
+        ) else {
+            throw SyntaxKitError.grammarLoadFailed(languageID: languageID)
         }
 
         do {
+            let queryData = try Data(contentsOf: queryURL)
             let query = try Query(language: language, data: queryData)
             return (language, query)
         } catch {
