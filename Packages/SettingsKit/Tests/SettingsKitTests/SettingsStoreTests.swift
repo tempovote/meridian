@@ -77,4 +77,40 @@ struct SettingsStoreTests {
         store.update { $0.editor.fontSize = 22 }
         #expect(observedSize == 22)
     }
+
+    @Test func externalValidEditIsPickedUpLive() async throws {
+        let dir = try makeTempDir()
+        let store = SettingsStore(directoryURL: dir)
+        store.update { $0.editor.fontSize = 20 } // ensures the file + directory exist
+
+        let url = dir.appendingPathComponent("settings.json")
+        var json = try JSONSerialization.jsonObject(with: Data(contentsOf: url)) as? [String: Any] ?? [:]
+        var editor = json["editor"] as? [String: Any] ?? [:]
+        editor["fontSize"] = 30
+        json["editor"] = editor
+        try JSONSerialization.data(withJSONObject: json).write(to: url, options: .atomic)
+
+        let deadline = Date().addingTimeInterval(2)
+        while store.current.editor.fontSize != 30, Date() < deadline {
+            try await Task.sleep(nanoseconds: 20_000_000)
+        }
+        #expect(store.current.editor.fontSize == 30)
+        #expect(store.lastLoadError == nil)
+    }
+
+    @Test func externalMalformedEditSetsErrorWithoutClobberingCurrent() async throws {
+        let dir = try makeTempDir()
+        let store = SettingsStore(directoryURL: dir)
+        store.update { $0.editor.fontSize = 20 }
+
+        let url = dir.appendingPathComponent("settings.json")
+        try Data("{ not valid json".utf8).write(to: url, options: .atomic)
+
+        let deadline = Date().addingTimeInterval(2)
+        while store.lastLoadError == nil, Date() < deadline {
+            try await Task.sleep(nanoseconds: 20_000_000)
+        }
+        #expect(store.lastLoadError != nil)
+        #expect(store.current.editor.fontSize == 20) // untouched by the bad reload
+    }
 }

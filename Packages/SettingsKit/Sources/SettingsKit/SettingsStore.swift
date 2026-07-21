@@ -18,6 +18,7 @@ public final class SettingsStore {
     /// additive fields (ARCHITECTURE §14 forward compat).
     private var extraTopLevelJSON: [String: Any] = [:]
     private var changeHandlers: [(Settings) -> Void] = []
+    private var watcher: SettingsFileWatcher?
 
     public static var defaultDirectory: URL {
         let appSupport = FileManager.default
@@ -48,6 +49,12 @@ public final class SettingsStore {
             }
         } else {
             current = .default
+        }
+        watcher = SettingsFileWatcher(directoryURL: directoryURL) { [weak self] in
+            assert(Thread.isMainThread, "SettingsFileWatcher fired off the main queue")
+            MainActor.assumeIsolated {
+                self?.reloadFromDisk()
+            }
         }
     }
 
