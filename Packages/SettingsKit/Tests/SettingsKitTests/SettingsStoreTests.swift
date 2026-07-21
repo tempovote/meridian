@@ -112,4 +112,30 @@ struct SettingsStoreTests {
         #expect(store.lastLoadError != nil)
         #expect(store.current.editor.fontSize == 20) // untouched by the bad reload
     }
+
+    /// Regression test: a subscriber (e.g. Preferences' error banner)
+    /// registered *before* an external edit breaks the file must still
+    /// be notified when that reload fails — not just when it succeeds.
+    /// Reproduces a real bug found via manual feel-check: an
+    /// already-open Preferences window's banner never appeared because
+    /// `reloadFromDisk()` only called `notifyObservers()` on its success
+    /// path.
+    @Test func onChangeFiresEvenWhenExternalReloadFails() async throws {
+        let dir = try makeTempDir()
+        let store = SettingsStore(directoryURL: dir)
+        store.update { $0.editor.fontSize = 20 } // ensures the file + directory exist
+
+        var notificationCount = 0
+        store.onChange { _ in notificationCount += 1 }
+
+        let url = dir.appendingPathComponent("settings.json")
+        try Data("{ not valid json".utf8).write(to: url, options: .atomic)
+
+        let deadline = Date().addingTimeInterval(2)
+        while notificationCount == 0, Date() < deadline {
+            try await Task.sleep(nanoseconds: 20_000_000)
+        }
+        #expect(notificationCount > 0)
+        #expect(store.lastLoadError != nil)
+    }
 }

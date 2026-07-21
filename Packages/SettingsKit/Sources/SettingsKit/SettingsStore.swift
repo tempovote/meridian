@@ -59,7 +59,10 @@ public final class SettingsStore {
     }
 
     /// The only write path: Preferences UI mutates a copy, this persists
-    /// it and (on success) swaps it in as `current`.
+    /// it and (on success) swaps it in as `current`. Notifies observers
+    /// on both success AND failure — a subscriber (e.g. Preferences'
+    /// error banner) needs to learn about a new `lastLoadError` just as
+    /// much as it needs to learn about a new `current`.
     public func update(_ transform: (inout Settings) -> Void) {
         var next = current
         transform(&next)
@@ -67,18 +70,18 @@ public final class SettingsStore {
             try persist(next)
             current = next
             lastLoadError = nil
-            notifyObservers()
         } catch let error as SettingsKitError {
             lastLoadError = error
         } catch {
             lastLoadError = .writeFailed(underlying: error)
         }
+        notifyObservers()
     }
 
-    /// Registers a handler fired after every successful `update` or
-    /// external reload. Handlers are never removed for the lifetime of
-    /// the app (P1 simplification — see plan Task 6 notes); each closure
-    /// should capture its owner weakly.
+    /// Registers a handler fired after every `update` or external reload
+    /// attempt, successful or not. Handlers are never removed for the
+    /// lifetime of the app (P1 simplification — see plan Task 6 notes);
+    /// each closure should capture its owner weakly.
     public func onChange(_ handler: @escaping (Settings) -> Void) {
         changeHandlers.append(handler)
     }
@@ -86,7 +89,12 @@ public final class SettingsStore {
     /// Called by ``SettingsFileWatcher`` (Task 3) when `settings.json`'s
     /// directory changes. A no-op if the file doesn't currently exist
     /// (some other file in the directory changed, or `settings.json` was
-    /// deleted) — that is not an error, just nothing to reload.
+    /// deleted) — that is not an error, just nothing to reload. Notifies
+    /// observers on both success AND failure (see `update(_:)`'s doc
+    /// comment for why) — this is the path a hand-edited, broken
+    /// `settings.json` takes, and without notifying on failure too, an
+    /// already-open Preferences window's error banner would never learn
+    /// that `lastLoadError` just changed.
     func reloadFromDisk() {
         guard FileManager.default.fileExists(atPath: fileURL.path) else { return }
         do {
@@ -94,12 +102,12 @@ public final class SettingsStore {
             current = loaded.settings
             extraTopLevelJSON = loaded.extraTopLevelJSON
             lastLoadError = nil
-            notifyObservers()
         } catch let error as SettingsKitError {
             lastLoadError = error
         } catch {
             lastLoadError = .decodingFailed(underlying: error)
         }
+        notifyObservers()
     }
 
     private func notifyObservers() {
