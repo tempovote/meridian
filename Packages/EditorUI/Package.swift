@@ -9,14 +9,15 @@ let package = Package(
     ],
     dependencies: [
         .package(path: "../DocumentCore"),
+        .package(path: "../SettingsKit"),
         .package(path: "../SyntaxKit"),
         .package(path: "../ThemeKit"),
     ],
     targets: [
         .target(
             name: "EditorUI",
-            dependencies: ["DocumentCore", "SyntaxKit", "ThemeKit"],
+            dependencies: ["DocumentCore", "SettingsKit", "SyntaxKit", "ThemeKit"],
         ),
-        .testTarget(name: "EditorUITests", dependencies: ["EditorUI"]),
+        .testTarget(name: "EditorUITests", dependencies: ["EditorUI", "SettingsKit"]),
     ],
 )

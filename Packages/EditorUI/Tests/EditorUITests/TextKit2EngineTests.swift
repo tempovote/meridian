@@ -1,8 +1,16 @@
 import AppKit
 import DocumentCore
+import SettingsKit
 import Testing
 import ThemeKit
 @testable import EditorUI
+
+/// A fresh, unique temp directory per call — real `SettingsStore`
+/// instances only (this repo doesn't mock; ARCHITECTURE §15).
+private func testSettingsDirectory() -> URL {
+    FileManager.default.temporaryDirectory
+        .appendingPathComponent("editorui-settings-tests-\(UUID().uuidString)")
+}
 
 /// Deterministic RNG so the round-trip fuzz case is reproducible.
 private struct SplitMix64: RandomNumberGenerator {
@@ -25,7 +33,7 @@ private struct SplitMix64: RandomNumberGenerator {
 struct TextKit2EngineTests {
     private func makeEngine(_ text: String) -> (TextKit2Engine, TextBuffer) {
         let themeEngine = ThemeEngine(darkTheme: BundledThemes.meridianDark, lightTheme: BundledThemes.meridianLight)
-        let engine = TextKit2Engine(themeEngine: themeEngine)
+        let engine = TextKit2Engine(themeEngine: themeEngine, settingsStore: SettingsStore(directoryURL: testSettingsDirectory()))
         let buffer = TextBuffer(text)
         engine.load(buffer: buffer)
         return (engine, buffer)
@@ -38,7 +46,7 @@ struct TextKit2EngineTests {
 
     @Test func loadDoesNotFireOnUserEdit() {
         let themeEngine = ThemeEngine(darkTheme: BundledThemes.meridianDark, lightTheme: BundledThemes.meridianLight)
-        let engine = TextKit2Engine(themeEngine: themeEngine)
+        let engine = TextKit2Engine(themeEngine: themeEngine, settingsStore: SettingsStore(directoryURL: testSettingsDirectory()))
         var fired = 0
         engine.onUserEdit = { _ in fired += 1 }
         engine.load(buffer: TextBuffer("seed"))

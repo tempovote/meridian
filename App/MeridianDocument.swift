@@ -82,7 +82,7 @@ final class MeridianDocument: NSDocument {
 
     override func makeWindowControllers() {
         MainActor.assumeIsolated {
-            let engine = TextKit2Engine(themeEngine: AppDelegate.themeEngine)
+            let engine = TextKit2Engine(themeEngine: AppDelegate.themeEngine, settingsStore: AppDelegate.settingsStore)
             engine.languageID = fileURL.flatMap { languageID(forFileExtension: $0.pathExtension) }
             let viewModel = EditorViewModel(buffer: pendingBuffer, engine: engine)
             self.engine = engine
