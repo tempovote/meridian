@@ -19,10 +19,10 @@ public final class TextKit2Engine: NSObject, TextLayoutEngine {
     /// within `MainActor.assumeIsolated` (directly, or via the `@MainActor`
     /// methods below), so no `nonisolated(unsafe)` escape hatch is needed —
     /// see the delegate override's doc comment for the isolation bridge.
-    private var buffer = TextBuffer()
+    var buffer = TextBuffer()
     /// True while `load`/`apply` mutate the storage, so the delegate does
     /// not report our own mirroring as a user edit.
-    private var isMirroring = false
+    var isMirroring = false
     /// Increments every time `load(buffer:)` adopts a brand-new buffer
     /// lineage (never on `apply`, which reuses the same lineage). Needed
     /// because `TextBuffer.version` resets to 0 for every new `TextBuffer`
@@ -31,10 +31,10 @@ public final class TextKit2Engine: NSObject, TextLayoutEngine {
     /// "later edit of the same lineage" from "an entirely different
     /// lineage that happens to share a version" (e.g. `NSDocument` revert
     /// calling `load(buffer:)` again on the same engine).
-    private var loadGeneration = 0
+    var loadGeneration = 0
 
-    private let syntaxService = SyntaxService()
-    private let syntaxDocumentID = DocumentID()
+    let syntaxService = SyntaxService()
+    let syntaxDocumentID = DocumentID()
     /// Detected once at `load(buffer:)` time from the document's file
     /// extension (set externally — see `languageID(forFileExtension:)`
     /// below); `nil` means "don't highlight".
@@ -44,6 +44,15 @@ public final class TextKit2Engine: NSObject, TextLayoutEngine {
     private let settingsStore: SettingsStore
     var fontCache: TokenFontCache
     var paragraphStyle: NSParagraphStyle
+    /// The most recent token classification from `applyHighlighting`, kept
+    /// around so bracket-match recomputation (on every selection change)
+    /// doesn't need to reparse — `nil` until the first successful parse,
+    /// or forever for a document with no `languageID`.
+    var lastTokenRuns: [TokenRun]?
+    /// The two byte ranges currently painted with the bracket-match
+    /// background color, so they can be cleared before a new pair (or
+    /// none) is painted.
+    var currentBracketHighlightRanges: [NSRange] = []
 
     public var onUserEdit: ((EditTransaction) -> Void)?
 
@@ -121,7 +130,7 @@ public final class TextKit2Engine: NSObject, TextLayoutEngine {
         return storage
     }
 
-    private var contentStorage: NSTextContentStorage {
+    var contentStorage: NSTextContentStorage {
         guard let contentStorage = textView.textContentStorage
         else { preconditionFailure("NSTextView lost its TextKit 2 content storage") }
         return contentStorage
@@ -142,56 +151,6 @@ public final class TextKit2Engine: NSObject, TextLayoutEngine {
             )
         }
         highlightCurrentBuffer()
-    }
-
-    /// Kicks off a background reparse + repaint for the current buffer.
-    /// Fire-and-forget: discards the result if `buffer.version` has
-    /// already moved on by the time the actor call returns (stale-result
-    /// drop, ARCHITECTURE §3.4), or if `loadGeneration` has advanced —
-    /// i.e. `load(buffer:)` adopted an entirely different buffer lineage
-    /// in the meantime (e.g. an `NSDocument` revert), which could
-    /// otherwise share the stale request's version number by coincidence
-    /// since `TextBuffer.version` resets to 0 on every new instance.
-    func highlightCurrentBuffer() {
-        guard let languageID else { return }
-        let snapshot = buffer
-        let requestedVersion = snapshot.version
-        let requestedGeneration = loadGeneration
-        Task { @MainActor [weak self] in
-            guard let self else { return }
-            let runs: [TokenRun]
-            do {
-                runs = try await syntaxService.reparse(
-                    documentID: syntaxDocumentID,
-                    languageID: languageID,
-                    snapshot: snapshot,
-                    version: requestedVersion,
-                    edit: nil,
-                )
-            } catch {
-                return
-            }
-            guard loadGeneration == requestedGeneration,
-                  buffer.version == requestedVersion
-            else { return }
-            applyHighlighting(runs, against: snapshot)
-        }
-    }
-
-    private func applyHighlighting(_ runs: [TokenRun], against snapshot: TextBuffer) {
-        isMirroring = true
-        defer { isMirroring = false }
-        contentStorage.performEditingTransaction {
-            for run in runs {
-                let style = themeEngine.resolvedStyle(for: run.type.rawValue)
-                let location = snapshot.utf16Offset(of: run.range.lowerBound).value
-                let length = snapshot.utf16Offset(of: run.range.upperBound).value - location
-                guard location >= 0, length >= 0, location + length <= storage.length else { continue }
-                let range = NSRange(location: location, length: length)
-                storage.addAttribute(.foregroundColor, value: style.color, range: range)
-                storage.addAttribute(.font, value: fontCache.font(bold: style.bold, italic: style.italic), range: range)
-            }
-        }
     }
 
     public func apply(_ transaction: EditTransaction, base: TextBuffer) {
@@ -326,6 +285,7 @@ extension TextKit2Engine: NSTextViewDelegate {
     public func textViewDidChangeSelection(_ notification: Notification) {
         textView.needsDisplay = true
         rulerView?.needsDisplay = true
+        updateBracketHighlight()
     }
 }
 
@@ -360,6 +320,15 @@ extension TextKit2Engine: NSTextStorageDelegate {
         /// Test hooks — compiled out of release builds.
         var storageStringForTesting: String {
             storage.string
+        }
+
+        /// Reads a single storage attribute at a UTF-16 offset — used by
+        /// bracket-match tests to confirm a `.backgroundColor` attribute
+        /// is (or isn't) present at a specific location, without needing
+        /// to know the exact `NSColor` value.
+        func storageAttributeForTesting(_ key: NSAttributedString.Key, at utf16Offset: Int) -> Any? {
+            guard utf16Offset < storage.length else { return nil }
+            return storage.attribute(key, at: utf16Offset, effectiveRange: nil)
         }
 
         var snapshotStringForTesting: String {

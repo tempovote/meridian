@@ -84,12 +84,21 @@ enum BracketMatcher {
         return nil
     }
 
-    /// The raw byte at `offset`, or `nil` if `offset` is out of bounds.
-    /// Brackets are single-byte ASCII, so a 1-byte slice is always safe
-    /// once bounds are checked.
+    /// The raw byte at `offset`, or `nil` if `offset` is out of bounds, or
+    /// `offset` falls inside (or immediately before) a multi-byte UTF-8
+    /// scalar. `findForward`/`findBackward` advance one byte at a time
+    /// regardless of scalar width, so this is reached at every byte
+    /// position of multi-byte content, not just scalar starts — and
+    /// `TextBuffer.slice(_:)` traps on a non-scalar-boundary range.
+    /// Brackets are single-byte ASCII, so a genuine match can only occur
+    /// at a scalar that is exactly 1 byte wide (both `offset` and
+    /// `offset + 1` on scalar boundaries); anything else safely isn't a
+    /// bracket and is skipped rather than sliced.
     private static func character(in buffer: TextBuffer, at offset: ByteOffset) -> UInt8? {
         guard offset.value >= 0, offset.value < buffer.utf8Count else { return nil }
-        return buffer.slice(offset ..< ByteOffset(offset.value + 1)).utf8.first
+        let next = ByteOffset(offset.value + 1)
+        guard buffer.isScalarBoundary(offset), buffer.isScalarBoundary(next) else { return nil }
+        return buffer.slice(offset ..< next).utf8.first
     }
 
     /// `true` when `offset` should be considered for matching: always true
