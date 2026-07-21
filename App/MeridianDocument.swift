@@ -166,7 +166,25 @@ final class MeridianDocument: NSDocument {
             onExecute: { [weak self] in
                 guard let self, let command = viewModel.selectedCommand else { return }
                 hideCommandPalette()
-                NSApp.sendAction(command.selector, to: nil, from: nil)
+                // Commands `MeridianDocument` implements directly (the toggles
+                // and text transforms — see the list in `CommandRegistry`'s
+                // Edit/View sections) are sent straight to `self`, bypassing
+                // the responder-chain walk entirely. That walk depends on
+                // `hideCommandPalette()` having already handed first-responder
+                // status back to the editor's text view — true today, but a
+                // needless dependency for actions `self` already answers to
+                // directly, and one that showed up here as "Soft Wrap doesn't
+                // actually toggle" when invoked from the palette. Commands the
+                // document does NOT implement (Cut/Copy/Paste/Select All,
+                // which `NSTextView` answers; Undo/Redo, which it also
+                // intercepts itself — see `documentUndoManager`'s doc comment)
+                // still need the real responder-chain resolution, since only
+                // the text view (now first responder again) can answer them.
+                if self.responds(to: command.selector) {
+                    NSApp.sendAction(command.selector, to: self, from: nil)
+                } else {
+                    NSApp.sendAction(command.selector, to: nil, from: nil)
+                }
             },
             onClose: { [weak self] in
                 self?.hideCommandPalette()

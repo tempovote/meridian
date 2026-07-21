@@ -8,6 +8,14 @@ public struct CommandPaletteView: View {
     @Bindable var viewModel: CommandPaletteViewModel
     public let onExecute: () -> Void
     public let onClose: () -> Void
+    /// Claims SwiftUI-level keyboard focus for the search field as soon as
+    /// the palette appears. `window.makeFirstResponder(host)` (in
+    /// `MeridianDocument.showCommandPalette(_:)`) only makes the enclosing
+    /// `NSHostingView` the AppKit first responder — that does not, by
+    /// itself, give any SwiftUI view inside it keyboard focus, so without
+    /// this the `.onKeyPress` handlers below (and the `TextField`) stay
+    /// unresponsive until the user clicks in.
+    @FocusState private var isSearchFieldFocused: Bool
 
     public init(viewModel: CommandPaletteViewModel, onExecute: @escaping () -> Void, onClose: @escaping () -> Void) {
         self.viewModel = viewModel
@@ -22,6 +30,7 @@ public struct CommandPaletteView: View {
                     .foregroundColor(.secondary)
                 TextField("Type a command…", text: $viewModel.query)
                     .textFieldStyle(.plain)
+                    .focused($isSearchFieldFocused)
                     .onSubmit(execute)
             }
 
@@ -54,6 +63,9 @@ public struct CommandPaletteView: View {
         .onKeyPress(.escape) {
             onClose()
             return .handled
+        }
+        .onAppear {
+            isSearchFieldFocused = true
         }
     }
 
