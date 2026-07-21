@@ -12,6 +12,8 @@ public enum TokenType: String, Sendable, CaseIterable {
     case number
     case constant
     case punctuation
+    case tag
+    case attribute
     case plain
 
     /// Maps a raw tree-sitter capture name (e.g. `"keyword.function"`) to
