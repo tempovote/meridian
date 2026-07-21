@@ -20,6 +20,12 @@ public final class SettingsStore {
     private var changeHandlers: [(Settings) -> Void] = []
     private var watcher: SettingsFileWatcher?
 
+    /// `~/Library/Application Support/Meridian/` when unsandboxed. The app
+    /// build has `com.apple.security.app-sandbox` enabled, so this API
+    /// (correctly) resolves to the sandbox container instead —
+    /// `~/Library/Containers/<bundle-id>/Data/Library/Application Support/Meridian/`
+    /// — for manual inspection/hand-editing during testing, look there,
+    /// not the literal unsandboxed path.
     public static var defaultDirectory: URL {
         let appSupport = FileManager.default
             .urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
