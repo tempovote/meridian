@@ -1,8 +1,16 @@
 import AppKit
 import DocumentCore
+import SettingsKit
 import Testing
 import ThemeKit
 @testable import EditorUI
+
+/// A fresh, unique temp directory per call — real `SettingsStore`
+/// instances only (this repo doesn't mock; ARCHITECTURE §15).
+private func testSettingsDirectory() -> URL {
+    FileManager.default.temporaryDirectory
+        .appendingPathComponent("editorui-settings-tests-\(UUID().uuidString)")
+}
 
 @MainActor
 @Suite("SoftWrapAndChromeTests")
@@ -32,7 +40,10 @@ struct SoftWrapAndChromeTests {
 
     @Test func textKit2EngineSoftWrapAndGutterToggles() {
         let themeEngine = ThemeEngine(darkTheme: BundledThemes.meridianDark, lightTheme: BundledThemes.meridianLight)
-        let engine = TextKit2Engine(themeEngine: themeEngine)
+        let engine = TextKit2Engine(
+            themeEngine: themeEngine,
+            settingsStore: SettingsStore(directoryURL: testSettingsDirectory()),
+        )
         let vm = EditorViewModel(buffer: TextBuffer("Line 1\nLine 2"), engine: engine)
 
         engine.setSoftWrap(true)

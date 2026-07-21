@@ -1,5 +1,6 @@
 import AppKit
 import DocumentCore
+import SettingsKit
 import SyntaxKit
 import ThemeKit
 
@@ -11,7 +12,7 @@ import ThemeKit
 @MainActor
 public final class TextKit2Engine: NSObject, TextLayoutEngine {
     private let scrollView: NSScrollView
-    private let textView: MeridianTextView
+    let textView: MeridianTextView
     private var rulerView: LineNumberRulerView?
     /// The engine-local mirror snapshot. Invariant: equals the storage's
     /// string after every load/apply/user edit. Only ever touched from
@@ -39,8 +40,10 @@ public final class TextKit2Engine: NSObject, TextLayoutEngine {
     /// below); `nil` means "don't highlight".
     public var languageID: String?
 
-    private let themeEngine: ThemeEngine
-    private let fontCache = TokenFontCache(baseSize: 13)
+    let themeEngine: ThemeEngine
+    private let settingsStore: SettingsStore
+    var fontCache: TokenFontCache
+    var paragraphStyle: NSParagraphStyle
 
     public var onUserEdit: ((EditTransaction) -> Void)?
 
@@ -65,8 +68,12 @@ public final class TextKit2Engine: NSObject, TextLayoutEngine {
     }
 
     /// Builds the scroll view + TextKit 2 text view, plain-text config.
-    public init(themeEngine: ThemeEngine) {
+    public init(themeEngine: ThemeEngine, settingsStore: SettingsStore) {
         self.themeEngine = themeEngine
+        self.settingsStore = settingsStore
+        let initialEditor = settingsStore.current.editor
+        fontCache = TokenFontCache(familyName: initialEditor.fontFamily, size: CGFloat(initialEditor.fontSize))
+        paragraphStyle = TabStopStyle.paragraphStyle(tabWidth: initialEditor.tabWidth, font: fontCache.baseFont)
         textView = MeridianTextView(usingTextLayoutManager: true)
         scrollView = NSScrollView()
         super.init()
@@ -77,7 +84,7 @@ public final class TextKit2Engine: NSObject, TextLayoutEngine {
         textView.isAutomaticDashSubstitutionEnabled = false
         textView.isAutomaticTextReplacementEnabled = false
         textView.isAutomaticSpellingCorrectionEnabled = false
-        textView.font = NSFont.monospacedSystemFont(ofSize: 13, weight: .regular)
+        textView.font = fontCache.baseFont
         textView.autoresizingMask = [.width]
         textView.isVerticallyResizable = true
         textView.isHorizontallyResizable = false
@@ -98,29 +105,16 @@ public final class TextKit2Engine: NSObject, TextLayoutEngine {
         textView.onEffectiveAppearanceChange = { [weak self] in
             self?.handleAppearanceChange()
         }
+        settingsStore.onChange { [weak self] settings in
+            self?.applyEditorSettings(settings.editor)
+        }
         applyEditorColors()
-    }
-
-    private func applyEditorColors() {
-        textView.backgroundColor = themeEngine.editorColors.background
-        textView.insertionPointColor = themeEngine.editorColors.caret
-        textView.currentLineHighlightColor = themeEngine.editorColors.lineHighlight
-    }
-
-    /// Called when `MeridianTextView.viewDidChangeEffectiveAppearance()`
-    /// fires (system light/dark toggle, or a window moving to a screen
-    /// with a different active appearance).
-    private func handleAppearanceChange() {
-        let isDark = textView.effectiveAppearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
-        themeEngine.appearanceDidChange(isDark: isDark)
-        applyEditorColors()
-        highlightCurrentBuffer()
     }
 
     /// The TextKit 2 backing store. Trapping here is correct: a nil
     /// `textContentStorage` means the view silently downgraded to
     /// TextKit 1 — a programming error we must catch immediately.
-    private var storage: NSTextStorage {
+    var storage: NSTextStorage {
         guard let contentStorage = textView.textContentStorage,
               let storage = contentStorage.textStorage
         else { preconditionFailure("NSTextView lost its TextKit 2 content storage") }
@@ -158,7 +152,7 @@ public final class TextKit2Engine: NSObject, TextLayoutEngine {
     /// in the meantime (e.g. an `NSDocument` revert), which could
     /// otherwise share the stale request's version number by coincidence
     /// since `TextBuffer.version` resets to 0 on every new instance.
-    private func highlightCurrentBuffer() {
+    func highlightCurrentBuffer() {
         guard let languageID else { return }
         let snapshot = buffer
         let requestedVersion = snapshot.version
@@ -278,8 +272,9 @@ public final class TextKit2Engine: NSObject, TextLayoutEngine {
 
     private var typingAttributes: [NSAttributedString.Key: Any] {
         [
-            .font: NSFont.monospacedSystemFont(ofSize: 13, weight: .regular),
+            .font: fontCache.baseFont,
             .foregroundColor: NSColor.textColor,
+            .paragraphStyle: paragraphStyle,
         ]
     }
 

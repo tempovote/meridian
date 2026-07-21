@@ -1,5 +1,7 @@
 import AppKit
+import SettingsKit
 import ThemeKit
+import WorkspaceUI
 
 @main
 final class AppDelegate: NSObject, NSApplicationDelegate {
@@ -16,6 +18,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         lightTheme: BundledThemes.meridianLight,
     )
 
+    /// The single shared settings store, constructed once at the
+    /// composition root alongside `themeEngine` (both are the same
+    /// sanctioned "no singletons except the composition root" exception —
+    /// `AppDelegate` *is* the composition root).
+    @MainActor
+    static let settingsStore = SettingsStore()
+
+    /// The one shared Preferences window, created lazily on first use.
+    @MainActor
+    private lazy var preferencesWindowController = PreferencesWindowController(
+        settingsStore: AppDelegate.settingsStore,
+    )
+
     @MainActor
     static func main() {
         let app = NSApplication.shared
@@ -28,6 +43,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.activate()
+    }
+
+    @MainActor
+    @objc func showPreferences(_ sender: Any?) {
+        preferencesWindowController.show()
     }
 
     /// Document-based default: launching (or clicking the Dock icon with

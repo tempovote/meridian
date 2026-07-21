@@ -68,7 +68,9 @@ final class MeridianDocument: NSDocument {
                 // path only runs for NSDocument's built-in revert.
                 _ = viewModel // old model discarded with its undo history
                 engine.languageID = languageID(forFileExtension: url.pathExtension)
-                self.viewModel = EditorViewModel(buffer: file.buffer, engine: engine)
+                let newViewModel = EditorViewModel(buffer: file.buffer, engine: engine)
+                newViewModel.isSoftWrapEnabled = AppDelegate.settingsStore.current.editor.softWrapDefault
+                self.viewModel = newViewModel
                 self.wireUndoCallback()
             }
         }
@@ -82,9 +84,10 @@ final class MeridianDocument: NSDocument {
 
     override func makeWindowControllers() {
         MainActor.assumeIsolated {
-            let engine = TextKit2Engine(themeEngine: AppDelegate.themeEngine)
+            let engine = TextKit2Engine(themeEngine: AppDelegate.themeEngine, settingsStore: AppDelegate.settingsStore)
             engine.languageID = fileURL.flatMap { languageID(forFileExtension: $0.pathExtension) }
             let viewModel = EditorViewModel(buffer: pendingBuffer, engine: engine)
+            viewModel.isSoftWrapEnabled = AppDelegate.settingsStore.current.editor.softWrapDefault
             self.engine = engine
             self.viewModel = viewModel
             wireUndoCallback()
