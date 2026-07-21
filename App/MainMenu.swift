@@ -22,6 +22,10 @@ enum MainMenu {
                      action: #selector(NSApplication.orderFrontStandardAboutPanel(_:)),
                      keyEquivalent: "")
         menu.addItem(.separator())
+        menu.addItem(withTitle: "Preferences…",
+                     action: #selector(AppDelegate.showPreferences(_:)),
+                     keyEquivalent: ",")
+        menu.addItem(.separator())
         menu.addItem(withTitle: "Quit Meridian",
                      action: #selector(NSApplication.terminate(_:)),
                      keyEquivalent: "q")
