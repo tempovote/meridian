@@ -1,6 +1,7 @@
 import AppKit
 import DocumentCore
 import Testing
+import ThemeKit
 @testable import EditorUI
 
 /// Deterministic RNG so the round-trip fuzz case is reproducible.
@@ -23,7 +24,8 @@ private struct SplitMix64: RandomNumberGenerator {
 @Suite("TextKit2Engine")
 struct TextKit2EngineTests {
     private func makeEngine(_ text: String) -> (TextKit2Engine, TextBuffer) {
-        let engine = TextKit2Engine()
+        let themeEngine = ThemeEngine(darkTheme: BundledThemes.meridianDark, lightTheme: BundledThemes.meridianLight)
+        let engine = TextKit2Engine(themeEngine: themeEngine)
         let buffer = TextBuffer(text)
         engine.load(buffer: buffer)
         return (engine, buffer)
@@ -35,7 +37,8 @@ struct TextKit2EngineTests {
     }
 
     @Test func loadDoesNotFireOnUserEdit() {
-        let engine = TextKit2Engine()
+        let themeEngine = ThemeEngine(darkTheme: BundledThemes.meridianDark, lightTheme: BundledThemes.meridianLight)
+        let engine = TextKit2Engine(themeEngine: themeEngine)
         var fired = 0
         engine.onUserEdit = { _ in fired += 1 }
         engine.load(buffer: TextBuffer("seed"))

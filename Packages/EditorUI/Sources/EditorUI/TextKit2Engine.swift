@@ -1,6 +1,7 @@
 import AppKit
 import DocumentCore
 import SyntaxKit
+import ThemeKit
 
 /// TextKit 2 conformer of ``TextLayoutEngine``: a standard `NSTextView`
 /// backed by Apple's `NSTextContentStorage` (ADR 0009 verdict), with the
@@ -35,27 +36,10 @@ public final class TextKit2Engine: NSObject, TextLayoutEngine {
     private let syntaxDocumentID = DocumentID()
     /// Detected once at `load(buffer:)` time from the document's file
     /// extension (set externally — see `languageID(forFileExtension:)`
-    /// below); `nil` means "don't highlight" (any extension besides
-    /// json/swift, or no extension known yet).
+    /// below); `nil` means "don't highlight".
     public var languageID: String?
 
-    /// Temporary hardcoded palette (design spec Decision 5) — replaced
-    /// wholesale by real `ThemeKit` resolution in a later M4 phase. Do
-    /// not extend this table; it exists only to prove the pipeline
-    /// paints real color end-to-end.
-    private static let temporaryColors: [TokenType: NSColor] = [
-        .keyword: .systemPurple,
-        .string: .systemGreen,
-        .comment: .systemGray,
-        .function: .systemBlue,
-        .type: .systemTeal,
-        .variable: .textColor,
-        .property: .systemBlue,
-        .number: .systemOrange,
-        .constant: .systemOrange,
-        .punctuation: .textColor,
-        .plain: .textColor,
-    ]
+    private let themeEngine: ThemeEngine
 
     public var onUserEdit: ((EditTransaction) -> Void)?
 
@@ -80,7 +64,8 @@ public final class TextKit2Engine: NSObject, TextLayoutEngine {
     }
 
     /// Builds the scroll view + TextKit 2 text view, plain-text config.
-    override public init() {
+    public init(themeEngine: ThemeEngine) {
+        self.themeEngine = themeEngine
         textView = MeridianTextView(usingTextLayoutManager: true)
         scrollView = NSScrollView()
         super.init()
@@ -109,6 +94,26 @@ public final class TextKit2Engine: NSObject, TextLayoutEngine {
 
         storage.delegate = self
         textView.delegate = self
+        textView.onEffectiveAppearanceChange = { [weak self] in
+            self?.handleAppearanceChange()
+        }
+        applyEditorColors()
+    }
+
+    private func applyEditorColors() {
+        textView.backgroundColor = themeEngine.editorColors.background
+        textView.insertionPointColor = themeEngine.editorColors.caret
+        textView.currentLineHighlightColor = themeEngine.editorColors.lineHighlight
+    }
+
+    /// Called when `MeridianTextView.viewDidChangeEffectiveAppearance()`
+    /// fires (system light/dark toggle, or a window moving to a screen
+    /// with a different active appearance).
+    private func handleAppearanceChange() {
+        let isDark = textView.effectiveAppearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
+        themeEngine.appearanceDidChange(isDark: isDark)
+        applyEditorColors()
+        highlightCurrentBuffer()
     }
 
     /// The TextKit 2 backing store. Trapping here is correct: a nil
@@ -183,13 +188,23 @@ public final class TextKit2Engine: NSObject, TextLayoutEngine {
         defer { isMirroring = false }
         contentStorage.performEditingTransaction {
             for run in runs {
-                let color = Self.temporaryColors[run.type] ?? .textColor
+                let style = themeEngine.resolvedStyle(for: run.type.rawValue)
                 let location = snapshot.utf16Offset(of: run.range.lowerBound).value
                 let length = snapshot.utf16Offset(of: run.range.upperBound).value - location
                 guard location >= 0, length >= 0, location + length <= storage.length else { continue }
-                storage.addAttribute(.foregroundColor, value: color, range: NSRange(location: location, length: length))
+                let range = NSRange(location: location, length: length)
+                storage.addAttribute(.foregroundColor, value: style.color, range: range)
+                storage.addAttribute(.font, value: resolvedFont(bold: style.bold, italic: style.italic), range: range)
             }
         }
+    }
+
+    private func resolvedFont(bold: Bool, italic: Bool) -> NSFont {
+        var font = NSFont.monospacedSystemFont(ofSize: 13, weight: bold ? .bold : .regular)
+        if italic {
+            font = NSFontManager.shared.convert(font, toHaveTrait: .italicFontMask)
+        }
+        return font
     }
 
     public func apply(_ transaction: EditTransaction, base: TextBuffer) {
