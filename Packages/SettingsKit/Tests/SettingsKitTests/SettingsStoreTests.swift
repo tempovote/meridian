@@ -33,7 +33,9 @@ struct SettingsStoreTests {
         let dir = try makeTempDir()
         try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         let json = """
-        { "schemaVersion": 1, "editor": { "fontFamily": "Menlo", "fontSize": 16, "tabWidth": 2, "softWrapDefault": false } }
+        { "schemaVersion": 1, "editor": {
+          "fontFamily": "Menlo", "fontSize": 16, "tabWidth": 2, "softWrapDefault": false
+        } }
         """
         try Data(json.utf8).write(to: dir.appendingPathComponent("settings.json"))
 
