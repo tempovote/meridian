@@ -149,6 +149,11 @@ final class MeridianDocument: NSDocument {
     }
 
     private var commandPaletteHost: NSHostingView<CommandPaletteView>?
+    /// Local mouse-down monitor that dismisses the palette on click-outside
+    /// (spec: "The palette closes on Esc, on executing a command, or on
+    /// click-outside"). Installed only while the palette is open; removed
+    /// in `hideCommandPalette()` so it never lingers over normal editing.
+    private var commandPaletteClickMonitor: Any?
 
     @objc func showCommandPalette(_ sender: Any?) {
         guard commandPaletteHost == nil else {
@@ -172,10 +177,27 @@ final class MeridianDocument: NSDocument {
         if let window = windowControllers.first?.window, let containerStack = window.contentView as? NSStackView {
             containerStack.insertView(host, at: 0, in: .top)
             window.makeFirstResponder(host)
+            commandPaletteClickMonitor = NSEvent
+                .addLocalMonitorForEvents(matching: .leftMouseDown) { [weak self] event in
+                    guard let self else { return event }
+                    // Only clicks inside this document's own window can dismiss
+                    // its palette — other windows (e.g. another document) are
+                    // left alone.
+                    guard event.window === window else { return event }
+                    let locationInHost = host.convert(event.locationInWindow, from: nil)
+                    if !host.bounds.contains(locationInHost) {
+                        hideCommandPalette()
+                    }
+                    return event
+                }
         }
     }
 
     private func hideCommandPalette() {
+        if let monitor = commandPaletteClickMonitor {
+            NSEvent.removeMonitor(monitor)
+            commandPaletteClickMonitor = nil
+        }
         if let host = commandPaletteHost {
             host.removeFromSuperview()
             commandPaletteHost = nil
