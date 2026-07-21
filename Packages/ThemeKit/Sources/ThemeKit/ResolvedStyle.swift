@@ -13,4 +13,5 @@ public struct ResolvedEditorColors: Sendable {
     public let background: NSColor
     public let caret: NSColor
     public let lineHighlight: NSColor
+    public let bracketMatch: NSColor
 }

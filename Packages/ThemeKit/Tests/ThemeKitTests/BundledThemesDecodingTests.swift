@@ -43,4 +43,19 @@ struct BundledThemesDecodingTests {
         #expect(BundledThemes.meridianLight.appearance == .light)
         #expect(BundledThemes.meridianLightContrast.appearance == .light)
     }
+
+    @Test func allFourBundledThemesHaveCompleteEditorColors() {
+        let themes = [
+            BundledThemes.meridianDark,
+            BundledThemes.meridianLight,
+            BundledThemes.meridianDarkContrast,
+            BundledThemes.meridianLightContrast,
+        ]
+        for theme in themes {
+            #expect(!theme.editor.background.isEmpty, "\(theme.name) has empty background")
+            #expect(!theme.editor.caret.isEmpty, "\(theme.name) has empty caret")
+            #expect(!theme.editor.lineHighlight.isEmpty, "\(theme.name) has empty lineHighlight")
+            #expect(!theme.editor.bracketMatch.isEmpty, "\(theme.name) has empty bracketMatch")
+        }
+    }
 }

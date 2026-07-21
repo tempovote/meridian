@@ -53,6 +53,7 @@ public final class ThemeEngine {
             background: HexColor.nsColor(fromHex: editor.background) ?? .textBackgroundColor,
             caret: HexColor.nsColor(fromHex: editor.caret) ?? .textColor,
             lineHighlight: HexColor.nsColor(fromHex: editor.lineHighlight) ?? .quaternaryLabelColor,
+            bracketMatch: HexColor.nsColor(fromHex: editor.bracketMatch) ?? .selectedTextBackgroundColor,
         )
     }
 }
