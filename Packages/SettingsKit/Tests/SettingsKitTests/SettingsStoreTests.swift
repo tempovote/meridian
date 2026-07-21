@@ -8,13 +8,12 @@ struct SettingsStoreTests {
     /// A fresh, unique temp directory per test — `SettingsStore` creates
     /// it if missing, mirroring the real app-support directory.
     private func makeTempDir() throws -> URL {
-        let dir = FileManager.default.temporaryDirectory
+        FileManager.default.temporaryDirectory
             .appendingPathComponent("settingskit-tests-\(UUID().uuidString)")
-        return dir
     }
 
     @Test func missingFileStartsAtDefaults() throws {
-        let store = SettingsStore(directoryURL: try makeTempDir())
+        let store = try SettingsStore(directoryURL: makeTempDir())
         #expect(store.current == Settings.default)
         #expect(store.lastLoadError == nil)
     }
@@ -71,7 +70,7 @@ struct SettingsStoreTests {
     }
 
     @Test func onChangeFiresOnUpdate() throws {
-        let store = SettingsStore(directoryURL: try makeTempDir())
+        let store = try SettingsStore(directoryURL: makeTempDir())
         var observedSize: Double?
         store.onChange { settings in observedSize = settings.editor.fontSize }
         store.update { $0.editor.fontSize = 22 }

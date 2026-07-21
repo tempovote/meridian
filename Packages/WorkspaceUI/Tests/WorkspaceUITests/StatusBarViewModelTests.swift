@@ -18,7 +18,10 @@ private func testSettingsDirectory() -> URL {
 struct StatusBarViewModelTests {
     @Test func statusBarStateDerivedFromViewModel() {
         let themeEngine = ThemeEngine(darkTheme: BundledThemes.meridianDark, lightTheme: BundledThemes.meridianLight)
-        let engine = TextKit2Engine(themeEngine: themeEngine, settingsStore: SettingsStore(directoryURL: testSettingsDirectory()))
+        let engine = TextKit2Engine(
+            themeEngine: themeEngine,
+            settingsStore: SettingsStore(directoryURL: testSettingsDirectory()),
+        )
         let vm = EditorViewModel(buffer: TextBuffer("First Line\nSecond Line"), engine: engine)
         engine.setSelection(SelectionSet(caretAt: ByteOffset(0)), in: vm.buffer)
 

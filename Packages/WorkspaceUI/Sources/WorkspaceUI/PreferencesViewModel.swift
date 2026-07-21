@@ -59,10 +59,18 @@ public final class PreferencesViewModel {
 
     private func syncFromStore(_ settings: Settings) {
         let editor = settings.editor
-        if fontFamily != editor.fontFamily { fontFamily = editor.fontFamily }
-        if fontSize != editor.fontSize { fontSize = editor.fontSize }
-        if tabWidth != editor.tabWidth { tabWidth = editor.tabWidth }
-        if softWrapDefault != editor.softWrapDefault { softWrapDefault = editor.softWrapDefault }
+        if fontFamily != editor.fontFamily {
+            fontFamily = editor.fontFamily
+        }
+        if fontSize != editor.fontSize {
+            fontSize = editor.fontSize
+        }
+        if tabWidth != editor.tabWidth {
+            tabWidth = editor.tabWidth
+        }
+        if softWrapDefault != editor.softWrapDefault {
+            softWrapDefault = editor.softWrapDefault
+        }
         bannerMessage = store.lastLoadError?.errorDescription
     }
 }

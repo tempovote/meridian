@@ -40,7 +40,10 @@ struct SoftWrapAndChromeTests {
 
     @Test func textKit2EngineSoftWrapAndGutterToggles() {
         let themeEngine = ThemeEngine(darkTheme: BundledThemes.meridianDark, lightTheme: BundledThemes.meridianLight)
-        let engine = TextKit2Engine(themeEngine: themeEngine, settingsStore: SettingsStore(directoryURL: testSettingsDirectory()))
+        let engine = TextKit2Engine(
+            themeEngine: themeEngine,
+            settingsStore: SettingsStore(directoryURL: testSettingsDirectory()),
+        )
         let vm = EditorViewModel(buffer: TextBuffer("Line 1\nLine 2"), engine: engine)
 
         engine.setSoftWrap(true)

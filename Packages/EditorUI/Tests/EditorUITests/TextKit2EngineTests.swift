@@ -33,7 +33,10 @@ private struct SplitMix64: RandomNumberGenerator {
 struct TextKit2EngineTests {
     private func makeEngine(_ text: String) -> (TextKit2Engine, TextBuffer) {
         let themeEngine = ThemeEngine(darkTheme: BundledThemes.meridianDark, lightTheme: BundledThemes.meridianLight)
-        let engine = TextKit2Engine(themeEngine: themeEngine, settingsStore: SettingsStore(directoryURL: testSettingsDirectory()))
+        let engine = TextKit2Engine(
+            themeEngine: themeEngine,
+            settingsStore: SettingsStore(directoryURL: testSettingsDirectory()),
+        )
         let buffer = TextBuffer(text)
         engine.load(buffer: buffer)
         return (engine, buffer)
@@ -46,7 +49,10 @@ struct TextKit2EngineTests {
 
     @Test func loadDoesNotFireOnUserEdit() {
         let themeEngine = ThemeEngine(darkTheme: BundledThemes.meridianDark, lightTheme: BundledThemes.meridianLight)
-        let engine = TextKit2Engine(themeEngine: themeEngine, settingsStore: SettingsStore(directoryURL: testSettingsDirectory()))
+        let engine = TextKit2Engine(
+            themeEngine: themeEngine,
+            settingsStore: SettingsStore(directoryURL: testSettingsDirectory()),
+        )
         var fired = 0
         engine.onUserEdit = { _ in fired += 1 }
         engine.load(buffer: TextBuffer("seed"))
