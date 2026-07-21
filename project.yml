@@ -20,6 +20,7 @@ packages:
   SettingsKit: { path: Packages/SettingsKit }
   EditorUI: { path: Packages/EditorUI }
   DocumentCore: { path: Packages/DocumentCore }
+  ThemeKit: { path: Packages/ThemeKit }
 
 targets:
   Meridian:
@@ -34,6 +35,7 @@ targets:
       - package: SettingsKit
       - package: EditorUI
       - package: DocumentCore
+      - package: ThemeKit
     info:
       path: App/Resources/Info.plist
       properties:

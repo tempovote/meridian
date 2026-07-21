@@ -3,6 +3,7 @@ import DocumentCore
 import EditorUI
 import FileKit
 import SwiftUI
+import ThemeKit
 import WorkspaceUI
 
 /// Errors that block opening a document, with user-facing text.
@@ -81,7 +82,7 @@ final class MeridianDocument: NSDocument {
 
     override func makeWindowControllers() {
         MainActor.assumeIsolated {
-            let engine = TextKit2Engine()
+            let engine = TextKit2Engine(themeEngine: AppDelegate.themeEngine)
             engine.languageID = fileURL.flatMap { languageID(forFileExtension: $0.pathExtension) }
             let viewModel = EditorViewModel(buffer: pendingBuffer, engine: engine)
             self.engine = engine
