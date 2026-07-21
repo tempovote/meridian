@@ -3,10 +3,10 @@ import Testing
 
 @Suite("BundledThemesDecodingTests")
 struct BundledThemesDecodingTests {
-    // Mirrors SyntaxKit.TokenType.allCases' raw values without depending on
-    // SyntaxKit (ThemeKit stays dependency-free) — kept in sync manually;
-    // EditorUI's BundledThemeCoverageTests (Task 5) is the test that
-    // actually verifies this list against the real TokenType enum.
+    /// Mirrors SyntaxKit.TokenType.allCases' raw values without depending on
+    /// SyntaxKit (ThemeKit stays dependency-free) — kept in sync manually;
+    /// EditorUI's BundledThemeCoverageTests (Task 5) is the test that
+    /// actually verifies this list against the real TokenType enum.
     private static let expectedTokenKeys: Set<String> = [
         "keyword", "string", "comment", "function", "type", "variable",
         "property", "number", "constant", "punctuation", "tag", "attribute", "plain",
