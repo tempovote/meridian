@@ -8,7 +8,10 @@ let package = Package(
         .library(name: "ThemeKit", targets: ["ThemeKit"]),
     ],
     targets: [
-        .target(name: "ThemeKit"),
+        .target(
+            name: "ThemeKit",
+            resources: [.copy("Resources")],
+        ),
         .testTarget(name: "ThemeKitTests", dependencies: ["ThemeKit"]),
     ],
 )

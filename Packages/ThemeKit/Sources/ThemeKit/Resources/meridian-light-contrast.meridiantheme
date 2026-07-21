@@ -1,0 +1,24 @@
+{
+  "name": "Meridian Light — Contrast",
+  "appearance": "light",
+  "editor": {
+    "background": "#FFFFFF",
+    "caret": "#005FB8",
+    "lineHighlight": "#E8E8E8"
+  },
+  "tokens": {
+    "keyword": { "color": "#AF00DB", "bold": true },
+    "string": { "color": "#098658" },
+    "comment": { "color": "#708090", "italic": true },
+    "function": { "color": "#0000FF" },
+    "type": { "color": "#267F99" },
+    "variable": { "color": "#000000" },
+    "property": { "color": "#A31515" },
+    "number": { "color": "#B5860B" },
+    "constant": { "color": "#B5860B" },
+    "punctuation": { "color": "#000000" },
+    "tag": { "color": "#800000" },
+    "attribute": { "color": "#FF0000" },
+    "plain": { "color": "#000000" }
+  }
+}

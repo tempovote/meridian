@@ -1,0 +1,24 @@
+{
+  "name": "Meridian Dark",
+  "appearance": "dark",
+  "editor": {
+    "background": "#1E2127",
+    "caret": "#61AFEF",
+    "lineHighlight": "#2C313A"
+  },
+  "tokens": {
+    "keyword": { "color": "#C678DD", "bold": true },
+    "string": { "color": "#98C379" },
+    "comment": { "color": "#5C6370", "italic": true },
+    "function": { "color": "#61AFEF" },
+    "type": { "color": "#E5C07B" },
+    "variable": { "color": "#ABB2BF" },
+    "property": { "color": "#E06C75" },
+    "number": { "color": "#D19A66" },
+    "constant": { "color": "#D19A66" },
+    "punctuation": { "color": "#ABB2BF" },
+    "tag": { "color": "#E06C75" },
+    "attribute": { "color": "#D19A66" },
+    "plain": { "color": "#ABB2BF" }
+  }
+}
