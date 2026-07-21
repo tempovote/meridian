@@ -5,10 +5,16 @@ import Testing
 @MainActor
 @Suite("CommandPaletteViewModelTests")
 struct CommandPaletteViewModelTests {
+    /// These are synthetic fixture selectors, not real @objc methods —
+    /// `#selector` requires an actual declaration to reference, so it can't
+    /// express these. `NSSelectorFromString` builds a `Selector` from an
+    /// arbitrary string at runtime without tripping the compiler's
+    /// "use #selector instead of explicitly constructing a Selector"
+    /// warning-as-error, which only fires for the `Selector(_:)` initializer.
     private let sample: [Command] = [
-        Command(title: "Open File", selector: Selector(("openFile:")), keyEquivalent: "o"),
-        Command(title: "Save", selector: Selector(("save:")), keyEquivalent: "s"),
-        Command(title: "Find and Replace", selector: Selector(("findReplace:")), keyEquivalent: nil),
+        Command(title: "Open File", selector: NSSelectorFromString("openFile:"), keyEquivalent: "o"),
+        Command(title: "Save", selector: NSSelectorFromString("save:"), keyEquivalent: "s"),
+        Command(title: "Find and Replace", selector: NSSelectorFromString("findReplace:"), keyEquivalent: nil),
     ]
 
     @Test func emptyQueryShowsAllCommandsInOrder() {
