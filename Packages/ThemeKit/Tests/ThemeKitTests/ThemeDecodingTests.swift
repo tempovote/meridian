@@ -9,7 +9,9 @@ struct ThemeDecodingTests {
         {
           "name": "Sample",
           "appearance": "light",
-          "editor": { "background": "#FFFFFF", "caret": "#000000", "lineHighlight": "#EEEEEE", "bracketMatch": "#3E4451" },
+          "editor": {
+            "background": "#FFFFFF", "caret": "#000000", "lineHighlight": "#EEEEEE", "bracketMatch": "#3E4451"
+          },
           "tokens": {
             "keyword": { "color": "#AA00AA", "bold": true },
             "comment": { "color": "#888888", "italic": true },

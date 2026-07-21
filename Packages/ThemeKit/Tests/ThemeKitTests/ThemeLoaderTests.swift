@@ -22,7 +22,9 @@ struct ThemeLoaderTests {
         {
           "name": "Test Theme",
           "appearance": "dark",
-          "editor": { "background": "#111111", "caret": "#FFFFFF", "lineHighlight": "#222222", "bracketMatch": "#333333" },
+          "editor": {
+            "background": "#111111", "caret": "#FFFFFF", "lineHighlight": "#222222", "bracketMatch": "#333333"
+          },
           "tokens": { "keyword": { "color": "#FF00FF", "bold": true } }
         }
         """

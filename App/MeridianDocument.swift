@@ -141,11 +141,11 @@ final class MeridianDocument: NSDocument {
     private var findBarHost: NSHostingView<FindBarView>?
 
     @objc func performFind(_ sender: Any?) {
-        showFindBar()
+        showFindBar(startExpanded: false)
     }
 
     @objc func performFindAndReplace(_ sender: Any?) {
-        showFindBar()
+        showFindBar(startExpanded: true)
     }
 
     private var commandPaletteHost: NSHostingView<CommandPaletteView>?
@@ -180,7 +180,7 @@ final class MeridianDocument: NSDocument {
                 // intercepts itself — see `documentUndoManager`'s doc comment)
                 // still need the real responder-chain resolution, since only
                 // the text view (now first responder again) can answer them.
-                if self.responds(to: command.selector) {
+                if responds(to: command.selector) {
                     NSApp.sendAction(command.selector, to: self, from: nil)
                 } else {
                     NSApp.sendAction(command.selector, to: nil, from: nil)
@@ -262,9 +262,9 @@ final class MeridianDocument: NSDocument {
         viewModel.perform(TextTransforms.convertLineEndings(in: viewModel.buffer, to: .crlf))
     }
 
-    private func showFindBar() {
+    private func showFindBar(startExpanded: Bool) {
         guard let viewModel, findBarHost == nil else { return }
-        let findView = FindBarView(viewModel: viewModel) { [weak self] in
+        let findView = FindBarView(viewModel: viewModel, startExpanded: startExpanded) { [weak self] in
             self?.hideFindBar()
         }
         let host = NSHostingView(rootView: findView)
@@ -272,6 +272,7 @@ final class MeridianDocument: NSDocument {
 
         if let window = windowControllers.first?.window, let containerStack = window.contentView as? NSStackView {
             containerStack.insertView(host, at: 0, in: .top)
+            window.makeFirstResponder(host)
         }
     }
 
@@ -279,6 +280,7 @@ final class MeridianDocument: NSDocument {
         if let host = findBarHost {
             host.removeFromSuperview()
             findBarHost = nil
+            windowControllers.first?.window?.makeFirstResponder(engine?.keyView)
         }
     }
 
