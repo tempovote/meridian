@@ -1,7 +1,7 @@
 import DocumentCore
 import EditorUI
-import ThemeKit
 import Testing
+import ThemeKit
 import WorkspaceUI
 
 @MainActor
