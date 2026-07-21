@@ -7,6 +7,23 @@ let package = Package(
     products: [
         .library(name: "TreeSitterJSON", targets: ["TreeSitterJSON"]),
         .library(name: "TreeSitterSwift", targets: ["TreeSitterSwift"]),
+        .library(name: "TreeSitterJavascript", targets: ["TreeSitterJavascript"]),
+        .library(name: "TreeSitterTypescript", targets: ["TreeSitterTypescript"]),
+        .library(name: "TreeSitterHtml", targets: ["TreeSitterHtml"]),
+        .library(name: "TreeSitterCss", targets: ["TreeSitterCss"]),
+        .library(name: "TreeSitterPython", targets: ["TreeSitterPython"]),
+        .library(name: "TreeSitterYaml", targets: ["TreeSitterYaml"]),
+        .library(name: "TreeSitterToml", targets: ["TreeSitterToml"]),
+        .library(name: "TreeSitterBash", targets: ["TreeSitterBash"]),
+        .library(name: "TreeSitterC", targets: ["TreeSitterC"]),
+        .library(name: "TreeSitterCpp", targets: ["TreeSitterCpp"]),
+        .library(name: "TreeSitterRust", targets: ["TreeSitterRust"]),
+        .library(name: "TreeSitterGo", targets: ["TreeSitterGo"]),
+        .library(name: "TreeSitterJava", targets: ["TreeSitterJava"]),
+        .library(name: "TreeSitterRuby", targets: ["TreeSitterRuby"]),
+        .library(name: "TreeSitterPhp", targets: ["TreeSitterPhp"]),
+        .library(name: "TreeSitterMarkdown", targets: ["TreeSitterMarkdown"]),
+        .library(name: "TreeSitterXml", targets: ["TreeSitterXml"]),
     ],
     targets: [
         .target(
@@ -19,5 +36,91 @@ let package = Package(
             cSettings: [.headerSearchPath(".")],
         ),
         .testTarget(name: "TreeSitterSwiftTests", dependencies: ["TreeSitterSwift"]),
+        .target(
+            name: "TreeSitterJavascript",
+            cSettings: [.headerSearchPath(".")],
+        ),
+        .testTarget(name: "TreeSitterJavascriptTests", dependencies: ["TreeSitterJavascript"]),
+        .target(
+            name: "TreeSitterTypescript",
+            cSettings: [.headerSearchPath(".")],
+        ),
+        .testTarget(name: "TreeSitterTypescriptTests", dependencies: ["TreeSitterTypescript"]),
+        .target(
+            name: "TreeSitterHtml",
+            cSettings: [.headerSearchPath(".")],
+        ),
+        .testTarget(name: "TreeSitterHtmlTests", dependencies: ["TreeSitterHtml"]),
+        .target(
+            name: "TreeSitterCss",
+            cSettings: [.headerSearchPath(".")],
+        ),
+        .testTarget(name: "TreeSitterCssTests", dependencies: ["TreeSitterCss"]),
+        .target(
+            name: "TreeSitterPython",
+            cSettings: [.headerSearchPath(".")],
+        ),
+        .testTarget(name: "TreeSitterPythonTests", dependencies: ["TreeSitterPython"]),
+        .target(
+            name: "TreeSitterYaml",
+            exclude: ["schema.core.c"],
+            cSettings: [.headerSearchPath(".")],
+        ),
+        .testTarget(name: "TreeSitterYamlTests", dependencies: ["TreeSitterYaml"]),
+        .target(
+            name: "TreeSitterToml",
+            cSettings: [.headerSearchPath(".")],
+        ),
+        .testTarget(name: "TreeSitterTomlTests", dependencies: ["TreeSitterToml"]),
+        .target(
+            name: "TreeSitterBash",
+            cSettings: [.headerSearchPath(".")],
+        ),
+        .testTarget(name: "TreeSitterBashTests", dependencies: ["TreeSitterBash"]),
+        .target(
+            name: "TreeSitterC",
+            cSettings: [.headerSearchPath(".")],
+        ),
+        .testTarget(name: "TreeSitterCTests", dependencies: ["TreeSitterC"]),
+        .target(
+            name: "TreeSitterCpp",
+            cSettings: [.headerSearchPath(".")],
+        ),
+        .testTarget(name: "TreeSitterCppTests", dependencies: ["TreeSitterCpp"]),
+        .target(
+            name: "TreeSitterRust",
+            cSettings: [.headerSearchPath(".")],
+        ),
+        .testTarget(name: "TreeSitterRustTests", dependencies: ["TreeSitterRust"]),
+        .target(
+            name: "TreeSitterGo",
+            cSettings: [.headerSearchPath(".")],
+        ),
+        .testTarget(name: "TreeSitterGoTests", dependencies: ["TreeSitterGo"]),
+        .target(
+            name: "TreeSitterJava",
+            cSettings: [.headerSearchPath(".")],
+        ),
+        .testTarget(name: "TreeSitterJavaTests", dependencies: ["TreeSitterJava"]),
+        .target(
+            name: "TreeSitterRuby",
+            cSettings: [.headerSearchPath(".")],
+        ),
+        .testTarget(name: "TreeSitterRubyTests", dependencies: ["TreeSitterRuby"]),
+        .target(
+            name: "TreeSitterPhp",
+            cSettings: [.headerSearchPath(".")],
+        ),
+        .testTarget(name: "TreeSitterPhpTests", dependencies: ["TreeSitterPhp"]),
+        .target(
+            name: "TreeSitterMarkdown",
+            cSettings: [.headerSearchPath(".")],
+        ),
+        .testTarget(name: "TreeSitterMarkdownTests", dependencies: ["TreeSitterMarkdown"]),
+        .target(
+            name: "TreeSitterXml",
+            cSettings: [.headerSearchPath(".")],
+        ),
+        .testTarget(name: "TreeSitterXmlTests", dependencies: ["TreeSitterXml"]),
     ],
 )

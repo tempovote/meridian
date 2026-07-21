@@ -42,9 +42,22 @@ targets:
         LSMinimumSystemVersion: "15.0"
         NSPrincipalClass: NSApplication
         NSHumanReadableCopyright: ""
+        # public.text is the true common ancestor for essentially every
+        # text-based system UTI (verified via `lsregister -dump`): plain
+        # source files conform to it via public.plain-text, but several of
+        # M4 Phase 2's grammar-bundled languages have a macOS-provided UTI
+        # (public.yaml, public.toml, public.css, public.html, public.xml,
+        # com.microsoft.typescript, ...) that conforms directly to
+        # public.text as a SIBLING of public.plain-text, not a descendant
+        # of it — so declaring only public.plain-text (as this app did
+        # through M3/M4 Phase 1) left the Open panel refusing those files
+        # even though SyntaxKit fully supports the grammar. Declaring
+        # public.text directly covers every text-conforming UTI on the
+        # system, present or future, without hand-maintaining an
+        # extension list in sync with EditorUI's languageID(forFileExtension:).
         CFBundleDocumentTypes:
-          - CFBundleTypeName: Plain Text
-            LSItemContentTypes: [public.plain-text]
+          - CFBundleTypeName: Text
+            LSItemContentTypes: [public.text]
             CFBundleTypeRole: Editor
             NSDocumentClass: Meridian.MeridianDocument
             LSHandlerRank: Alternate
@@ -53,6 +66,45 @@ targets:
             CFBundleTypeRole: Editor
             NSDocumentClass: Meridian.MeridianDocument
             LSHandlerRank: Alternate
+          # Bare .ts resolves system-wide to public.mpeg-2-transport-stream
+          # (MPEG video, predates TypeScript's extension) rather than
+          # com.microsoft.typescript, so it does NOT conform to public.text
+          # no matter what UTI we declare — verified via
+          # UTType(filenameExtension: "ts").conforms(to: .text) == false.
+          # .tsx has no such collision. Legacy extension-based matching
+          # (independent of UTI conformance) is the standard remedy.
+          - CFBundleTypeName: TypeScript
+            CFBundleTypeExtensions: [ts]
+            CFBundleTypeRole: Editor
+            NSDocumentClass: Meridian.MeridianDocument
+            LSHandlerRank: Alternate
+          - CFBundleTypeName: Source Code
+            LSItemContentTypes: [dev.meridian.source-code]
+            CFBundleTypeRole: Editor
+            NSDocumentClass: Meridian.MeridianDocument
+            LSHandlerRank: Alternate
+        # public.text alone isn't sufficient: a handful of extensions have
+        # NO macOS-provided UTI at all (verified via
+        # UTType(filenameExtension:) resolving to an unclaimed dyn.* type
+        # that conforms to nothing) — currently cjs, rs, go on this
+        # machine, though the exact set can vary by macOS version. Declare
+        # a fallback UTI conforming to public.text (NOT public.plain-text —
+        # see the CFBundleDocumentTypes comment above for why that was
+        # wrong) covering every extension EditorUI's
+        # languageID(forFileExtension:) recognizes, so an extension losing
+        # its system UTI on some other machine/OS version doesn't silently
+        # regress into unopenable again.
+        UTExportedTypeDeclarations:
+          - UTTypeIdentifier: dev.meridian.source-code
+            UTTypeDescription: Source Code
+            UTTypeConformsTo: [public.text]
+            UTTypeTagSpecification:
+              public.filename-extension:
+                [
+                  js, mjs, cjs, ts, tsx, html, htm, css, py, yml, yaml, toml,
+                  sh, bash, c, h, cpp, cc, hpp, cxx, rs, go, java, rb, php,
+                  md, markdown, xml,
+                ]
     entitlements:
       path: App/Resources/Meridian.entitlements
       properties:
