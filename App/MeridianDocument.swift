@@ -141,11 +141,86 @@ final class MeridianDocument: NSDocument {
     private var findBarHost: NSHostingView<FindBarView>?
 
     @objc func performFind(_ sender: Any?) {
-        showFindBar()
+        showFindBar(startExpanded: false)
     }
 
     @objc func performFindAndReplace(_ sender: Any?) {
-        showFindBar()
+        showFindBar(startExpanded: true)
+    }
+
+    private var commandPaletteHost: NSHostingView<CommandPaletteView>?
+    /// Local mouse-down monitor that dismisses the palette on click-outside
+    /// (spec: "The palette closes on Esc, on executing a command, or on
+    /// click-outside"). Installed only while the palette is open; removed
+    /// in `hideCommandPalette()` so it never lingers over normal editing.
+    private var commandPaletteClickMonitor: Any?
+
+    @objc func showCommandPalette(_ sender: Any?) {
+        guard commandPaletteHost == nil else {
+            hideCommandPalette()
+            return
+        }
+        let viewModel = CommandPaletteViewModel(commands: CommandRegistry.commands)
+        let paletteView = CommandPaletteView(
+            viewModel: viewModel,
+            onExecute: { [weak self] in
+                guard let self, let command = viewModel.selectedCommand else { return }
+                hideCommandPalette()
+                // Commands `MeridianDocument` implements directly (the toggles
+                // and text transforms — see the list in `CommandRegistry`'s
+                // Edit/View sections) are sent straight to `self`, bypassing
+                // the responder-chain walk entirely. That walk depends on
+                // `hideCommandPalette()` having already handed first-responder
+                // status back to the editor's text view — true today, but a
+                // needless dependency for actions `self` already answers to
+                // directly, and one that showed up here as "Soft Wrap doesn't
+                // actually toggle" when invoked from the palette. Commands the
+                // document does NOT implement (Cut/Copy/Paste/Select All,
+                // which `NSTextView` answers; Undo/Redo, which it also
+                // intercepts itself — see `documentUndoManager`'s doc comment)
+                // still need the real responder-chain resolution, since only
+                // the text view (now first responder again) can answer them.
+                if responds(to: command.selector) {
+                    NSApp.sendAction(command.selector, to: self, from: nil)
+                } else {
+                    NSApp.sendAction(command.selector, to: nil, from: nil)
+                }
+            },
+            onClose: { [weak self] in
+                self?.hideCommandPalette()
+            },
+        )
+        let host = NSHostingView(rootView: paletteView)
+        commandPaletteHost = host
+        if let window = windowControllers.first?.window, let containerStack = window.contentView as? NSStackView {
+            containerStack.insertView(host, at: 0, in: .top)
+            window.makeFirstResponder(host)
+            commandPaletteClickMonitor = NSEvent
+                .addLocalMonitorForEvents(matching: .leftMouseDown) { [weak self] event in
+                    guard let self else { return event }
+                    // Only clicks inside this document's own window can dismiss
+                    // its palette — other windows (e.g. another document) are
+                    // left alone.
+                    guard event.window === window else { return event }
+                    let locationInHost = host.convert(event.locationInWindow, from: nil)
+                    if !host.bounds.contains(locationInHost) {
+                        hideCommandPalette()
+                    }
+                    return event
+                }
+        }
+    }
+
+    private func hideCommandPalette() {
+        if let monitor = commandPaletteClickMonitor {
+            NSEvent.removeMonitor(monitor)
+            commandPaletteClickMonitor = nil
+        }
+        if let host = commandPaletteHost {
+            host.removeFromSuperview()
+            commandPaletteHost = nil
+            windowControllers.first?.window?.makeFirstResponder(engine?.keyView)
+        }
     }
 
     @objc func duplicateLine(_ sender: Any?) {
@@ -187,9 +262,9 @@ final class MeridianDocument: NSDocument {
         viewModel.perform(TextTransforms.convertLineEndings(in: viewModel.buffer, to: .crlf))
     }
 
-    private func showFindBar() {
+    private func showFindBar(startExpanded: Bool) {
         guard let viewModel, findBarHost == nil else { return }
-        let findView = FindBarView(viewModel: viewModel) { [weak self] in
+        let findView = FindBarView(viewModel: viewModel, startExpanded: startExpanded) { [weak self] in
             self?.hideFindBar()
         }
         let host = NSHostingView(rootView: findView)
@@ -197,6 +272,7 @@ final class MeridianDocument: NSDocument {
 
         if let window = windowControllers.first?.window, let containerStack = window.contentView as? NSStackView {
             containerStack.insertView(host, at: 0, in: .top)
+            window.makeFirstResponder(host)
         }
     }
 
@@ -204,6 +280,7 @@ final class MeridianDocument: NSDocument {
         if let host = findBarHost {
             host.removeFromSuperview()
             findBarHost = nil
+            windowControllers.first?.window?.makeFirstResponder(engine?.keyView)
         }
     }
 

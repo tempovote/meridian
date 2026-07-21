@@ -47,6 +47,22 @@ struct TextKit2EngineTests {
         #expect(engine.storageStringForTesting == "hello\nxin chào 🎉")
     }
 
+    @Test func movingCaretNextToBracketAppliesBracketMatchColor() {
+        let (engine, buffer) = makeEngine("foo(bar)")
+        engine.setSelection(SelectionSet(caretAt: ByteOffset(3)), in: buffer)
+        #expect(engine.storageAttributeForTesting(.backgroundColor, at: 3) != nil)
+        #expect(engine.storageAttributeForTesting(.backgroundColor, at: 7) != nil)
+    }
+
+    @Test func movingCaretAwayFromBracketClearsHighlight() {
+        let (engine, buffer) = makeEngine("foo(bar)")
+        engine.setSelection(SelectionSet(caretAt: ByteOffset(3)), in: buffer)
+        #expect(engine.storageAttributeForTesting(.backgroundColor, at: 3) != nil)
+        engine.setSelection(SelectionSet(caretAt: ByteOffset(0)), in: buffer)
+        #expect(engine.storageAttributeForTesting(.backgroundColor, at: 3) == nil)
+        #expect(engine.storageAttributeForTesting(.backgroundColor, at: 7) == nil)
+    }
+
     @Test func loadDoesNotFireOnUserEdit() {
         let themeEngine = ThemeEngine(darkTheme: BundledThemes.meridianDark, lightTheme: BundledThemes.meridianLight)
         let engine = TextKit2Engine(

@@ -4,7 +4,8 @@
   "editor": {
     "background": "#000000",
     "caret": "#00D9FF",
-    "lineHighlight": "#1A1A1A"
+    "lineHighlight": "#1A1A1A",
+    "bracketMatch": "#264F78"
   },
   "tokens": {
     "keyword": { "color": "#FF79C6", "bold": true },

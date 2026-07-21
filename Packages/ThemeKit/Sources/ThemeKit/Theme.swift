@@ -11,11 +11,13 @@ public struct EditorColors: Codable, Sendable {
     public let background: String
     public let caret: String
     public let lineHighlight: String
+    public let bracketMatch: String
 
-    public init(background: String, caret: String, lineHighlight: String) {
+    public init(background: String, caret: String, lineHighlight: String, bracketMatch: String) {
         self.background = background
         self.caret = caret
         self.lineHighlight = lineHighlight
+        self.bracketMatch = bracketMatch
     }
 }
 

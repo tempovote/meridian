@@ -13,15 +13,22 @@ public struct FindBarView: View {
     @State private var isCaseSensitive: Bool = false
     @State private var isWholeWord: Bool = false
     @State private var isRegex: Bool = false
-    @State private var isReplaceExpanded: Bool = false
+    @State private var isReplaceExpanded: Bool
     @State private var matches: [SearchMatch] = []
     @State private var currentMatchIndex: Int = 0
+    /// Claims SwiftUI-level keyboard focus for the query field as soon as
+    /// the bar appears — see `CommandPaletteView`'s identical property for
+    /// why this is needed: `window.makeFirstResponder(host)` only makes the
+    /// enclosing `NSHostingView` the AppKit first responder, which does not
+    /// by itself give any SwiftUI view inside it keyboard focus.
+    @FocusState private var isQueryFocused: Bool
 
     public let onClose: () -> Void
 
-    public init(viewModel: EditorViewModel, onClose: @escaping () -> Void) {
+    public init(viewModel: EditorViewModel, startExpanded: Bool = false, onClose: @escaping () -> Void) {
         self.viewModel = viewModel
         self.onClose = onClose
+        _isReplaceExpanded = State(initialValue: startExpanded)
     }
 
     private var options: SearchOptions {
@@ -47,21 +54,30 @@ public struct FindBarView: View {
 
                 TextField("Find", text: $query)
                     .textFieldStyle(.plain)
+                    .focused($isQueryFocused)
                     .onChange(of: query) { performSearch() }
                     .onSubmit { findNext() }
 
-                // Search options toggles
+                Divider().frame(height: 14)
+
+                // Search options toggles — visually separated from the
+                // TextField above so they don't read as stray, uneditable
+                // placeholder text sitting inside the search box.
                 HStack(spacing: 4) {
                     ToggleOptionButton(title: "Aa", isSelected: $isCaseSensitive) { performSearch() }
                     ToggleOptionButton(title: "W", isSelected: $isWholeWord) { performSearch() }
                     ToggleOptionButton(title: ".*", isSelected: $isRegex) { performSearch() }
                 }
 
-                // Match count indicator
+                // Match count indicator. The reserved width only kicks in
+                // once there's actually a query, so an idle bar doesn't show
+                // a persistent empty box — it still stops the nav/expand/
+                // close buttons from jittering sideways as the count text's
+                // length varies ("1 of 5" vs. "No results") once searching.
                 Text(matchCountText)
                     .font(.caption)
                     .foregroundColor(.secondary)
-                    .frame(minWidth: 65, alignment: .trailing)
+                    .frame(minWidth: query.isEmpty ? 0 : 65, alignment: .trailing)
 
                 // Navigation buttons
                 Button(action: findPrevious, label: {
@@ -113,6 +129,25 @@ public struct FindBarView: View {
         .cornerRadius(6)
         .shadow(radius: 2)
         .padding(8)
+        // Fixed width, same reasoning as `CommandPaletteView`'s: without an
+        // explicit width, `NSHostingView` reports an intrinsic content size
+        // computed from the current (often short/empty) query text on the
+        // FIRST layout pass inside the enclosing `NSStackView`, and nothing
+        // re-triggers that layout pass until SwiftUI content changes size —
+        // so toggle buttons/match count/nav buttons render squeezed and
+        // overlapping until typing forces a resize. A fixed width sidesteps
+        // the whole race by giving Auto Layout a concrete size up front.
+        .frame(width: 560)
+        .onAppear {
+            // A same-tick focus claim races NSHostingView's installation into
+            // the AppKit view hierarchy (the bar is inserted via
+            // `NSStackView.insertView` immediately before this fires) — the
+            // SwiftUI focus system isn't reliably ready yet. Deferring to the
+            // next run-loop tick avoids the race.
+            DispatchQueue.main.async {
+                isQueryFocused = true
+            }
+        }
     }
 
     private var matchCountText: String {
