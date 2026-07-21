@@ -1,4 +1,5 @@
 import AppKit
+import WorkspaceUI
 
 /// Programmatic main menu (ARCHITECTURE §23: menus are AppKit's domain).
 /// All items use standard responder-chain selectors so NSDocument,
@@ -34,125 +35,71 @@ enum MainMenu {
 
     private static func fileMenuItem() -> NSMenuItem {
         let menu = NSMenu(title: "File")
-        menu.addItem(withTitle: "New",
-                     action: #selector(NSDocumentController.newDocument(_:)),
-                     keyEquivalent: "n")
-        menu.addItem(withTitle: "Open…",
-                     action: #selector(NSDocumentController.openDocument(_:)),
-                     keyEquivalent: "o")
+        addCommand(to: menu, title: "New", action: #selector(NSDocumentController.newDocument(_:)), keyEquivalent: "n")
+        addCommand(to: menu, title: "Open…", action: #selector(NSDocumentController.openDocument(_:)), keyEquivalent: "o")
         menu.addItem(.separator())
-        menu.addItem(withTitle: "Close",
-                     action: #selector(NSWindow.performClose(_:)),
-                     keyEquivalent: "w")
-        menu.addItem(withTitle: "Save…",
-                     action: Selector(("saveDocument:")),
-                     keyEquivalent: "s")
-        let saveAs = NSMenuItem(title: "Save As…",
-                                action: Selector(("saveDocumentAs:")),
-                                keyEquivalent: "S")
-        menu.addItem(saveAs)
+        addCommand(to: menu, title: "Close", action: #selector(NSWindow.performClose(_:)), keyEquivalent: "w")
+        addCommand(to: menu, title: "Save…", action: Selector(("saveDocument:")), keyEquivalent: "s")
+        addCommand(to: menu, title: "Save As…", action: Selector(("saveDocumentAs:")), keyEquivalent: "S")
         return wrapped(menu)
     }
 
     private static func editMenuItem() -> NSMenuItem {
         let menu = NSMenu(title: "Edit")
-        menu.addItem(withTitle: "Undo", action: Selector(("undo:")), keyEquivalent: "z")
-        let redo = NSMenuItem(title: "Redo", action: Selector(("redo:")), keyEquivalent: "Z")
-        menu.addItem(redo)
+        addCommand(to: menu, title: "Undo", action: Selector(("undo:")), keyEquivalent: "z")
+        addCommand(to: menu, title: "Redo", action: Selector(("redo:")), keyEquivalent: "Z")
         menu.addItem(.separator())
-        menu.addItem(withTitle: "Cut", action: #selector(NSText.cut(_:)), keyEquivalent: "x")
-        menu.addItem(withTitle: "Copy", action: #selector(NSText.copy(_:)), keyEquivalent: "c")
-        menu.addItem(withTitle: "Paste", action: #selector(NSText.paste(_:)), keyEquivalent: "v")
-        menu.addItem(withTitle: "Select All",
-                     action: #selector(NSText.selectAll(_:)), keyEquivalent: "a")
+        addCommand(to: menu, title: "Cut", action: #selector(NSText.cut(_:)), keyEquivalent: "x")
+        addCommand(to: menu, title: "Copy", action: #selector(NSText.copy(_:)), keyEquivalent: "c")
+        addCommand(to: menu, title: "Paste", action: #selector(NSText.paste(_:)), keyEquivalent: "v")
+        addCommand(to: menu, title: "Select All", action: #selector(NSText.selectAll(_:)), keyEquivalent: "a")
         menu.addItem(.separator())
 
-        // Line & Transform Submenu items
-        let dupLine = NSMenuItem(title: "Duplicate Line", action: Selector(("duplicateLine:")), keyEquivalent: "D")
-        menu.addItem(dupLine)
-
-        let deleteLine = NSMenuItem(title: "Delete Line", action: Selector(("deleteLine:")), keyEquivalent: "K")
-        menu.addItem(deleteLine)
-
-        let trimWhitespace = NSMenuItem(
-            title: "Trim Trailing Whitespace",
-            action: Selector(("trimTrailingWhitespace:")),
-            keyEquivalent: "",
+        addCommand(to: menu, title: "Duplicate Line", action: Selector(("duplicateLine:")), keyEquivalent: "D")
+        addCommand(to: menu, title: "Delete Line", action: Selector(("deleteLine:")), keyEquivalent: "K")
+        addCommand(to: menu, title: "Trim Trailing Whitespace", action: Selector(("trimTrailingWhitespace:")), keyEquivalent: "")
+        addCommand(to: menu, title: "Make Upper Case", action: Selector(("makeUpperCase:")), keyEquivalent: "")
+        addCommand(to: menu, title: "Make Lower Case", action: Selector(("makeLowerCase:")), keyEquivalent: "")
+        addCommand(
+            to: menu, title: "Convert Line Endings to LF",
+            action: Selector(("convertLineEndingsToLF:")), keyEquivalent: "",
         )
-        menu.addItem(trimWhitespace)
-
-        let upperCase = NSMenuItem(title: "Make Upper Case", action: Selector(("makeUpperCase:")), keyEquivalent: "")
-        menu.addItem(upperCase)
-
-        let lowerCase = NSMenuItem(title: "Make Lower Case", action: Selector(("makeLowerCase:")), keyEquivalent: "")
-        menu.addItem(lowerCase)
-
-        let convertToLF = NSMenuItem(
-            title: "Convert Line Endings to LF",
-            action: Selector(("convertLineEndingsToLF:")),
-            keyEquivalent: "",
+        addCommand(
+            to: menu, title: "Convert Line Endings to CRLF",
+            action: Selector(("convertLineEndingsToCRLF:")), keyEquivalent: "",
         )
-        menu.addItem(convertToLF)
-
-        let convertToCRLF = NSMenuItem(
-            title: "Convert Line Endings to CRLF",
-            action: Selector(("convertLineEndingsToCRLF:")),
-            keyEquivalent: "",
-        )
-        menu.addItem(convertToCRLF)
 
         return wrapped(menu)
     }
 
     private static func findMenuItem() -> NSMenuItem {
         let menu = NSMenu(title: "Find")
-
-        let find = NSMenuItem(title: "Find…", action: Selector(("performFind:")), keyEquivalent: "f")
-        menu.addItem(find)
-
-        let replace = NSMenuItem(
-            title: "Find and Replace…",
-            action: Selector(("performFindAndReplace:")),
-            keyEquivalent: "f",
+        addCommand(to: menu, title: "Find…", action: Selector(("performFind:")), keyEquivalent: "f")
+        addCommand(
+            to: menu, title: "Find and Replace…", action: Selector(("performFindAndReplace:")),
+            keyEquivalent: "f", modifierMask: [.command, .option],
         )
-        replace.keyEquivalentModifierMask = [.command, .option]
-        menu.addItem(replace)
-
-        let findNext = NSMenuItem(title: "Find Next", action: Selector(("findNext:")), keyEquivalent: "g")
-        menu.addItem(findNext)
-
-        let findPrev = NSMenuItem(title: "Find Previous", action: Selector(("findPrevious:")), keyEquivalent: "G")
-        menu.addItem(findPrev)
-
+        addCommand(to: menu, title: "Find Next", action: Selector(("findNext:")), keyEquivalent: "g")
+        addCommand(to: menu, title: "Find Previous", action: Selector(("findPrevious:")), keyEquivalent: "G")
+        menu.addItem(.separator())
+        addCommand(
+            to: menu, title: "Command Palette…", action: Selector(("showCommandPalette:")),
+            keyEquivalent: "p", modifierMask: [.command, .shift],
+        )
         return wrapped(menu)
     }
 
     private static func viewMenuItem() -> NSMenuItem {
         let menu = NSMenu(title: "View")
-
-        let lineNumbers = NSMenuItem(
-            title: "Line Numbers",
-            action: Selector(("toggleLineNumbers:")),
-            keyEquivalent: "l",
+        addCommand(
+            to: menu, title: "Line Numbers", action: Selector(("toggleLineNumbers:")),
+            keyEquivalent: "l", modifierMask: [.command, .option],
         )
-        lineNumbers.keyEquivalentModifierMask = [.command, .option]
-        menu.addItem(lineNumbers)
-
-        let softWrap = NSMenuItem(
-            title: "Soft Wrap",
-            action: Selector(("toggleSoftWrap:")),
-            keyEquivalent: "w",
+        addCommand(
+            to: menu, title: "Soft Wrap", action: Selector(("toggleSoftWrap:")),
+            keyEquivalent: "w", modifierMask: [.command, .option],
         )
-        softWrap.keyEquivalentModifierMask = [.command, .option]
-        menu.addItem(softWrap)
-
-        let statusBar = NSMenuItem(
-            title: "Status Bar",
-            action: Selector(("toggleStatusBar:")),
-            keyEquivalent: "",
-        )
-        menu.addItem(statusBar)
-
+        addCommand(to: menu, title: "Status Bar", action: Selector(("toggleStatusBar:")), keyEquivalent: "")
         return wrapped(menu)
     }
 
@@ -168,6 +115,27 @@ enum MainMenu {
     private static func wrapped(_ menu: NSMenu) -> NSMenuItem {
         let item = NSMenuItem()
         item.submenu = menu
+        return item
+    }
+
+    /// Creates a menu item AND registers it in `CommandRegistry` in one
+    /// call — the single source of truth that keeps the Command Palette
+    /// synced with the menu. Only used for File/Edit/Find/View items
+    /// (document/editing actions); the App menu and Window menu are
+    /// deliberately excluded (see plan/spec Non-Goals).
+    @discardableResult
+    private static func addCommand(
+        to menu: NSMenu, title: String, action: Selector, keyEquivalent: String,
+        modifierMask: NSEvent.ModifierFlags? = nil,
+    ) -> NSMenuItem {
+        let item = NSMenuItem(title: title, action: action, keyEquivalent: keyEquivalent)
+        if let modifierMask {
+            item.keyEquivalentModifierMask = modifierMask
+        }
+        menu.addItem(item)
+        CommandRegistry.register(
+            title: title, selector: action, keyEquivalent: keyEquivalent.isEmpty ? nil : keyEquivalent,
+        )
         return item
     }
 }

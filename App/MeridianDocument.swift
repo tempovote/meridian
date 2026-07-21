@@ -148,6 +148,41 @@ final class MeridianDocument: NSDocument {
         showFindBar()
     }
 
+    private var commandPaletteHost: NSHostingView<CommandPaletteView>?
+
+    @objc func showCommandPalette(_ sender: Any?) {
+        guard commandPaletteHost == nil else {
+            hideCommandPalette()
+            return
+        }
+        let viewModel = CommandPaletteViewModel(commands: CommandRegistry.commands)
+        let paletteView = CommandPaletteView(
+            viewModel: viewModel,
+            onExecute: { [weak self] in
+                guard let self, let command = viewModel.selectedCommand else { return }
+                self.hideCommandPalette()
+                NSApp.sendAction(command.selector, to: nil, from: nil)
+            },
+            onClose: { [weak self] in
+                self?.hideCommandPalette()
+            },
+        )
+        let host = NSHostingView(rootView: paletteView)
+        commandPaletteHost = host
+        if let window = windowControllers.first?.window, let containerStack = window.contentView as? NSStackView {
+            containerStack.insertView(host, at: 0, in: .top)
+            window.makeFirstResponder(host)
+        }
+    }
+
+    private func hideCommandPalette() {
+        if let host = commandPaletteHost {
+            host.removeFromSuperview()
+            commandPaletteHost = nil
+            windowControllers.first?.window?.makeFirstResponder(engine?.keyView)
+        }
+    }
+
     @objc func duplicateLine(_ sender: Any?) {
         guard let viewModel else { return }
         viewModel.perform(TextTransforms.duplicateLines(in: viewModel.buffer, selection: viewModel.selection))
