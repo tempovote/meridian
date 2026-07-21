@@ -1,13 +1,15 @@
 import DocumentCore
 import EditorUI
 import Testing
+import ThemeKit
 import WorkspaceUI
 
 @MainActor
 @Suite("StatusBarViewModelTests")
 struct StatusBarViewModelTests {
     @Test func statusBarStateDerivedFromViewModel() {
-        let engine = TextKit2Engine()
+        let themeEngine = ThemeEngine(darkTheme: BundledThemes.meridianDark, lightTheme: BundledThemes.meridianLight)
+        let engine = TextKit2Engine(themeEngine: themeEngine)
         let vm = EditorViewModel(buffer: TextBuffer("First Line\nSecond Line"), engine: engine)
         engine.setSelection(SelectionSet(caretAt: ByteOffset(0)), in: vm.buffer)
 

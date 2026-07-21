@@ -1,0 +1,24 @@
+{
+  "name": "Meridian Dark — Contrast",
+  "appearance": "dark",
+  "editor": {
+    "background": "#000000",
+    "caret": "#00D9FF",
+    "lineHighlight": "#1A1A1A"
+  },
+  "tokens": {
+    "keyword": { "color": "#FF79C6", "bold": true },
+    "string": { "color": "#50FA7B" },
+    "comment": { "color": "#6272A4", "italic": true },
+    "function": { "color": "#8BE9FD" },
+    "type": { "color": "#F1FA8C" },
+    "variable": { "color": "#F8F8F2" },
+    "property": { "color": "#FF5555" },
+    "number": { "color": "#BD93F9" },
+    "constant": { "color": "#BD93F9" },
+    "punctuation": { "color": "#F8F8F2" },
+    "tag": { "color": "#FF5555" },
+    "attribute": { "color": "#BD93F9" },
+    "plain": { "color": "#F8F8F2" }
+  }
+}

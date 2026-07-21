@@ -8,6 +8,8 @@ struct TokenTypeTests {
         #expect(TokenType(captureName: "keyword") == .keyword)
         #expect(TokenType(captureName: "string") == .string)
         #expect(TokenType(captureName: "comment") == .comment)
+        #expect(TokenType(captureName: "tag") == .tag)
+        #expect(TokenType(captureName: "attribute") == .attribute)
     }
 
     @Test func dottedSuffixFallsBackToKnownPrefix() {

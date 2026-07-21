@@ -21,6 +21,16 @@ public final class MeridianTextView: NSTextView {
         }
     }
 
+    /// Fired by `viewDidChangeEffectiveAppearance()` below — lets the
+    /// owning `TextKit2Engine` react to a system light/dark toggle
+    /// without `MeridianTextView` needing to know about `ThemeKit` itself.
+    public var onEffectiveAppearanceChange: (() -> Void)?
+
+    override public func viewDidChangeEffectiveAppearance() {
+        super.viewDidChangeEffectiveAppearance()
+        onEffectiveAppearanceChange?()
+    }
+
     override public func drawBackground(in rect: NSRect) {
         super.drawBackground(in: rect)
 

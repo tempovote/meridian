@@ -1,0 +1,24 @@
+{
+  "name": "Meridian Light",
+  "appearance": "light",
+  "editor": {
+    "background": "#FAFAFA",
+    "caret": "#0184BC",
+    "lineHighlight": "#ECECEC"
+  },
+  "tokens": {
+    "keyword": { "color": "#A626A4", "bold": true },
+    "string": { "color": "#50A14F" },
+    "comment": { "color": "#A0A1A7", "italic": true },
+    "function": { "color": "#4078F2" },
+    "type": { "color": "#C18401" },
+    "variable": { "color": "#383A42" },
+    "property": { "color": "#E45649" },
+    "number": { "color": "#986801" },
+    "constant": { "color": "#986801" },
+    "punctuation": { "color": "#383A42" },
+    "tag": { "color": "#E45649" },
+    "attribute": { "color": "#986801" },
+    "plain": { "color": "#383A42" }
+  }
+}
