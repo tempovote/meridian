@@ -40,16 +40,7 @@ public final class TextKit2Engine: NSObject, TextLayoutEngine {
     public var languageID: String?
 
     private let themeEngine: ThemeEngine
-
-    /// The 4 possible token-style font variants, resolved once at init —
-    /// `applyHighlighting` must stay a pure lookup with zero style
-    /// computation on the render path (ARCHITECTURE §13), so the
-    /// `NSFontManager.convert` trait conversion for italics happens here,
-    /// not per run per repaint.
-    private let regularFont: NSFont
-    private let boldFont: NSFont
-    private let italicFont: NSFont
-    private let boldItalicFont: NSFont
+    private let fontCache = TokenFontCache(baseSize: 13)
 
     public var onUserEdit: ((EditTransaction) -> Void)?
 
@@ -76,12 +67,6 @@ public final class TextKit2Engine: NSObject, TextLayoutEngine {
     /// Builds the scroll view + TextKit 2 text view, plain-text config.
     public init(themeEngine: ThemeEngine) {
         self.themeEngine = themeEngine
-        let regular = NSFont.monospacedSystemFont(ofSize: 13, weight: .regular)
-        let bold = NSFont.monospacedSystemFont(ofSize: 13, weight: .bold)
-        regularFont = regular
-        boldFont = bold
-        italicFont = NSFontManager.shared.convert(regular, toHaveTrait: .italicFontMask)
-        boldItalicFont = NSFontManager.shared.convert(bold, toHaveTrait: .italicFontMask)
         textView = MeridianTextView(usingTextLayoutManager: true)
         scrollView = NSScrollView()
         super.init()
@@ -210,17 +195,8 @@ public final class TextKit2Engine: NSObject, TextLayoutEngine {
                 guard location >= 0, length >= 0, location + length <= storage.length else { continue }
                 let range = NSRange(location: location, length: length)
                 storage.addAttribute(.foregroundColor, value: style.color, range: range)
-                storage.addAttribute(.font, value: resolvedFont(bold: style.bold, italic: style.italic), range: range)
+                storage.addAttribute(.font, value: fontCache.font(bold: style.bold, italic: style.italic), range: range)
             }
-        }
-    }
-
-    private func resolvedFont(bold: Bool, italic: Bool) -> NSFont {
-        switch (bold, italic) {
-        case (false, false): regularFont
-        case (true, false): boldFont
-        case (false, true): italicFont
-        case (true, true): boldItalicFont
         }
     }
 
