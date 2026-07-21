@@ -36,7 +36,12 @@ enum MainMenu {
     private static func fileMenuItem() -> NSMenuItem {
         let menu = NSMenu(title: "File")
         addCommand(to: menu, title: "New", action: #selector(NSDocumentController.newDocument(_:)), keyEquivalent: "n")
-        addCommand(to: menu, title: "Open…", action: #selector(NSDocumentController.openDocument(_:)), keyEquivalent: "o")
+        addCommand(
+            to: menu,
+            title: "Open…",
+            action: #selector(NSDocumentController.openDocument(_:)),
+            keyEquivalent: "o",
+        )
         menu.addItem(.separator())
         addCommand(to: menu, title: "Close", action: #selector(NSWindow.performClose(_:)), keyEquivalent: "w")
         addCommand(to: menu, title: "Save…", action: Selector(("saveDocument:")), keyEquivalent: "s")
@@ -57,7 +62,12 @@ enum MainMenu {
 
         addCommand(to: menu, title: "Duplicate Line", action: Selector(("duplicateLine:")), keyEquivalent: "D")
         addCommand(to: menu, title: "Delete Line", action: Selector(("deleteLine:")), keyEquivalent: "K")
-        addCommand(to: menu, title: "Trim Trailing Whitespace", action: Selector(("trimTrailingWhitespace:")), keyEquivalent: "")
+        addCommand(
+            to: menu,
+            title: "Trim Trailing Whitespace",
+            action: Selector(("trimTrailingWhitespace:")),
+            keyEquivalent: "",
+        )
         addCommand(to: menu, title: "Make Upper Case", action: Selector(("makeUpperCase:")), keyEquivalent: "")
         addCommand(to: menu, title: "Make Lower Case", action: Selector(("makeLowerCase:")), keyEquivalent: "")
         addCommand(

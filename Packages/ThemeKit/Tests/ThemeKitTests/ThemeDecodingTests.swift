@@ -35,7 +35,12 @@ struct ThemeDecodingTests {
         let original = Theme(
             name: "RoundTrip",
             appearance: .dark,
-            editor: EditorColors(background: "#111111", caret: "#222222", lineHighlight: "#333333", bracketMatch: "#444444"),
+            editor: EditorColors(
+                background: "#111111",
+                caret: "#222222",
+                lineHighlight: "#333333",
+                bracketMatch: "#444444",
+            ),
             tokens: ["keyword": TokenStyle(color: "#ABCDEF", bold: true, italic: false)],
         )
         let data = try JSONEncoder().encode(original)

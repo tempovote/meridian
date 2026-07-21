@@ -160,7 +160,7 @@ final class MeridianDocument: NSDocument {
             viewModel: viewModel,
             onExecute: { [weak self] in
                 guard let self, let command = viewModel.selectedCommand else { return }
-                self.hideCommandPalette()
+                hideCommandPalette()
                 NSApp.sendAction(command.selector, to: nil, from: nil)
             },
             onClose: { [weak self] in

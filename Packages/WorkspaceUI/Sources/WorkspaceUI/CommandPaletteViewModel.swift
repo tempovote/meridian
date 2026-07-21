@@ -19,6 +19,7 @@ public final class CommandPaletteViewModel {
             }
         }
     }
+
     public private(set) var selectedIndex: Int = 0
 
     public init(commands: [Command]) {

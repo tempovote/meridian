@@ -8,7 +8,12 @@ struct ThemeEngineTests {
         let dark = Theme(
             name: "TestDark",
             appearance: .dark,
-            editor: EditorColors(background: "#000000", caret: "#FFFFFF", lineHighlight: "#111111", bracketMatch: "#3E4451"),
+            editor: EditorColors(
+                background: "#000000",
+                caret: "#FFFFFF",
+                lineHighlight: "#111111",
+                bracketMatch: "#3E4451",
+            ),
             tokens: [
                 "keyword": TokenStyle(color: "#FF00FF", bold: true, italic: nil),
                 "plain": TokenStyle(color: "#EEEEEE"),
@@ -17,7 +22,12 @@ struct ThemeEngineTests {
         let light = Theme(
             name: "TestLight",
             appearance: .light,
-            editor: EditorColors(background: "#FFFFFF", caret: "#000000", lineHighlight: "#EEEEEE", bracketMatch: "#D6E4FF"),
+            editor: EditorColors(
+                background: "#FFFFFF",
+                caret: "#000000",
+                lineHighlight: "#EEEEEE",
+                bracketMatch: "#D6E4FF",
+            ),
             tokens: [
                 "keyword": TokenStyle(color: "#0000FF", bold: false, italic: true),
                 "plain": TokenStyle(color: "#111111"),

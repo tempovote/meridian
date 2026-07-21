@@ -16,7 +16,7 @@ enum BracketMatcher {
     ]
 
     static func match(
-        in buffer: TextBuffer, at caret: ByteOffset, tokenRuns: [TokenRun]? = nil
+        in buffer: TextBuffer, at caret: ByteOffset, tokenRuns: [TokenRun]? = nil,
     ) -> (open: ByteOffset, close: ByteOffset)? {
         if let after = character(in: buffer, at: caret), isReal(caret, tokenRuns) {
             if let pair = pairs.first(where: { $0.open == after }) {
@@ -40,7 +40,7 @@ enum BracketMatcher {
 
     private static func findForward(
         in buffer: TextBuffer, openAt: ByteOffset,
-        pair: (open: UInt8, close: UInt8), tokenRuns: [TokenRun]?
+        pair: (open: UInt8, close: UInt8), tokenRuns: [TokenRun]?,
     ) -> (open: ByteOffset, close: ByteOffset)? {
         var depth = 1
         var offset = openAt.value + 1
@@ -63,7 +63,7 @@ enum BracketMatcher {
 
     private static func findBackward(
         in buffer: TextBuffer, closeAt: ByteOffset,
-        pair: (open: UInt8, close: UInt8), tokenRuns: [TokenRun]?
+        pair: (open: UInt8, close: UInt8), tokenRuns: [TokenRun]?,
     ) -> (open: ByteOffset, close: ByteOffset)? {
         var depth = 1
         var offset = closeAt.value - 1
