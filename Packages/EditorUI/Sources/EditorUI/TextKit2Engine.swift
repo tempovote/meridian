@@ -41,6 +41,16 @@ public final class TextKit2Engine: NSObject, TextLayoutEngine {
 
     private let themeEngine: ThemeEngine
 
+    /// The 4 possible token-style font variants, resolved once at init —
+    /// `applyHighlighting` must stay a pure lookup with zero style
+    /// computation on the render path (ARCHITECTURE §13), so the
+    /// `NSFontManager.convert` trait conversion for italics happens here,
+    /// not per run per repaint.
+    private let regularFont: NSFont
+    private let boldFont: NSFont
+    private let italicFont: NSFont
+    private let boldItalicFont: NSFont
+
     public var onUserEdit: ((EditTransaction) -> Void)?
 
     /// The undo manager Cmd+Z/Cmd+Shift+Z should resolve to. `NSTextView`
@@ -66,6 +76,12 @@ public final class TextKit2Engine: NSObject, TextLayoutEngine {
     /// Builds the scroll view + TextKit 2 text view, plain-text config.
     public init(themeEngine: ThemeEngine) {
         self.themeEngine = themeEngine
+        let regular = NSFont.monospacedSystemFont(ofSize: 13, weight: .regular)
+        let bold = NSFont.monospacedSystemFont(ofSize: 13, weight: .bold)
+        regularFont = regular
+        boldFont = bold
+        italicFont = NSFontManager.shared.convert(regular, toHaveTrait: .italicFontMask)
+        boldItalicFont = NSFontManager.shared.convert(bold, toHaveTrait: .italicFontMask)
         textView = MeridianTextView(usingTextLayoutManager: true)
         scrollView = NSScrollView()
         super.init()
@@ -200,11 +216,12 @@ public final class TextKit2Engine: NSObject, TextLayoutEngine {
     }
 
     private func resolvedFont(bold: Bool, italic: Bool) -> NSFont {
-        var font = NSFont.monospacedSystemFont(ofSize: 13, weight: bold ? .bold : .regular)
-        if italic {
-            font = NSFontManager.shared.convert(font, toHaveTrait: .italicFontMask)
+        switch (bold, italic) {
+        case (false, false): regularFont
+        case (true, false): boldFont
+        case (false, true): italicFont
+        case (true, true): boldItalicFont
         }
-        return font
     }
 
     public func apply(_ transaction: EditTransaction, base: TextBuffer) {
