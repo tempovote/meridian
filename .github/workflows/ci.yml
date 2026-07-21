@@ -108,6 +108,12 @@ jobs:
           xcodebuild test -project Meridian.xcodeproj -scheme Meridian
           -destination 'platform=macOS' CODE_SIGN_IDENTITY="-"
           CODE_SIGNING_REQUIRED=YES CODE_SIGNING_ALLOWED=YES
+      - name: App performance budget tests
+        run: >
+          xcodebuild test -project Meridian.xcodeproj -scheme MeridianPerformanceTests
+          -destination 'platform=macOS' CODE_SIGN_IDENTITY="-"
+          CODE_SIGNING_REQUIRED=YES CODE_SIGNING_ALLOWED=YES
+
 
   perf-smoke:
     runs-on: macos-15

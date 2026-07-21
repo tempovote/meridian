@@ -129,14 +129,36 @@ targets:
     dependencies:
       - target: Meridian
 
+  MeridianPerformanceTests:
+    type: bundle.unit-test
+    platform: macOS
+    sources: [Tests/PerformanceTests]
+    settings:
+      GENERATE_INFOPLIST_FILE: YES
+    dependencies:
+      - target: Meridian
+
 schemes:
   Meridian:
     build:
       targets:
         Meridian: all
         MeridianUITests: [test]
+        MeridianPerformanceTests: [test]
     run:
       config: Debug
     test:
       config: Debug
-      targets: [MeridianUITests]
+      targets: [MeridianUITests, MeridianPerformanceTests]
+
+  MeridianPerformanceTests:
+    build:
+      targets:
+        Meridian: all
+        MeridianPerformanceTests: [test]
+    run:
+      config: Debug
+    test:
+      config: Debug
+      targets: [MeridianPerformanceTests]
+

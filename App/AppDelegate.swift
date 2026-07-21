@@ -43,6 +43,26 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.activate()
+        if CommandLine.arguments.contains("--perf-cold-launch") {
+            DispatchQueue.main.async {
+                Swift.print("[MERIDIAN_PERF] FIRST_WINDOW_READY")
+                fflush(stdout)
+                exit(0)
+            }
+        } else if let index = CommandLine.arguments.firstIndex(of: "--perf-idle-tabs"),
+                  index + 1 < CommandLine.arguments.count,
+                  let tabCount = Int(CommandLine.arguments[index + 1]) {
+            DispatchQueue.main.async {
+                let docController = NSDocumentController.shared
+                let existingCount = docController.documents.count
+                let needed = max(0, tabCount - existingCount)
+                for _ in 0 ..< needed {
+                    try? docController.openUntitledDocumentAndDisplay(true)
+                }
+                Swift.print("[MERIDIAN_PERF] IDLE_TABS_READY")
+                fflush(stdout)
+            }
+        }
     }
 
     @MainActor
