@@ -34,6 +34,14 @@ struct PreferencesViewModelTests {
         #expect(store.current.editor.tabWidth == 8)
     }
 
+    @Test func externalStoreUpdateReflectsIntoViewModel() {
+        let store = makeStore()
+        let viewModel = PreferencesViewModel(store: store)
+        store.update { $0.editor.fontSize = 24; $0.editor.tabWidth = 6 }
+        #expect(viewModel.fontSize == 24)
+        #expect(viewModel.tabWidth == 6)
+    }
+
     @Test func bannerReflectsLastLoadError() throws {
         let dir = FileManager.default.temporaryDirectory
             .appendingPathComponent("workspaceui-prefs-tests-\(UUID().uuidString)")
