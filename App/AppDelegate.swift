@@ -31,6 +31,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         settingsStore: AppDelegate.settingsStore,
     )
 
+    /// Window controller for the crash report dialog (if shown).
+    @MainActor
+    private var crashReportWindowController: CrashReportWindowController?
+
     @MainActor
     static func main() {
         let app = NSApplication.shared
@@ -44,6 +48,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.activate()
         let args = CommandLine.arguments
+        let isTesting = isRunningUnderXCTest
+        let didCrash = isTesting ? false : CrashDetector.checkAndMarkLaunch()
+
         if args.contains("--perf-cold-launch") {
             DispatchQueue.main.async {
                 Swift.print("[MERIDIAN_PERF] FIRST_WINDOW_READY")
@@ -52,7 +59,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
         } else {
             handleIdleTabsIfNeeded(args: args)
+            if didCrash {
+                DispatchQueue.main.async { [weak self] in
+                    let report = DiagnosticReportCollector.collectLatestReport()
+                    let windowController = CrashReportWindowController(report: report)
+                    self?.crashReportWindowController = windowController
+                    windowController.show()
+                }
+            }
         }
+    }
+
+    func applicationWillTerminate(_ notification: Notification) {
+        CrashDetector.markCleanShutdown()
     }
 
     @MainActor
@@ -76,6 +95,26 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     @MainActor
     @objc func showPreferences(_ sender: Any?) {
         preferencesWindowController.show()
+    }
+
+    #if DEBUG
+        @objc func simulateCrash(_ sender: Any?) {
+            fatalError("Simulated crash for M5 Phase 3b test")
+        }
+    #endif
+
+    private var isRunningUnderXCTest: Bool {
+        let env = ProcessInfo.processInfo.environment
+        if env.keys.contains(where: { $0.hasPrefix("XC") || $0.hasPrefix("XCTest") }) {
+            return true
+        }
+        if env["DYLD_INSERT_LIBRARIES"]?.contains("XCTest") == true {
+            return true
+        }
+        if NSClassFromString("XCTestCase") != nil {
+            return true
+        }
+        return false
     }
 
     /// Document-based default: launching (or clicking the Dock icon with

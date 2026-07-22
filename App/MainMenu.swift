@@ -14,6 +14,7 @@ enum MainMenu {
         main.addItem(findMenuItem())
         main.addItem(viewMenuItem())
         main.addItem(windowMenuItem())
+        main.addItem(helpMenuItem())
         return main
     }
 
@@ -119,6 +120,16 @@ enum MainMenu {
                      action: #selector(NSWindow.performMiniaturize(_:)),
                      keyEquivalent: "m")
         NSApplication.shared.windowsMenu = menu
+        return wrapped(menu)
+    }
+
+    private static func helpMenuItem() -> NSMenuItem {
+        let menu = NSMenu(title: "Help")
+        #if DEBUG
+            menu.addItem(withTitle: "Simulate Crash (fatalError)",
+                         action: #selector(AppDelegate.simulateCrash(_:)),
+                         keyEquivalent: "")
+        #endif
         return wrapped(menu)
     }
 
