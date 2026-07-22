@@ -50,10 +50,7 @@ public final class DocumentModel {
     /// this document — `DocumentModel` has no notion of panes or engines.
     @discardableResult
     public func perform(_ transaction: EditTransaction) -> TextBuffer {
-        let base = buffer
-        buffer.apply(transaction)
-        record(transaction, base: base)
-        return base
+        applyAndRecord(transaction)
     }
 
     /// Records a transaction whose content change was already applied
@@ -61,8 +58,19 @@ public final class DocumentModel {
     /// already changed when the user typed — only the buffer and undo
     /// stack need to advance here). Returns the buffer state immediately
     /// before the transaction, same as ``perform(_:)``.
+    ///
+    /// Identical in implementation to ``perform(_:)`` today — kept as a
+    /// separate, distinctly-documented entry point because the two callers
+    /// (`EditorViewModel.perform`/`.userEdited`) diverge in what they do
+    /// with the transaction *afterward* (mirroring into this pane's own
+    /// engine, or not), which is a real semantic difference at the call
+    /// site even though `DocumentModel` itself treats both identically.
     @discardableResult
     public func applyUserEdit(_ transaction: EditTransaction) -> TextBuffer {
+        applyAndRecord(transaction)
+    }
+
+    private func applyAndRecord(_ transaction: EditTransaction) -> TextBuffer {
         let base = buffer
         buffer.apply(transaction)
         record(transaction, base: base)

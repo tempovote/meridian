@@ -61,6 +61,15 @@ final class MeridianDocument: NSDocument {
     /// act on, and which pane's state the status bar shows.
     private var focusedPaneIndex: Int = 0
     private var statusBarHost: NSHostingView<StatusBarView>?
+    /// Whatever currently occupies the container stack's editor/split slot
+    /// (a single pane's `engine.view`, or an `NSSplitView` wrapping two) —
+    /// tracked explicitly rather than assumed to be
+    /// `containerStack.arrangedSubviews.first`, because the find bar and
+    /// command palette ALSO insert themselves at index 0 (`.top` gravity
+    /// renders above the editor) while open. Without this, splitting while
+    /// either overlay is open would remove and orphan the overlay's host
+    /// instead of the editor slot.
+    private var editorSlotView: NSView?
     /// Metadata from the loaded file (encoding/BOM for faithful save);
     /// nil for untitled documents (saved as UTF-8, no BOM, LF).
     private var loadedMetadata: (encoding: TextEncoding, hadBOM: Bool)?
@@ -154,6 +163,7 @@ final class MeridianDocument: NSDocument {
             containerStack.orientation = .vertical
             containerStack.spacing = 0
             containerStack.alignment = .width
+            editorSlotView = engine.view
             host.setContentHuggingPriority(.required, for: .vertical)
 
             NSWindow.allowsAutomaticWindowTabbing = true
@@ -254,7 +264,10 @@ final class MeridianDocument: NSDocument {
         guard let window = windowControllers.first?.window,
               let containerStack = window.contentView as? NSStackView
         else { return }
-        if let existingPrimarySlot = containerStack.arrangedSubviews.first {
+        // Remove the tracked editor slot specifically — NOT
+        // `arrangedSubviews.first`, which the find bar / command palette
+        // can also occupy (see `editorSlotView`'s doc comment).
+        if let existingPrimarySlot = editorSlotView {
             containerStack.removeArrangedSubview(existingPrimarySlot)
             existingPrimarySlot.removeFromSuperview()
         }
@@ -274,7 +287,13 @@ final class MeridianDocument: NSDocument {
             newPrimarySlot = panes[0].engine.view
         }
         newPrimarySlot.setContentHuggingPriority(.defaultLow, for: .vertical)
-        containerStack.insertView(newPrimarySlot, at: 0, in: .top)
+        // Insert below any open overlay (find bar / command palette), not
+        // unconditionally at index 0 — an open overlay currently occupies
+        // that slot and must stay on top of the editor, not be displaced.
+        let overlayIsOpen = findBarHost != nil || commandPaletteHost != nil
+        let insertIndex = overlayIsOpen ? 1 : 0
+        containerStack.insertView(newPrimarySlot, at: insertIndex, in: .top)
+        editorSlotView = newPrimarySlot
     }
 
     /// Wires every pane's `onDidApplyTransaction` to mirror into every
@@ -311,6 +330,12 @@ final class MeridianDocument: NSDocument {
             encodingName: encodingName,
             lineEndingName: "LF",
         )
+        // Reconcile visibility with the newly-focused pane's own toggle —
+        // without this, hiding the bar while pane A is focused then
+        // switching focus to pane B (whose isStatusBarVisible is still
+        // true) would leave the bar hidden despite the View-menu checkmark
+        // (which reads focusedViewModel.isStatusBarVisible) showing "on".
+        host.isHidden = !viewModel.isStatusBarVisible
     }
 
     private var findBarHost: NSHostingView<FindBarView>?
