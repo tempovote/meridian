@@ -17,7 +17,7 @@ private func testSettingsDirectory() -> URL {
 struct SoftWrapAndChromeTests {
     @Test func viewModelTogglesAndDerivedProperties() {
         let engine = MockLayoutEngine()
-        let vm = EditorViewModel(buffer: TextBuffer("Hello\nWorld\nFoo"), engine: engine)
+        let vm = EditorViewModel(documentModel: DocumentModel(buffer: TextBuffer("Hello\nWorld\nFoo")), engine: engine)
 
         #expect(vm.isGutterVisible)
         #expect(vm.isSoftWrapEnabled)
@@ -44,7 +44,7 @@ struct SoftWrapAndChromeTests {
             themeEngine: themeEngine,
             settingsStore: SettingsStore(directoryURL: testSettingsDirectory()),
         )
-        let vm = EditorViewModel(buffer: TextBuffer("Line 1\nLine 2"), engine: engine)
+        let vm = EditorViewModel(documentModel: DocumentModel(buffer: TextBuffer("Line 1\nLine 2")), engine: engine)
 
         engine.setSoftWrap(true)
         engine.setSoftWrap(false)
