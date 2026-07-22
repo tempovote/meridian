@@ -1,3 +1,4 @@
+// swiftlint:disable file_length
 import AppKit
 import DocumentCore
 import EditorUI
@@ -26,23 +27,53 @@ enum DocumentOpenError: LocalizedError {
     }
 }
 
-/// The NSDocument bridge: FileKit I/O on the outside, EditorViewModel as
-/// the authoritative model, thin NSUndoManager actions replaying the
-/// rope's UndoStack (spec decision 3).
+/// The two ways a document's editor can be split into two panes. Naming
+/// matches the View-menu items, NOT `NSSplitView.isVertical` (whose
+/// "vertical" describes the DIVIDER's orientation, the opposite of the
+/// pane-arrangement naming used here and in the menu — `.horizontal`
+/// (stacked panes, divider runs horizontally) sets `isVertical = false`;
+/// `.vertical` (side-by-side panes, divider runs vertically) sets
+/// `isVertical = true`).
+private enum SplitOrientation {
+    case horizontal
+    case vertical
+}
+
+/// The NSDocument bridge: FileKit I/O on the outside, a `DocumentModel`
+/// (shared buffer/undo) plus one or two `EditorViewModel` panes (each its
+/// own engine + display settings) as the authoritative model, thin
+/// NSUndoManager actions replaying the rope's UndoStack (spec decision 3).
 final class MeridianDocument: NSDocument {
+    // swiftlint:disable:previous type_body_length
     /// Huge-file threshold: at or above this size, refuse to open.
     nonisolated static let maxFileSize = 64 * 1024 * 1024
     /// Pathological-line threshold, in UTF-8 bytes.
     nonisolated static let maxLineLength = 1_000_000
 
-    private var viewModel: EditorViewModel?
-    private var engine: TextKit2Engine?
+    private var documentModel: DocumentModel?
+    /// One entry when unsplit, two when split. Index 0 is always the
+    /// original/primary pane; index 1 (when present) is the secondary
+    /// pane created by a split.
+    private var panes: [(viewModel: EditorViewModel, engine: TextKit2Engine)] = []
+    private var currentSplitOrientation: SplitOrientation?
+    /// Which `panes` index the window's first responder currently belongs
+    /// to — drives which pane View-menu toggles/text-transform commands
+    /// act on, and which pane's state the status bar shows.
+    private var focusedPaneIndex: Int = 0
     private var statusBarHost: NSHostingView<StatusBarView>?
     /// Metadata from the loaded file (encoding/BOM for faithful save);
     /// nil for untitled documents (saved as UTF-8, no BOM, LF).
     private var loadedMetadata: (encoding: TextEncoding, hadBOM: Bool)?
     /// Buffer read before window controllers exist.
     private var pendingBuffer = TextBuffer()
+
+    private var focusedViewModel: EditorViewModel? {
+        panes.indices.contains(focusedPaneIndex) ? panes[focusedPaneIndex].viewModel : nil
+    }
+
+    private var focusedEngine: TextKit2Engine? {
+        panes.indices.contains(focusedPaneIndex) ? panes[focusedPaneIndex].engine : nil
+    }
 
     // swiftlint:disable:next static_over_final_class
     override class var autosavesInPlace: Bool {
@@ -62,35 +93,45 @@ final class MeridianDocument: NSDocument {
         MainActor.assumeIsolated {
             loadedMetadata = (file.encoding, file.hadBOM)
             pendingBuffer = file.buffer
-            // Re-opened into an existing window (revert): reload the model.
-            if let viewModel, let engine {
-                // Rebuild rather than diff — P1 has no revert UI; this
-                // path only runs for NSDocument's built-in revert.
-                _ = viewModel // old model discarded with its undo history
-                engine.languageID = languageID(forFileExtension: url.pathExtension)
-                let newViewModel = EditorViewModel(buffer: file.buffer, engine: engine)
-                newViewModel.isSoftWrapEnabled = AppDelegate.settingsStore.current.editor.softWrapDefault
-                self.viewModel = newViewModel
-                self.wireUndoCallback()
-            }
+            // Re-opened into an existing window (revert): reload the
+            // model. Rebuild rather than diff — P1 has no revert UI; this
+            // path only runs for NSDocument's built-in revert. Revert
+            // always collapses back to a single pane.
+            guard !panes.isEmpty else { return }
+            let newDocumentModel = DocumentModel(buffer: file.buffer)
+            documentModel = newDocumentModel
+            let primaryEngine = panes[0].engine
+            primaryEngine.languageID = languageID(forFileExtension: url.pathExtension)
+            let newViewModel = EditorViewModel(documentModel: newDocumentModel, engine: primaryEngine)
+            newViewModel.isSoftWrapEnabled = AppDelegate.settingsStore.current.editor.softWrapDefault
+            panes = [(newViewModel, primaryEngine)]
+            currentSplitOrientation = nil
+            focusedPaneIndex = 0
+            wireUndoCallback()
+            wireMirroring()
+            wireFocusTracking()
+            rebuildSplitLayout()
+            refreshStatusBar()
         }
     }
 
     override func data(ofType typeName: String) throws -> Data {
-        let buffer = MainActor.assumeIsolated { viewModel?.buffer } ?? pendingBuffer
+        let buffer = MainActor.assumeIsolated { documentModel?.buffer } ?? pendingBuffer
         let metadata = loadedMetadata ?? (.utf8, false)
         return try TextFileIO.encode(buffer, as: metadata.encoding, includeBOM: metadata.hadBOM)
     }
 
     override func makeWindowControllers() {
         MainActor.assumeIsolated {
-            let engine = TextKit2Engine(themeEngine: AppDelegate.themeEngine, settingsStore: AppDelegate.settingsStore)
-            engine.languageID = fileURL.flatMap { languageID(forFileExtension: $0.pathExtension) }
-            let viewModel = EditorViewModel(buffer: pendingBuffer, engine: engine)
+            let documentModel = DocumentModel(buffer: pendingBuffer)
+            self.documentModel = documentModel
+            let engine = makeEngine(languageID: fileURL.flatMap { languageID(forFileExtension: $0.pathExtension) })
+            let viewModel = EditorViewModel(documentModel: documentModel, engine: engine)
             viewModel.isSoftWrapEnabled = AppDelegate.settingsStore.current.editor.softWrapDefault
-            self.engine = engine
-            self.viewModel = viewModel
+            panes = [(viewModel, engine)]
             wireUndoCallback()
+            wireMirroring()
+            wireFocusTracking()
 
             let encodingName = loadedMetadata?.encoding.displayName ?? "UTF-8"
             let statusBar = StatusBarView(
@@ -99,13 +140,12 @@ final class MeridianDocument: NSDocument {
                 lineEndingName: "LF",
             )
             let host = NSHostingView(rootView: statusBar)
-            self.statusBarHost = host
+            statusBarHost = host
 
             let containerStack = NSStackView(views: [engine.view, host])
             containerStack.orientation = .vertical
             containerStack.spacing = 0
             containerStack.alignment = .width
-            engine.view.setContentHuggingPriority(.defaultLow, for: .vertical)
             host.setContentHuggingPriority(.required, for: .vertical)
 
             NSWindow.allowsAutomaticWindowTabbing = true
@@ -119,23 +159,143 @@ final class MeridianDocument: NSDocument {
             window.center()
             window.contentView = containerStack
             window.makeFirstResponder(engine.keyView)
-            engine.documentUndoManager = undoManager
             addWindowController(NSWindowController(window: window))
         }
     }
 
+    /// Builds a new `TextKit2Engine` wired to this document's undo manager.
+    /// `languageID` is only supplied for the primary pane (detected from
+    /// the file extension); a secondary pane created by a split copies its
+    /// language from the pane it was split from (see `setSplit`).
+    private func makeEngine(languageID: String?) -> TextKit2Engine {
+        let engine = TextKit2Engine(themeEngine: AppDelegate.themeEngine, settingsStore: AppDelegate.settingsStore)
+        engine.languageID = languageID
+        engine.documentUndoManager = undoManager
+        return engine
+    }
+
     @objc func toggleLineNumbers(_ sender: Any?) {
-        viewModel?.isGutterVisible.toggle()
+        focusedViewModel?.isGutterVisible.toggle()
     }
 
     @objc func toggleSoftWrap(_ sender: Any?) {
-        viewModel?.isSoftWrapEnabled.toggle()
+        focusedViewModel?.isSoftWrapEnabled.toggle()
     }
 
     @objc func toggleStatusBar(_ sender: Any?) {
-        guard let viewModel else { return }
+        guard let viewModel = focusedViewModel else { return }
         viewModel.isStatusBarVisible.toggle()
         statusBarHost?.isHidden = !viewModel.isStatusBarVisible
+    }
+
+    @objc func splitHorizontally(_ sender: Any?) {
+        setSplit(orientation: .horizontal)
+    }
+
+    @objc func splitVertically(_ sender: Any?) {
+        setSplit(orientation: .vertical)
+    }
+
+    /// Choosing the already-active orientation removes the split;
+    /// choosing the other orientation while split re-orients in place;
+    /// choosing either while unsplit creates the second pane.
+    private func setSplit(orientation: SplitOrientation) {
+        guard let documentModel, let primary = panes.first else { return }
+        if currentSplitOrientation == orientation {
+            removeSplit()
+            return
+        }
+        if panes.count == 1 {
+            let secondaryEngine = makeEngine(languageID: primary.engine.languageID)
+            let secondaryViewModel = EditorViewModel(documentModel: documentModel, engine: secondaryEngine)
+            secondaryViewModel.isGutterVisible = primary.viewModel.isGutterVisible
+            secondaryViewModel.isSoftWrapEnabled = primary.viewModel.isSoftWrapEnabled
+            secondaryViewModel.isCurrentLineHighlightEnabled = primary.viewModel.isCurrentLineHighlightEnabled
+            secondaryViewModel.isStatusBarVisible = primary.viewModel.isStatusBarVisible
+            panes.append((secondaryViewModel, secondaryEngine))
+            wireMirroring()
+            wireFocusTracking()
+        }
+        currentSplitOrientation = orientation
+        rebuildSplitLayout()
+    }
+
+    private func removeSplit() {
+        guard panes.count > 1 else { return }
+        let removed = panes.removeLast()
+        removed.viewModel.onDidApplyTransaction = nil
+        removed.engine.onBecomeFirstResponder = nil
+        currentSplitOrientation = nil
+        focusedPaneIndex = 0
+        rebuildSplitLayout()
+        windowControllers.first?.window?.makeFirstResponder(panes[0].engine.keyView)
+        refreshStatusBar()
+    }
+
+    /// Swaps whatever currently occupies the container stack's top slot
+    /// (a single pane's view, or a previous split view) for the correct
+    /// view given `panes.count` and `currentSplitOrientation`.
+    private func rebuildSplitLayout() {
+        guard let window = windowControllers.first?.window,
+              let containerStack = window.contentView as? NSStackView
+        else { return }
+        if let existingPrimarySlot = containerStack.arrangedSubviews.first {
+            containerStack.removeArrangedSubview(existingPrimarySlot)
+            existingPrimarySlot.removeFromSuperview()
+        }
+        let newPrimarySlot: NSView
+        if let orientation = currentSplitOrientation, panes.count > 1 {
+            let splitView = NSSplitView()
+            // See `SplitOrientation`'s doc comment for why this looks
+            // inverted: `.vertical` (side-by-side panes) needs a VERTICAL
+            // divider, i.e. `isVertical = true`.
+            splitView.isVertical = orientation == .vertical
+            splitView.dividerStyle = .thin
+            for pane in panes {
+                splitView.addArrangedSubview(pane.engine.view)
+            }
+            newPrimarySlot = splitView
+        } else {
+            newPrimarySlot = panes[0].engine.view
+        }
+        newPrimarySlot.setContentHuggingPriority(.defaultLow, for: .vertical)
+        containerStack.insertView(newPrimarySlot, at: 0, in: .top)
+    }
+
+    /// Wires every pane's `onDidApplyTransaction` to mirror into every
+    /// OTHER pane's engine, content-only (no selection change there).
+    /// Safe to call repeatedly (e.g. after adding/removing a pane) — it
+    /// just reassigns each pane's callback to the current `panes` array.
+    private func wireMirroring() {
+        for (index, pane) in panes.enumerated() {
+            pane.viewModel.onDidApplyTransaction = { [weak self] transaction, base in
+                guard let self else { return }
+                for (otherIndex, other) in panes.enumerated() where otherIndex != index {
+                    other.engine.apply(transaction, base: base, restoreSelection: false)
+                }
+            }
+        }
+    }
+
+    /// Wires every pane's engine to update `focusedPaneIndex` and the
+    /// status bar when that pane's text view becomes first responder.
+    private func wireFocusTracking() {
+        for (index, pane) in panes.enumerated() {
+            pane.engine.onBecomeFirstResponder = { [weak self] in
+                self?.focusedPaneIndex = index
+                self?.refreshStatusBar()
+            }
+        }
+    }
+
+    private func refreshStatusBar() {
+        guard let host = statusBarHost, let viewModel = focusedViewModel else { return }
+        let encodingName = loadedMetadata?.encoding.displayName ?? "UTF-8"
+        host.rootView = StatusBarView(
+            viewModel: viewModel,
+            encodingName: encodingName,
+            lineEndingName: "LF",
+        )
     }
 
     private var findBarHost: NSHostingView<FindBarView>?
@@ -219,51 +379,51 @@ final class MeridianDocument: NSDocument {
         if let host = commandPaletteHost {
             host.removeFromSuperview()
             commandPaletteHost = nil
-            windowControllers.first?.window?.makeFirstResponder(engine?.keyView)
+            windowControllers.first?.window?.makeFirstResponder(focusedEngine?.keyView)
         }
     }
 
     @objc func duplicateLine(_ sender: Any?) {
-        guard let viewModel else { return }
+        guard let viewModel = focusedViewModel else { return }
         viewModel.perform(TextTransforms.duplicateLines(in: viewModel.buffer, selection: viewModel.selection))
     }
 
     @objc func deleteLine(_ sender: Any?) {
-        guard let viewModel else { return }
+        guard let viewModel = focusedViewModel else { return }
         viewModel.perform(TextTransforms.deleteLines(in: viewModel.buffer, selection: viewModel.selection))
     }
 
     @objc func trimTrailingWhitespace(_ sender: Any?) {
-        guard let viewModel else { return }
+        guard let viewModel = focusedViewModel else { return }
         viewModel.perform(TextTransforms.trimTrailingWhitespace(in: viewModel.buffer))
     }
 
     @objc func makeUpperCase(_ sender: Any?) {
-        guard let viewModel else { return }
+        guard let viewModel = focusedViewModel else { return }
         viewModel
             .perform(TextTransforms
                 .transformCase(in: viewModel.buffer, selection: viewModel.selection) { $0.uppercased() })
     }
 
     @objc func makeLowerCase(_ sender: Any?) {
-        guard let viewModel else { return }
+        guard let viewModel = focusedViewModel else { return }
         viewModel
             .perform(TextTransforms
                 .transformCase(in: viewModel.buffer, selection: viewModel.selection) { $0.lowercased() })
     }
 
     @objc func convertLineEndingsToLF(_ sender: Any?) {
-        guard let viewModel else { return }
+        guard let viewModel = focusedViewModel else { return }
         viewModel.perform(TextTransforms.convertLineEndings(in: viewModel.buffer, to: .lf))
     }
 
     @objc func convertLineEndingsToCRLF(_ sender: Any?) {
-        guard let viewModel else { return }
+        guard let viewModel = focusedViewModel else { return }
         viewModel.perform(TextTransforms.convertLineEndings(in: viewModel.buffer, to: .crlf))
     }
 
     private func showFindBar(startExpanded: Bool) {
-        guard let viewModel, findBarHost == nil else { return }
+        guard let viewModel = focusedViewModel, findBarHost == nil else { return }
         let findView = FindBarView(viewModel: viewModel, startExpanded: startExpanded) { [weak self] in
             self?.hideFindBar()
         }
@@ -280,21 +440,29 @@ final class MeridianDocument: NSDocument {
         if let host = findBarHost {
             host.removeFromSuperview()
             findBarHost = nil
-            windowControllers.first?.window?.makeFirstResponder(engine?.keyView)
+            windowControllers.first?.window?.makeFirstResponder(focusedEngine?.keyView)
         }
     }
 
     override func validateMenuItem(_ menuItem: NSMenuItem) -> Bool {
         if menuItem.action == #selector(toggleLineNumbers(_:)) {
-            menuItem.state = (viewModel?.isGutterVisible == true) ? .on : .off
+            menuItem.state = (focusedViewModel?.isGutterVisible == true) ? .on : .off
             return true
         }
         if menuItem.action == #selector(toggleSoftWrap(_:)) {
-            menuItem.state = (viewModel?.isSoftWrapEnabled == true) ? .on : .off
+            menuItem.state = (focusedViewModel?.isSoftWrapEnabled == true) ? .on : .off
             return true
         }
         if menuItem.action == #selector(toggleStatusBar(_:)) {
-            menuItem.state = (viewModel?.isStatusBarVisible == true) ? .on : .off
+            menuItem.state = (focusedViewModel?.isStatusBarVisible == true) ? .on : .off
+            return true
+        }
+        if menuItem.action == #selector(splitHorizontally(_:)) {
+            menuItem.state = (currentSplitOrientation == .horizontal) ? .on : .off
+            return true
+        }
+        if menuItem.action == #selector(splitVertically(_:)) {
+            menuItem.state = (currentSplitOrientation == .vertical) ? .on : .off
             return true
         }
         return super.validateMenuItem(menuItem)
@@ -302,10 +470,12 @@ final class MeridianDocument: NSDocument {
 
     /// One NSUndoManager registration per new UndoStack entry, replayed
     /// through the rope. `isUndoing` discriminates the redo direction;
-    /// each replay re-registers so the chain continues both ways.
+    /// each replay re-registers so the chain continues both ways. Wired
+    /// on `documentModel` directly (not any one pane's `EditorViewModel`
+    /// passthrough) since it's the single source shared by every pane.
     @MainActor
     private func wireUndoCallback() {
-        viewModel?.onNewUndoEntry = { [weak self] in
+        documentModel?.onNewUndoEntry = { [weak self] in
             self?.registerUndoReplay()
         }
     }
@@ -316,9 +486,9 @@ final class MeridianDocument: NSDocument {
         undoManager.registerUndo(withTarget: self) { document in
             MainActor.assumeIsolated {
                 if document.undoManager?.isUndoing == true {
-                    document.viewModel?.undo()
+                    document.focusedViewModel?.undo()
                 } else {
-                    document.viewModel?.redo()
+                    document.focusedViewModel?.redo()
                 }
                 document.registerUndoReplay()
             }
