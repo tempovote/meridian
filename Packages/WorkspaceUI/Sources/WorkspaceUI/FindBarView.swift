@@ -1,21 +1,9 @@
-import DocumentCore
-import EditorUI
-import SearchKit
 import SwiftUI
 
-/// A floating Find & Replace bar observing search state on `EditorViewModel`.
+/// A floating Find & Replace bar rendering `FindBarViewModel`'s state.
 @MainActor
 public struct FindBarView: View {
-    @Bindable var viewModel: EditorViewModel
-    @State private var searchEngine = SearchEngine()
-    @State private var query: String = ""
-    @State private var replacement: String = ""
-    @State private var isCaseSensitive: Bool = false
-    @State private var isWholeWord: Bool = false
-    @State private var isRegex: Bool = false
-    @State private var isReplaceExpanded: Bool
-    @State private var matches: [SearchMatch] = []
-    @State private var currentMatchIndex: Int = 0
+    @Bindable var viewModel: FindBarViewModel
     /// Claims SwiftUI-level keyboard focus for the query field as soon as
     /// the bar appears — see `CommandPaletteView`'s identical property for
     /// why this is needed: `window.makeFirstResponder(host)` only makes the
@@ -25,24 +13,9 @@ public struct FindBarView: View {
 
     public let onClose: () -> Void
 
-    public init(viewModel: EditorViewModel, startExpanded: Bool = false, onClose: @escaping () -> Void) {
+    public init(viewModel: FindBarViewModel, onClose: @escaping () -> Void) {
         self.viewModel = viewModel
         self.onClose = onClose
-        _isReplaceExpanded = State(initialValue: startExpanded)
-    }
-
-    private var options: SearchOptions {
-        var opts: SearchOptions = []
-        if isCaseSensitive {
-            opts.insert(.caseSensitive)
-        }
-        if isWholeWord {
-            opts.insert(.wholeWord)
-        }
-        if isRegex {
-            opts.insert(.regularExpression)
-        }
-        return opts
     }
 
     public var body: some View {
@@ -52,11 +25,11 @@ public struct FindBarView: View {
                 Image(systemName: "magnifyingglass")
                     .foregroundColor(.secondary)
 
-                TextField("Find", text: $query)
+                TextField("Find", text: $viewModel.query)
                     .textFieldStyle(.plain)
                     .focused($isQueryFocused)
-                    .onChange(of: query) { performSearch() }
-                    .onSubmit { findNext() }
+                    .onChange(of: viewModel.query) { viewModel.performSearch() }
+                    .onSubmit { viewModel.findNext() }
 
                 Divider().frame(height: 14)
 
@@ -64,9 +37,10 @@ public struct FindBarView: View {
                 // TextField above so they don't read as stray, uneditable
                 // placeholder text sitting inside the search box.
                 HStack(spacing: 4) {
-                    ToggleOptionButton(title: "Aa", isSelected: $isCaseSensitive) { performSearch() }
-                    ToggleOptionButton(title: "W", isSelected: $isWholeWord) { performSearch() }
-                    ToggleOptionButton(title: ".*", isSelected: $isRegex) { performSearch() }
+                    ToggleOptionButton(title: "Aa", isSelected: $viewModel.isCaseSensitive) { viewModel.performSearch()
+                    }
+                    ToggleOptionButton(title: "W", isSelected: $viewModel.isWholeWord) { viewModel.performSearch() }
+                    ToggleOptionButton(title: ".*", isSelected: $viewModel.isRegex) { viewModel.performSearch() }
                 }
 
                 // Match count indicator. The reserved width only kicks in
@@ -74,27 +48,27 @@ public struct FindBarView: View {
                 // a persistent empty box — it still stops the nav/expand/
                 // close buttons from jittering sideways as the count text's
                 // length varies ("1 of 5" vs. "No results") once searching.
-                Text(matchCountText)
+                Text(viewModel.matchCountText)
                     .font(.caption)
                     .foregroundColor(.secondary)
-                    .frame(minWidth: query.isEmpty ? 0 : 65, alignment: .trailing)
+                    .frame(minWidth: viewModel.query.isEmpty ? 0 : 65, alignment: .trailing)
 
                 // Navigation buttons
-                Button(action: findPrevious, label: {
+                Button(action: viewModel.findPrevious, label: {
                     Image(systemName: "chevron.up")
                 })
                 .buttonStyle(.plain)
-                .disabled(matches.isEmpty)
+                .disabled(viewModel.matches.isEmpty)
 
-                Button(action: findNext, label: {
+                Button(action: viewModel.findNext, label: {
                     Image(systemName: "chevron.down")
                 })
                 .buttonStyle(.plain)
-                .disabled(matches.isEmpty)
+                .disabled(viewModel.matches.isEmpty)
 
                 // Expand replace toggle
                 Button(action: toggleReplace, label: {
-                    Image(systemName: isReplaceExpanded ? "chevron.down.square.fill" : "chevron.right.square")
+                    Image(systemName: viewModel.isReplaceExpanded ? "chevron.down.square.fill" : "chevron.right.square")
                 })
                 .buttonStyle(.plain)
 
@@ -106,19 +80,19 @@ public struct FindBarView: View {
             }
 
             // Replace Row
-            if isReplaceExpanded {
+            if viewModel.isReplaceExpanded {
                 HStack(spacing: 8) {
                     Image(systemName: "pencil")
                         .foregroundColor(.secondary)
 
-                    TextField("Replace", text: $replacement)
+                    TextField("Replace", text: $viewModel.replacement)
                         .textFieldStyle(.plain)
 
-                    Button("Replace", action: replaceCurrent)
-                        .disabled(matches.isEmpty)
+                    Button("Replace", action: viewModel.replaceCurrent)
+                        .disabled(viewModel.matches.isEmpty)
 
-                    Button("Replace All", action: replaceAll)
-                        .disabled(matches.isEmpty)
+                    Button("Replace All", action: viewModel.replaceAll)
+                        .disabled(viewModel.matches.isEmpty)
                 }
                 .transition(.move(edge: .top).combined(with: .opacity))
             }
@@ -138,6 +112,10 @@ public struct FindBarView: View {
         // overlapping until typing forces a resize. A fixed width sidesteps
         // the whole race by giving Auto Layout a concrete size up front.
         .frame(width: 560)
+        .onKeyPress(.escape) {
+            onClose()
+            return .handled
+        }
         .onAppear {
             // A same-tick focus claim races NSHostingView's installation into
             // the AppKit view hierarchy (the bar is inserted via
@@ -150,76 +128,10 @@ public struct FindBarView: View {
         }
     }
 
-    private var matchCountText: String {
-        if query.isEmpty {
-            return ""
-        }
-        if matches.isEmpty {
-            return "No results"
-        }
-        return "\(currentMatchIndex + 1) of \(matches.count)"
-    }
-
     private func toggleReplace() {
         withAnimation {
-            isReplaceExpanded.toggle()
+            viewModel.isReplaceExpanded.toggle()
         }
-    }
-
-    private func performSearch() {
-        guard !query.isEmpty else {
-            matches = []
-            currentMatchIndex = 0
-            return
-        }
-        matches = searchEngine.findAll(query: query, in: viewModel.buffer, options: options)
-        if matches.isEmpty {
-            currentMatchIndex = 0
-        } else {
-            currentMatchIndex = 0
-            selectMatch(matches[0])
-        }
-    }
-
-    private func findNext() {
-        guard !matches.isEmpty else { return }
-        currentMatchIndex = (currentMatchIndex + 1) % matches.count
-        selectMatch(matches[currentMatchIndex])
-    }
-
-    private func findPrevious() {
-        guard !matches.isEmpty else { return }
-        currentMatchIndex = (currentMatchIndex - 1 + matches.count) % matches.count
-        selectMatch(matches[currentMatchIndex])
-    }
-
-    private func replaceCurrent() {
-        guard !matches.isEmpty, currentMatchIndex < matches.count else { return }
-        let match = matches[currentMatchIndex]
-        let tx = searchEngine.buildReplaceTransaction(
-            matches: [match],
-            replacement: replacement,
-            in: viewModel.buffer,
-            origin: .user,
-        )
-        viewModel.perform(tx)
-        performSearch()
-    }
-
-    private func replaceAll() {
-        guard !matches.isEmpty else { return }
-        let tx = searchEngine.buildReplaceTransaction(
-            matches: matches,
-            replacement: replacement,
-            in: viewModel.buffer,
-            origin: .replaceAll,
-        )
-        viewModel.perform(tx)
-        performSearch()
-    }
-
-    private func selectMatch(_ match: SearchMatch) {
-        viewModel.setSelection(SelectionSet(ranges: [match.range]))
     }
 }
 

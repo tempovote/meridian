@@ -165,6 +165,7 @@ enum MainMenu {
         menu.addItem(item)
         CommandRegistry.register(
             title: title, selector: action, keyEquivalent: keyEquivalent.isEmpty ? nil : keyEquivalent,
+            modifierMask: item.keyEquivalentModifierMask,
         )
         return item
     }

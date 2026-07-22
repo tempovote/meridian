@@ -282,6 +282,21 @@ final class MeridianDocument: NSDocument {
             for pane in panes {
                 splitView.addArrangedSubview(pane.engine.view)
             }
+            // NSSplitView has no notion of "50/50" on its own: it sizes
+            // freshly added arranged subviews off whatever frame they
+            // already had, so a brand-new secondary pane (frame zero,
+            // never laid out) is left with almost no space while the
+            // pre-existing primary pane keeps nearly all of it. An
+            // explicit equal-dimension constraint gives the divider a
+            // sane starting position; the user can still drag it freely
+            // afterward.
+            let first = panes[0].engine.view
+            let second = panes[1].engine.view
+            if orientation == .vertical {
+                first.widthAnchor.constraint(equalTo: second.widthAnchor).isActive = true
+            } else {
+                first.heightAnchor.constraint(equalTo: second.heightAnchor).isActive = true
+            }
             newPrimarySlot = splitView
         } else {
             newPrimarySlot = panes[0].engine.view
@@ -339,6 +354,10 @@ final class MeridianDocument: NSDocument {
     }
 
     private var findBarHost: NSHostingView<FindBarView>?
+    /// Owns Find & Replace's search/navigation state — see
+    /// `FindBarViewModel`'s doc comment for why this lives here rather
+    /// than as `FindBarView`'s private `@State`.
+    private var findBarViewModel: FindBarViewModel?
 
     @objc func performFind(_ sender: Any?) {
         showFindBar(startExpanded: false)
@@ -346,6 +365,14 @@ final class MeridianDocument: NSDocument {
 
     @objc func performFindAndReplace(_ sender: Any?) {
         showFindBar(startExpanded: true)
+    }
+
+    @objc func findNext(_ sender: Any?) {
+        findBarViewModel?.findNext()
+    }
+
+    @objc func findPrevious(_ sender: Any?) {
+        findBarViewModel?.findPrevious()
     }
 
     private var commandPaletteHost: NSHostingView<CommandPaletteView>?
@@ -464,7 +491,22 @@ final class MeridianDocument: NSDocument {
 
     private func showFindBar(startExpanded: Bool) {
         guard let viewModel = focusedViewModel, findBarHost == nil else { return }
-        let findView = FindBarView(viewModel: viewModel, startExpanded: startExpanded) { [weak self] in
+        // Reuse the existing search state (query/matches/current index) if
+        // it's still for the same pane — closing the Find bar only hides
+        // its UI, it doesn't discard the search, so ⌘G/⇧⌘G keep working
+        // while it's closed and reopening resumes where the user left off.
+        // A stale instance (e.g. focus moved to a different split pane
+        // since the bar was last open) is replaced with a fresh one.
+        let findBarVM: FindBarViewModel = if let existing = findBarViewModel, existing.isBound(to: viewModel) {
+            existing
+        } else {
+            FindBarViewModel(editorViewModel: viewModel, startExpanded: startExpanded)
+        }
+        if startExpanded {
+            findBarVM.isReplaceExpanded = true
+        }
+        findBarViewModel = findBarVM
+        let findView = FindBarView(viewModel: findBarVM) { [weak self] in
             self?.hideFindBar()
         }
         let host = NSHostingView(rootView: findView)
@@ -485,6 +527,9 @@ final class MeridianDocument: NSDocument {
     }
 
     override func validateMenuItem(_ menuItem: NSMenuItem) -> Bool {
+        if menuItem.action == #selector(findNext(_:)) || menuItem.action == #selector(findPrevious(_:)) {
+            return !(findBarViewModel?.matches.isEmpty ?? true)
+        }
         if menuItem.action == #selector(toggleLineNumbers(_:)) {
             menuItem.state = (focusedViewModel?.isGutterVisible == true) ? .on : .off
             return true

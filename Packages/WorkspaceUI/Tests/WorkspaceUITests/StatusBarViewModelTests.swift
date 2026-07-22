@@ -22,7 +22,9 @@ struct StatusBarViewModelTests {
             themeEngine: themeEngine,
             settingsStore: SettingsStore(directoryURL: testSettingsDirectory()),
         )
-        let vm = EditorViewModel(buffer: TextBuffer("First Line\nSecond Line"), engine: engine)
+        let vm = EditorViewModel(
+            documentModel: DocumentModel(buffer: TextBuffer("First Line\nSecond Line")), engine: engine,
+        )
         engine.setSelection(SelectionSet(caretAt: ByteOffset(0)), in: vm.buffer)
 
         #expect(vm.currentCaretLineColumn.line == 1)

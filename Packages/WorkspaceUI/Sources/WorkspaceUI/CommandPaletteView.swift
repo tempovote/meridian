@@ -74,7 +74,7 @@ public struct CommandPaletteView: View {
             Text(command.title)
             Spacer()
             if let keyEquivalent = command.keyEquivalent, !keyEquivalent.isEmpty {
-                Text(keyEquivalent.uppercased())
+                Text(Self.shortcutDisplayString(modifierMask: command.modifierMask, keyEquivalent: keyEquivalent))
                     .font(.caption)
                     .foregroundColor(.secondary)
             }
@@ -88,5 +88,36 @@ public struct CommandPaletteView: View {
     private func execute() {
         guard viewModel.selectedCommand != nil else { return }
         onExecute()
+    }
+
+    /// Renders a shortcut the same way macOS menus do: modifier glyphs in
+    /// the conventional ⌃⌥⇧⌘ order, then the key. Without the modifier
+    /// glyphs, commands that share a key but differ in modifiers (Find ⌘F
+    /// vs. Find and Replace ⌘⌥F, Split Horizontally ⌘\ vs. Split
+    /// Vertically ⌘⇧\) render identically and look like duplicates.
+    ///
+    /// An uppercase letter key equivalent (e.g. Find Previous's `"G"`,
+    /// vs. Find Next's `"g"`) implicitly requires Shift in AppKit even
+    /// when `keyEquivalentModifierMask` itself omits `.shift` — matching
+    /// `MainMenu.swift`'s convention of expressing Shift via case rather
+    /// than an explicit modifier for menu items that don't otherwise need
+    /// a custom mask. Uppercasing the key for display without accounting
+    /// for this would make Find Next and Find Previous both read "⌘G".
+    private static func shortcutDisplayString(modifierMask: NSEvent.ModifierFlags, keyEquivalent: String) -> String {
+        let impliesShift = keyEquivalent != keyEquivalent.lowercased()
+        var glyphs = ""
+        if modifierMask.contains(.control) {
+            glyphs += "⌃"
+        }
+        if modifierMask.contains(.option) {
+            glyphs += "⌥"
+        }
+        if modifierMask.contains(.shift) || impliesShift {
+            glyphs += "⇧"
+        }
+        if modifierMask.contains(.command) {
+            glyphs += "⌘"
+        }
+        return glyphs + keyEquivalent.uppercased()
     }
 }
