@@ -39,6 +39,44 @@ private enum SplitOrientation {
     case vertical
 }
 
+/// `.thin`'s default 1pt divider is difficult to click-and-drag precisely
+/// — double the hit/visual width so grabbing it is comfortable, matching
+/// user feedback during feel-check.
+///
+/// Also seeds an even 50/50 divider position exactly once, on the first
+/// layout pass at which it has a real (non-zero) size. `NSSplitView`
+/// otherwise distributes space proportionally to the panes' existing
+/// frames, and a brand-new pane starts at frame zero, so the
+/// pre-existing pane keeps everything. Doing this from `layout()` AFTER
+/// `super.layout()` (which runs `adjustSubviews` and gives the split
+/// view a real size) means `setPosition` only ever moves the divider,
+/// never resizes the split view itself. After the one-time seed it never
+/// touches positioning again, so it doesn't fight the user dragging the
+/// divider or a later window resize.
+private final class WideDividerSplitView: NSSplitView {
+    override var dividerThickness: CGFloat {
+        super.dividerThickness * 2
+    }
+
+    private var hasSeededInitialPosition = false
+
+    /// Invoked once, immediately after the first layout pass has given
+    /// the panes real frames and the 50/50 split has been seeded — the
+    /// point at which a fresh pane's engine can finally render its
+    /// viewport against a real size (see `refreshViewportLayout`).
+    var onInitialLayout: (() -> Void)?
+
+    override func layout() {
+        super.layout()
+        guard !hasSeededInitialPosition,
+              subviews.count > 1,
+              bounds.width > 0, bounds.height > 0
+        else { return }
+        hasSeededInitialPosition = true
+        onInitialLayout?()
+    }
+}
+
 /// The NSDocument bridge: FileKit I/O on the outside, a `DocumentModel`
 /// (shared buffer/undo) plus one or two `EditorViewModel` panes (each its
 /// own engine + display settings) as the authoritative model, thin
@@ -113,6 +151,14 @@ final class MeridianDocument: NSDocument {
             guard !panes.isEmpty else { return }
             if panes.count > 1 {
                 detachSecondaryPane(panes[1])
+            }
+            // The primary pane's `EditorViewModel` is also about to be
+            // replaced below (`newViewModel`) — drop a Find bar view
+            // model bound to it the same way `detachSecondaryPane` does
+            // for the secondary pane, so it doesn't linger as a dangling
+            // search target.
+            if let findBarViewModel, findBarViewModel.isBound(to: panes[0].viewModel) {
+                self.findBarViewModel = nil
             }
             let newDocumentModel = DocumentModel(buffer: file.buffer)
             documentModel = newDocumentModel
@@ -240,10 +286,19 @@ final class MeridianDocument: NSDocument {
 
     /// Tears down a pane's callbacks so it doesn't fire against stale
     /// state after being dropped from `panes` — shared by `removeSplit()`
-    /// and revert's pane-collapse path in `read(from:ofType:)`.
+    /// and revert's pane-collapse path in `read(from:ofType:)`. Also
+    /// drops `findBarViewModel` if it was searching this pane: since
+    /// closing the Find bar no longer clears it (so ⌘G/⇧⌘G keep working
+    /// with the bar closed — see `FindBarViewModel`'s doc comment), a
+    /// dropped pane's view model would otherwise linger as a dangling
+    /// search target that ⌘G silently no-ops against until Find is
+    /// reopened on a still-live pane.
     private func detachSecondaryPane(_ pane: (viewModel: EditorViewModel, engine: TextKit2Engine)) {
         pane.viewModel.onDidApplyTransaction = nil
         pane.engine.onBecomeFirstResponder = nil
+        if let findBarViewModel, findBarViewModel.isBound(to: pane.viewModel) {
+            self.findBarViewModel = nil
+        }
     }
 
     private func removeSplit() {
@@ -273,29 +328,45 @@ final class MeridianDocument: NSDocument {
         }
         let newPrimarySlot: NSView
         if let orientation = currentSplitOrientation, panes.count > 1 {
-            let splitView = NSSplitView()
+            let splitView = WideDividerSplitView()
             // See `SplitOrientation`'s doc comment for why this looks
             // inverted: `.vertical` (side-by-side panes) needs a VERTICAL
             // divider, i.e. `isVertical = true`.
             splitView.isVertical = orientation == .vertical
             splitView.dividerStyle = .thin
+            // Give the freshly created secondary pane the SAME frame as the
+            // established primary pane before adding either to the split
+            // view. This is the crux of getting an even split: `NSSplitView`
+            // sizes its subviews by `adjustSubviews`, which scales them
+            // *proportionally to their current frames* to fill the split
+            // view. A brand-new pane starts at frame zero, so with unequal
+            // starting frames the proportion is 1:0 — the new pane gets
+            // nothing (and, for a horizontal/stacked split, is even treated
+            // as collapsed and can't be recovered by `setPosition`). Seeding
+            // both panes to the same non-zero frame makes the proportion
+            // 1:1, i.e. a clean 50/50, with neither pane collapsed.
+            let seedFrame = panes[0].engine.view.frame
             for pane in panes {
-                splitView.addArrangedSubview(pane.engine.view)
+                // Classic frame-managed split panes: `NSSplitView` sizes
+                // these directly via `adjustSubviews`, which requires
+                // autoresizing rather than Auto Layout. (When a pane returns
+                // to the single-pane slot, the host `NSStackView` flips this
+                // back to `false` for its own Auto Layout.)
+                pane.engine.view.translatesAutoresizingMaskIntoConstraints = true
+                pane.engine.view.frame = seedFrame
+                splitView.addSubview(pane.engine.view)
             }
-            // NSSplitView has no notion of "50/50" on its own: it sizes
-            // freshly added arranged subviews off whatever frame they
-            // already had, so a brand-new secondary pane (frame zero,
-            // never laid out) is left with almost no space while the
-            // pre-existing primary pane keeps nearly all of it. An
-            // explicit equal-dimension constraint gives the divider a
-            // sane starting position; the user can still drag it freely
-            // afterward.
-            let first = panes[0].engine.view
-            let second = panes[1].engine.view
-            if orientation == .vertical {
-                first.widthAnchor.constraint(equalTo: second.widthAnchor).isActive = true
-            } else {
-                first.heightAnchor.constraint(equalTo: second.heightAnchor).isActive = true
+            // Once the first layout pass has sized the panes, force each
+            // engine to render its viewport — a freshly created pane loaded
+            // its content while sized zero, and TextKit 2 won't render on
+            // the first sizing on its own (see `refreshViewportLayout`).
+            // This must fire AFTER that layout pass, so it hangs off the
+            // split view's post-layout callback rather than running here.
+            splitView.onInitialLayout = { [weak self] in
+                guard let self else { return }
+                for pane in panes {
+                    pane.engine.refreshViewportLayout()
+                }
             }
             newPrimarySlot = splitView
         } else {

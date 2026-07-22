@@ -236,6 +236,25 @@ public final class TextKit2Engine: NSObject, TextLayoutEngine {
         scrollView.rulersVisible = enabled
     }
 
+    /// Forces the TextKit 2 viewport to re-lay-out and redraw. Needed
+    /// when a pane whose content was loaded while it had zero size (a
+    /// freshly created split pane) is first shown at a real size:
+    /// TextKit 2 lays out lazily for the visible viewport and does not
+    /// render on that first non-zero sizing on its own, leaving the pane
+    /// blank until some later relayout (e.g. a divider drag) nudges it.
+    /// This reproduces that nudge deterministically.
+    public func refreshViewportLayout() {
+        scrollView.tile()
+        textView.needsLayout = true
+        textView.layoutSubtreeIfNeeded()
+        if let tlm = textView.textLayoutManager {
+            tlm.ensureLayout(for: tlm.documentRange)
+            tlm.textViewportLayoutController.layoutViewport()
+        }
+        textView.needsDisplay = true
+        rulerView?.needsDisplay = true
+    }
+
     private var typingAttributes: [NSAttributedString.Key: Any] {
         [
             .font: fontCache.baseFont,
