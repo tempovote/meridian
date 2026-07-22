@@ -48,7 +48,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.activate()
         let args = CommandLine.arguments
-        let isTesting = ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil
+        let isTesting = isRunningUnderXCTest
         let didCrash = isTesting ? false : CrashDetector.checkAndMarkLaunch()
 
         if args.contains("--perf-cold-launch") {
@@ -102,6 +102,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             fatalError("Simulated crash for M5 Phase 3b test")
         }
     #endif
+
+    private var isRunningUnderXCTest: Bool {
+        let env = ProcessInfo.processInfo.environment
+        if env.keys.contains(where: { $0.hasPrefix("XC") || $0.hasPrefix("XCTest") }) {
+            return true
+        }
+        if env["DYLD_INSERT_LIBRARIES"]?.contains("XCTest") == true {
+            return true
+        }
+        if NSClassFromString("XCTestCase") != nil {
+            return true
+        }
+        return false
+    }
 
     /// Document-based default: launching (or clicking the Dock icon with
     /// no windows) opens an untitled document.
