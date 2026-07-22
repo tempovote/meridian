@@ -48,7 +48,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.activate()
         let args = CommandLine.arguments
-        let didCrash = CrashDetector.checkAndMarkLaunch()
+        let isTesting = ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil
+        let didCrash = isTesting ? false : CrashDetector.checkAndMarkLaunch()
 
         if args.contains("--perf-cold-launch") {
             DispatchQueue.main.async {
@@ -97,7 +98,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     #if DEBUG
-        @MainActor
         @objc func simulateCrash(_ sender: Any?) {
             fatalError("Simulated crash for M5 Phase 3b test")
         }
