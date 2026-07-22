@@ -10,45 +10,46 @@ struct DiagnosticReport: Sendable {
     let backtraceSnippet: String
     let logFilePath: String?
 
-    /// Generates a clean markdown formatted report for copying or viewing.
+    /// Generates a clean formatted report for copying or viewing.
     var formattedText: String {
-        """
-        ### Meridian Crash Report Diagnostics
-        - **Timestamp:** \(timestamp)
-        - **App Version:** \(appVersion)
-        - **macOS Version:** \(osVersion)
-        - **Architecture:** \(architecture)
-        - **Exception Info:** \(exceptionInfo)
-        \(logFilePath.map { "- **Log File:** \($0)" } ?? "")
-
-        ### Stack Trace / Diagnostics
-        ```
-        \(backtraceSnippet)
-        ```
-        """
+        let logLine = logFilePath.map { "- **Log File:** \($0)" } ?? ""
+        return [
+            "### Meridian Crash Report Diagnostics",
+            "- **Timestamp:** \(timestamp)",
+            "- **App Version:** \(appVersion)",
+            "- **macOS Version:** \(osVersion)",
+            "- **Architecture:** \(architecture)",
+            "- **Exception Info:** \(exceptionInfo)",
+            logLine,
+            "",
+            "### Stack Trace / Diagnostics",
+            "```",
+            backtraceSnippet,
+            "```",
+        ].joined(separator: "\n")
     }
 
     /// Constructs a pre-filled GitHub issue URL.
     var githubIssueURL: URL? {
         let issueTitle = "Crash Report: \(exceptionInfo)"
-        let issueBody = """
-        ## Description
-        Meridian exited unexpectedly.
-
-        ## Diagnostics
-        - **App Version:** \(appVersion)
-        - **macOS Version:** \(osVersion)
-        - **Architecture:** \(architecture)
-        - **Exception:** \(exceptionInfo)
-
-        <details>
-        <summary>Stack Trace / System Diagnostic Snippet</summary>
-
-        ```
-        \(backtraceSnippet)
-        ```
-        </details>
-        """
+        let issueBody = [
+            "## Description",
+            "Meridian exited unexpectedly.",
+            "",
+            "## Diagnostics",
+            "- **App Version:** \(appVersion)",
+            "- **macOS Version:** \(osVersion)",
+            "- **Architecture:** \(architecture)",
+            "- **Exception:** \(exceptionInfo)",
+            "",
+            "<details>",
+            "<summary>Stack Trace / System Diagnostic Snippet</summary>",
+            "",
+            "```",
+            backtraceSnippet,
+            "```",
+            "</details>",
+        ].joined(separator: "\n")
 
         var components = URLComponents(string: "https://github.com/tempovote/meridian/issues/new")
         components?.queryItems = [
@@ -72,26 +73,33 @@ enum DiagnosticReportCollector {
             let arch = "x86_64"
         #endif
 
-        if let res = findLatestDiagnosticFile(), let content = try? String(contentsOf: res.url, encoding: .utf8) {
-            let (exceptionInfo, snippet) = parseReportContent(content)
-            let df = DateFormatter()
-            df.dateStyle = .medium
-            df.timeStyle = .medium
+        if let res = findLatestDiagnosticFile() {
+            if let content = try? String(contentsOf: res.url, encoding: .utf8) {
+                let (exceptionInfo, snippet) = parseReportContent(content)
+                let df = DateFormatter()
+                df.dateStyle = .medium
+                df.timeStyle = .medium
 
-            return DiagnosticReport(
-                timestamp: df.string(from: res.date),
-                appVersion: appVersion,
-                osVersion: osVersion,
-                architecture: arch,
-                exceptionInfo: exceptionInfo,
-                backtraceSnippet: snippet,
-                logFilePath: res.url.path,
-            )
+                return DiagnosticReport(
+                    timestamp: df.string(from: res.date),
+                    appVersion: appVersion,
+                    osVersion: osVersion,
+                    architecture: arch,
+                    exceptionInfo: exceptionInfo,
+                    backtraceSnippet: snippet,
+                    logFilePath: res.url.path,
+                )
+            }
         }
 
         let df = DateFormatter()
         df.dateStyle = .medium
         df.timeStyle = .medium
+
+        let fallbackSnippet = [
+            "The previous session ended unexpectedly.",
+            "No system crash log was found in ~/Library/Logs/DiagnosticReports/.",
+        ].joined(separator: "\n")
 
         return DiagnosticReport(
             timestamp: df.string(from: Date()),
@@ -99,10 +107,7 @@ enum DiagnosticReportCollector {
             osVersion: osVersion,
             architecture: arch,
             exceptionInfo: "Abnormal Termination (No .ips diagnostic log found)",
-            backtraceSnippet: """
-            The previous session ended unexpectedly. \
-            No system crash log was found in ~/Library/Logs/DiagnosticReports/.
-            """,
+            backtraceSnippet: fallbackSnippet,
             logFilePath: nil,
         )
     }
@@ -152,9 +157,8 @@ enum DiagnosticReportCollector {
 
             let hasExc = trimmed.contains("\"exception\"") || trimmed.contains("\"termination\"") || trimmed
                 .contains("\"bug_type\"")
-            if hasExc {
-                if let data = trimmed.data(using: .utf8),
-                   let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+            if hasExc, let data = trimmed.data(using: .utf8) {
+                if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
                     exceptionType = extractExceptionType(from: json)
                 }
             }
@@ -173,10 +177,8 @@ enum DiagnosticReportCollector {
         if let bugType = json["bug_type"] as? String {
             result = "Crash (\(bugType))"
         }
-        if let exc = json["exception"] as? [String: Any] {
-            if let type = exc["type"] as? String {
-                result = type
-            }
+        if let exc = json["exception"] as? [String: Any], let type = exc["type"] as? String {
+            result = type
         }
         if let term = json["termination"] as? [String: Any] {
             if let code = term["code"] as? Int, let ns = term["namespace"] as? String {
