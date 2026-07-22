@@ -26,6 +26,20 @@ public final class MeridianTextView: NSTextView {
     /// without `MeridianTextView` needing to know about `ThemeKit` itself.
     public var onEffectiveAppearanceChange: (() -> Void)?
 
+    /// Fired when this text view becomes the window's first responder —
+    /// lets the owning `TextKit2Engine`/host track focus across multiple
+    /// panes sharing one document (split editor) without needing a
+    /// custom `NSWindow` subclass to observe first-responder changes.
+    public var onBecomeFirstResponder: (() -> Void)?
+
+    override public func becomeFirstResponder() -> Bool {
+        let result = super.becomeFirstResponder()
+        if result {
+            onBecomeFirstResponder?()
+        }
+        return result
+    }
+
     override public func viewDidChangeEffectiveAppearance() {
         super.viewDidChangeEffectiveAppearance()
         onEffectiveAppearanceChange?()

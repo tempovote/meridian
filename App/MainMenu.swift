@@ -111,6 +111,15 @@ enum MainMenu {
             keyEquivalent: "w", modifierMask: [.command, .option],
         )
         addCommand(to: menu, title: "Status Bar", action: Selector(("toggleStatusBar:")), keyEquivalent: "")
+        menu.addItem(.separator())
+        addCommand(
+            to: menu, title: "Split Horizontally", action: Selector(("splitHorizontally:")),
+            keyEquivalent: "\\", modifierMask: [.command],
+        )
+        addCommand(
+            to: menu, title: "Split Vertically", action: Selector(("splitVertically:")),
+            keyEquivalent: "\\", modifierMask: [.command, .shift],
+        )
         return wrapped(menu)
     }
 
@@ -156,6 +165,7 @@ enum MainMenu {
         menu.addItem(item)
         CommandRegistry.register(
             title: title, selector: action, keyEquivalent: keyEquivalent.isEmpty ? nil : keyEquivalent,
+            modifierMask: item.keyEquivalentModifierMask,
         )
         return item
     }

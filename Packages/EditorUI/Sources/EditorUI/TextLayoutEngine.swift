@@ -32,8 +32,13 @@ public protocol TextLayoutEngine: AnyObject {
 
     /// Mirrors a rope-side transaction into the renderer. `base` is the
     /// buffer BEFORE the transaction (needed for coordinate conversion).
-    /// Does not fire ``onUserEdit``.
-    func apply(_ transaction: EditTransaction, base: TextBuffer)
+    /// Does not fire ``onUserEdit``. `restoreSelection` controls whether
+    /// the renderer's caret/selection moves to `transaction.selectionAfter`
+    /// — pass `false` when this call is mirroring another pane's edit into
+    /// a sibling pane that didn't originate it, where only the content
+    /// should change and the sibling's own scroll/caret position must be
+    /// left alone.
+    func apply(_ transaction: EditTransaction, base: TextBuffer, restoreSelection: Bool)
 
     /// The current selection in rope coordinates. `buffer` must be the
     /// engine's current mirror content.
@@ -51,9 +56,22 @@ public protocol TextLayoutEngine: AnyObject {
 
     /// Toggles visibility of the line number gutter.
     func setGutterVisible(_ enabled: Bool)
+
+    /// Fired when this engine's view becomes the window's first
+    /// responder — lets the host track which pane the user is currently
+    /// interacting with (e.g. to drive which pane's state the status bar
+    /// reflects, when a document has more than one pane open).
+    var onBecomeFirstResponder: (() -> Void)? { get set }
 }
 
 public extension TextLayoutEngine {
     func setSoftWrap(_ enabled: Bool) {}
     func setGutterVisible(_ enabled: Bool) {}
+
+    /// Convenience overload preserving every existing call site — always
+    /// restores selection, matching this method's original (pre-split-editor)
+    /// behavior.
+    func apply(_ transaction: EditTransaction, base: TextBuffer) {
+        apply(transaction, base: base, restoreSelection: true)
+    }
 }

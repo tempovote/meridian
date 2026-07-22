@@ -31,7 +31,7 @@ final class DocumentAndEditorPerfTests: XCTestCase {
             themeEngine: AppDelegate.themeEngine,
             settingsStore: AppDelegate.settingsStore,
         )
-        _ = EditorViewModel(buffer: textFile.buffer, engine: engine)
+        _ = EditorViewModel(documentModel: DocumentModel(buffer: textFile.buffer), engine: engine)
 
         let duration = start.duration(to: clock.now)
 
@@ -84,7 +84,7 @@ final class DocumentAndEditorPerfTests: XCTestCase {
             themeEngine: AppDelegate.themeEngine,
             settingsStore: AppDelegate.settingsStore,
         )
-        let viewModel = EditorViewModel(buffer: textFile.buffer, engine: engine)
+        let viewModel = EditorViewModel(documentModel: DocumentModel(buffer: textFile.buffer), engine: engine)
 
         let sampleCount = Self.isDebugBuild ? 5 : 50
         var durations: [Duration] = []

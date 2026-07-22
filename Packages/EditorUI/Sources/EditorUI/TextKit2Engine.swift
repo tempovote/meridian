@@ -76,6 +76,13 @@ public final class TextKit2Engine: NSObject, TextLayoutEngine {
         textView
     }
 
+    /// Passthrough to `textView.onBecomeFirstResponder` — see
+    /// `TextLayoutEngine.onBecomeFirstResponder`'s doc comment.
+    public var onBecomeFirstResponder: (() -> Void)? {
+        get { textView.onBecomeFirstResponder }
+        set { textView.onBecomeFirstResponder = newValue }
+    }
+
     /// Builds the scroll view + TextKit 2 text view, plain-text config.
     public init(themeEngine: ThemeEngine, settingsStore: SettingsStore) {
         self.themeEngine = themeEngine
@@ -153,7 +160,7 @@ public final class TextKit2Engine: NSObject, TextLayoutEngine {
         highlightCurrentBuffer()
     }
 
-    public func apply(_ transaction: EditTransaction, base: TextBuffer) {
+    public func apply(_ transaction: EditTransaction, base: TextBuffer, restoreSelection: Bool) {
         precondition(
             base.version == buffer.version,
             "engine mirror out of sync with caller's base buffer",
@@ -175,7 +182,7 @@ public final class TextKit2Engine: NSObject, TextLayoutEngine {
         buffer.apply(transaction)
         assertMirrorInvariant()
         highlightCurrentBuffer()
-        if !transaction.selectionAfter.ranges.isEmpty {
+        if restoreSelection, !transaction.selectionAfter.ranges.isEmpty {
             setSelection(transaction.selectionAfter, in: buffer)
         }
     }
@@ -227,6 +234,25 @@ public final class TextKit2Engine: NSObject, TextLayoutEngine {
 
     public func setGutterVisible(_ enabled: Bool) {
         scrollView.rulersVisible = enabled
+    }
+
+    /// Forces the TextKit 2 viewport to re-lay-out and redraw. Needed
+    /// when a pane whose content was loaded while it had zero size (a
+    /// freshly created split pane) is first shown at a real size:
+    /// TextKit 2 lays out lazily for the visible viewport and does not
+    /// render on that first non-zero sizing on its own, leaving the pane
+    /// blank until some later relayout (e.g. a divider drag) nudges it.
+    /// This reproduces that nudge deterministically.
+    public func refreshViewportLayout() {
+        scrollView.tile()
+        textView.needsLayout = true
+        textView.layoutSubtreeIfNeeded()
+        if let tlm = textView.textLayoutManager {
+            tlm.ensureLayout(for: tlm.documentRange)
+            tlm.textViewportLayoutController.layoutViewport()
+        }
+        textView.needsDisplay = true
+        rulerView?.needsDisplay = true
     }
 
     private var typingAttributes: [NSAttributedString.Key: Any] {

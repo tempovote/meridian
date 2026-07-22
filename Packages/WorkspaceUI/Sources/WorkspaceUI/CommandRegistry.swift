@@ -10,11 +10,21 @@ public struct Command: Identifiable, Sendable {
     public let title: String
     public let selector: Selector
     public let keyEquivalent: String?
+    /// The modifiers `keyEquivalent` requires, matching the menu item's
+    /// `keyEquivalentModifierMask` — without this, commands that differ
+    /// only by modifier (e.g. Find ⌘F vs. Find and Replace ⌘⌥F, or Split
+    /// Horizontally ⌘\ vs. Split Vertically ⌘⇧\) render with identical,
+    /// misleading shortcut text in the palette.
+    public let modifierMask: NSEvent.ModifierFlags
 
-    public init(title: String, selector: Selector, keyEquivalent: String?) {
+    public init(
+        title: String, selector: Selector, keyEquivalent: String?,
+        modifierMask: NSEvent.ModifierFlags = .command,
+    ) {
         self.title = title
         self.selector = selector
         self.keyEquivalent = keyEquivalent
+        self.modifierMask = modifierMask
     }
 }
 
@@ -29,7 +39,12 @@ public struct Command: Identifiable, Sendable {
 public enum CommandRegistry {
     public private(set) static var commands: [Command] = []
 
-    public static func register(title: String, selector: Selector, keyEquivalent: String?) {
-        commands.append(Command(title: title, selector: selector, keyEquivalent: keyEquivalent))
+    public static func register(
+        title: String, selector: Selector, keyEquivalent: String?,
+        modifierMask: NSEvent.ModifierFlags = .command,
+    ) {
+        commands.append(Command(
+            title: title, selector: selector, keyEquivalent: keyEquivalent, modifierMask: modifierMask,
+        ))
     }
 }

@@ -115,6 +115,21 @@ struct TextKit2EngineTests {
         #expect(engine.storageStringForTesting == "é🎉!")
     }
 
+    @Test func applyWithRestoreSelectionFalseLeavesSelectionUnchanged() {
+        let (engine, buffer) = makeEngine("hello")
+        engine.setSelection(SelectionSet(caretAt: ByteOffset(2)), in: buffer)
+        let base = engine.snapshotForTesting
+        let transaction = EditTransaction(
+            baseVersion: base.version,
+            edits: [Edit(range: ByteOffset(5) ..< ByteOffset(5), replacement: "!")],
+            selectionAfter: SelectionSet(caretAt: ByteOffset(6)),
+            origin: .replaceAll,
+        )
+        engine.apply(transaction, base: base, restoreSelection: false)
+        #expect(engine.storageStringForTesting == "hello!")
+        #expect(engine.selection(in: engine.snapshotForTesting) == SelectionSet(caretAt: ByteOffset(2)))
+    }
+
     @Test func simulatedTypingFiresOnUserEditWithRopeCoordinates() throws {
         let (engine, _) = makeEngine("héllo") // é at UTF-16 1, bytes 1..<3
         var received: [EditTransaction] = []
