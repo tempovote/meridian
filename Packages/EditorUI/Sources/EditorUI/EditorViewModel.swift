@@ -45,6 +45,14 @@ public final class EditorViewModel {
     /// Whether the status bar at the bottom of the window is visible.
     public var isStatusBarVisible: Bool = true
 
+    /// Fired after any transaction changes `documentModel`'s buffer via
+    /// this pane — a user edit in this pane's engine, a programmatic
+    /// `perform`, or an undo/redo replay this pane originated. The owning
+    /// document uses this to mirror the same transaction (content-only,
+    /// selection untouched) into any sibling pane's engine when the
+    /// document is split into more than one pane.
+    public var onDidApplyTransaction: ((EditTransaction, TextBuffer) -> Void)?
+
     /// Loads `documentModel`'s buffer into `engine` and starts observing
     /// its user edits.
     public init(documentModel: DocumentModel, engine: any TextLayoutEngine) {
@@ -105,6 +113,7 @@ public final class EditorViewModel {
     public func perform(_ transaction: EditTransaction) {
         let base = documentModel.perform(transaction)
         engine.apply(transaction, base: base)
+        onDidApplyTransaction?(transaction, base)
     }
 
     /// Undoes the newest undo entry, mirroring each inverse into the engine.
@@ -122,14 +131,17 @@ public final class EditorViewModel {
     /// Handles an engine-reported user edit: the engine's mirror already
     /// changed, so only `documentModel`'s buffer and undo stack advance here.
     private func userEdited(_ transaction: EditTransaction) {
-        _ = documentModel.applyUserEdit(transaction)
+        let base = documentModel.applyUserEdit(transaction)
+        onDidApplyTransaction?(transaction, base)
     }
 
     /// Shared by `undo()`/`redo()`: mirrors each replayed transaction into
-    /// this pane's engine, in order.
+    /// this pane's engine, in order, firing `onDidApplyTransaction` for
+    /// each so the owning document can mirror it into any sibling pane too.
     private func mirrorIntoEngine(_ replayed: [(transaction: EditTransaction, base: TextBuffer)]) {
         for (transaction, base) in replayed {
             engine.apply(transaction, base: base)
+            onDidApplyTransaction?(transaction, base)
         }
     }
 }

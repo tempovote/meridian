@@ -13,16 +13,19 @@ final class MockLayoutEngine: TextLayoutEngine {
     }
 
     var onUserEdit: ((EditTransaction) -> Void)?
+    var onBecomeFirstResponder: (() -> Void)?
     var loaded: [TextBuffer] = []
-    var applied: [(transaction: EditTransaction, base: TextBuffer)] = []
+    // Matches TextLayoutEngine.apply's own 3-arg shape.
+    // swiftlint:disable:next large_tuple
+    var applied: [(transaction: EditTransaction, base: TextBuffer, restoreSelection: Bool)] = []
     var selectionsSet: [SelectionSet] = []
 
     func load(buffer: TextBuffer) {
         loaded.append(buffer)
     }
 
-    func apply(_ transaction: EditTransaction, base: TextBuffer) {
-        applied.append((transaction, base))
+    func apply(_ transaction: EditTransaction, base: TextBuffer, restoreSelection: Bool) {
+        applied.append((transaction, base, restoreSelection))
     }
 
     func selection(in buffer: TextBuffer) -> SelectionSet {
@@ -178,5 +181,33 @@ struct EditorViewModelTests {
         #expect(vmB.isGutterVisible)
         vmB.isSoftWrapEnabled = true // was already true; toggling vmA didn't flip it
         #expect(!vmA.isSoftWrapEnabled) // vmA's own toggle is unaffected by vmB
+    }
+
+    @Test func onDidApplyTransactionFiresForPerformUserEditAndUndo() {
+        let engine = MockLayoutEngine()
+        let vm = makeViewModel(TextBuffer("ab"), engine: engine)
+        var firedCount = 0
+        var lastBaseString: String?
+        vm.onDidApplyTransaction = { _, base in
+            firedCount += 1
+            lastBaseString = base.string
+        }
+        vm.perform(EditTransaction(
+            baseVersion: vm.buffer.version,
+            edits: [Edit(range: ByteOffset(0) ..< ByteOffset(2), replacement: "cd")],
+            origin: .replaceAll,
+        ))
+        #expect(firedCount == 1)
+        #expect(lastBaseString == "ab")
+
+        _ = engine.simulateUserEdit(
+            range: ByteOffset(2) ..< ByteOffset(2), replacement: "e", base: vm.buffer,
+        )
+        #expect(firedCount == 2)
+        #expect(vm.buffer.string == "cde")
+
+        vm.undo()
+        #expect(firedCount == 3)
+        #expect(vm.buffer.string == "cd")
     }
 }

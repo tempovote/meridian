@@ -76,6 +76,13 @@ public final class TextKit2Engine: NSObject, TextLayoutEngine {
         textView
     }
 
+    /// Passthrough to `textView.onBecomeFirstResponder` — see
+    /// `TextLayoutEngine.onBecomeFirstResponder`'s doc comment.
+    public var onBecomeFirstResponder: (() -> Void)? {
+        get { textView.onBecomeFirstResponder }
+        set { textView.onBecomeFirstResponder = newValue }
+    }
+
     /// Builds the scroll view + TextKit 2 text view, plain-text config.
     public init(themeEngine: ThemeEngine, settingsStore: SettingsStore) {
         self.themeEngine = themeEngine
@@ -153,7 +160,7 @@ public final class TextKit2Engine: NSObject, TextLayoutEngine {
         highlightCurrentBuffer()
     }
 
-    public func apply(_ transaction: EditTransaction, base: TextBuffer) {
+    public func apply(_ transaction: EditTransaction, base: TextBuffer, restoreSelection: Bool) {
         precondition(
             base.version == buffer.version,
             "engine mirror out of sync with caller's base buffer",
@@ -175,7 +182,7 @@ public final class TextKit2Engine: NSObject, TextLayoutEngine {
         buffer.apply(transaction)
         assertMirrorInvariant()
         highlightCurrentBuffer()
-        if !transaction.selectionAfter.ranges.isEmpty {
+        if restoreSelection, !transaction.selectionAfter.ranges.isEmpty {
             setSelection(transaction.selectionAfter, in: buffer)
         }
     }
