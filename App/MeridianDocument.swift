@@ -96,8 +96,15 @@ final class MeridianDocument: NSDocument {
             // Re-opened into an existing window (revert): reload the
             // model. Rebuild rather than diff — P1 has no revert UI; this
             // path only runs for NSDocument's built-in revert. Revert
-            // always collapses back to a single pane.
+            // always collapses back to a single pane — tear down a
+            // dropped secondary pane the same way removeSplit() does, so
+            // its callbacks don't fire against stale state and first
+            // responder doesn't end up pointing at a view no longer in
+            // the hierarchy.
             guard !panes.isEmpty else { return }
+            if panes.count > 1 {
+                detachSecondaryPane(panes[1])
+            }
             let newDocumentModel = DocumentModel(buffer: file.buffer)
             documentModel = newDocumentModel
             let primaryEngine = panes[0].engine
@@ -111,6 +118,7 @@ final class MeridianDocument: NSDocument {
             wireMirroring()
             wireFocusTracking()
             rebuildSplitLayout()
+            windowControllers.first?.window?.makeFirstResponder(panes[0].engine.keyView)
             refreshStatusBar()
         }
     }
@@ -220,11 +228,18 @@ final class MeridianDocument: NSDocument {
         rebuildSplitLayout()
     }
 
+    /// Tears down a pane's callbacks so it doesn't fire against stale
+    /// state after being dropped from `panes` — shared by `removeSplit()`
+    /// and revert's pane-collapse path in `read(from:ofType:)`.
+    private func detachSecondaryPane(_ pane: (viewModel: EditorViewModel, engine: TextKit2Engine)) {
+        pane.viewModel.onDidApplyTransaction = nil
+        pane.engine.onBecomeFirstResponder = nil
+    }
+
     private func removeSplit() {
         guard panes.count > 1 else { return }
         let removed = panes.removeLast()
-        removed.viewModel.onDidApplyTransaction = nil
-        removed.engine.onBecomeFirstResponder = nil
+        detachSecondaryPane(removed)
         currentSplitOrientation = nil
         focusedPaneIndex = 0
         rebuildSplitLayout()
