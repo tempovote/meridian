@@ -123,20 +123,43 @@ public extension TextKit2Engine {
 
     /// Shared post-fold-mutation guard (spec invariant: "caret never lands
     /// inside hidden text"): if the caret ended up buried inside a region
-    /// this operation just folded, moves it to the end of that region's
-    /// still-visible first line — standard Notepad++/VS Code behavior.
-    /// Without this, the caret sits invisible in hidden text and the very
-    /// next selection change trips `unfoldIfSelectionEnteredHiddenText`,
-    /// silently reverting the fold the user just requested. A no-op
-    /// (correctly) whenever the caret isn't inside hidden text — including
-    /// every `unfold*` call site, which never need to call this.
+    /// this operation just folded, moves it to the end of the innermost
+    /// enclosing region's visible first line — standard Notepad++/VS Code
+    /// behavior. Without this, the caret sits invisible in hidden text and
+    /// the very next selection change trips
+    /// `unfoldIfSelectionEnteredHiddenText`, silently reverting the fold
+    /// the user just requested. A no-op (correctly) whenever the caret
+    /// isn't inside hidden text — including every `unfold*` call site,
+    /// which never need to call this.
+    ///
+    /// Resolves the FINAL target line entirely in `FoldModel`/`buffer`
+    /// terms before ever touching the real selection, and calls
+    /// `setSelection` exactly once. This matters for NESTED folds: e.g.
+    /// after `foldAll()`/`foldLevel()` folds both an outer block and the
+    /// caret's inner block at once, the innermost enclosing region's own
+    /// first line is itself hidden inside the OUTER fold. Calling
+    /// `setSelection` at that intermediate (still-hidden) position would
+    /// synchronously fire `textViewDidChangeSelection` ->
+    /// `unfoldIfSelectionEnteredHiddenText`, which would immediately
+    /// unfold the whole enclosing chain — undoing the very fold(s) this
+    /// operation just applied. Walking outward first and only committing
+    /// the final, genuinely-visible line avoids that. Bounded by
+    /// `folded.count`: each hop strictly widens to a shallower enclosing
+    /// region, so it terminates within that many iterations even against
+    /// `FoldModel`'s legally-permitted overlapping regions.
     private func repositionCaretIfInsideHiddenText() {
-        guard let caret = caretByteOffset, foldModel.isInsideHiddenText(caret, in: buffer) else { return }
-        let line = buffer.linePosition(of: caret).line
-        guard let region = foldModel.foldedRegionHidingLine(line, in: buffer) else { return }
-        let startLine = buffer.linePosition(of: region.lowerBound).line
-        let lineEnd = buffer.byteRange(ofLine: startLine).upperBound
-        setSelection(SelectionSet(caretAt: lineEnd), in: buffer)
+        guard let originalCaret = caretByteOffset, foldModel.isInsideHiddenText(originalCaret, in: buffer)
+        else { return }
+        var caret = originalCaret
+        var remainingHops = foldModel.folded.count
+        while remainingHops > 0, foldModel.isInsideHiddenText(caret, in: buffer) {
+            remainingHops -= 1
+            let line = buffer.linePosition(of: caret).line
+            guard let region = foldModel.foldedRegionHidingLine(line, in: buffer) else { break }
+            let startLine = buffer.linePosition(of: region.lowerBound).line
+            caret = buffer.byteRange(ofLine: startLine).upperBound
+        }
+        setSelection(SelectionSet(caretAt: caret), in: buffer)
     }
 
     /// Hit-tests a click in `textView`'s local coordinates against the `…`

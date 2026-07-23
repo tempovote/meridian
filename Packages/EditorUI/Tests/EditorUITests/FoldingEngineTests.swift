@@ -31,6 +31,22 @@ struct FoldingEngineTests {
         return engine
     }
 
+    /// A function whose body contains an `if` statement — two NESTED
+    /// foldable regions (the `func` declaration, and the `if` inside it) —
+    /// for the caret-reposition-under-nested-folds regression test.
+    private func makeNestedSwiftEngine() async -> TextKit2Engine {
+        let themeEngine = ThemeEngine(darkTheme: BundledThemes.meridianDark, lightTheme: BundledThemes.meridianLight)
+        let engine = TextKit2Engine(
+            themeEngine: themeEngine,
+            settingsStore: SettingsStore(directoryURL: testSettingsDirectory()),
+        )
+        engine.languageID = "swift"
+        engine.view.frame = NSRect(x: 0, y: 0, width: 600, height: 400)
+        engine.load(buffer: TextBuffer("func outer() {\n    if true {\n        let x = 1\n    }\n}\n"))
+        await engine.waitForParseForTesting()
+        return engine
+    }
+
     @Test func parsePopulatesFoldModel() async {
         let engine = await makeSwiftEngine()
         #expect(!engine.foldModelForTesting.foldable.isEmpty)
@@ -156,6 +172,37 @@ struct FoldingEngineTests {
         // must not trip the hidden-text guard and unfold it.
         try engine.setSelection(SelectionSet(caretAt: #require(caretAfter)), in: engine.snapshotForTesting)
         #expect(engine.foldModelForTesting.folded.count == 1)
+    }
+
+    /// F3 nested-fold regression: with the caret in a doubly-nested
+    /// region's body, `foldAll()` folds BOTH the outer `func` and the
+    /// inner `if` at once. Repositioning the caret to the INNER region's
+    /// first line isn't enough — that line is itself hidden inside the
+    /// OUTER fold — so it must walk outward until it lands somewhere
+    /// genuinely visible, or `foldAll()` instantly undoes itself around
+    /// the caret (via the synchronous `unfoldIfSelectionEnteredHiddenText`
+    /// -> `unfoldEnclosing` guard unfolding the whole chain).
+    @Test func foldAllWithCaretInNestedBodyKeepsBothFoldsIntact() async throws {
+        let engine = await makeNestedSwiftEngine()
+        // "func outer() {\n    if true {\n        let x = 1\n    }\n}\n" — byte
+        // 35 lands inside "        let x = 1" (the innermost, doubly-hidden body).
+        let innerBodyOffset = ByteOffset(35)
+        engine.setSelection(SelectionSet(caretAt: innerBodyOffset), in: engine.snapshotForTesting)
+        engine.foldAll()
+
+        #expect(engine.foldModelForTesting.folded.count == 2) // BOTH folds still intact...
+        let caretAfter = engine.selection(in: engine.snapshotForTesting).ranges.first?.lowerBound
+        #expect(caretAfter != nil)
+        // ...and the caret landed somewhere genuinely visible, not merely
+        // moved to another (still-hidden) nested first line.
+        #expect(try !engine.foldModelForTesting.isInsideHiddenText(#require(caretAfter), in: engine.snapshotForTesting))
+        #expect(!engine.hiddenUTF16SpansForTesting.isEmpty)
+
+        // A subsequent selection-change/guard invocation at that same
+        // location must not unfold anything either.
+        try engine.setSelection(SelectionSet(caretAt: #require(caretAfter)), in: engine.snapshotForTesting)
+        #expect(engine.foldModelForTesting.folded.count == 2)
+        #expect(!engine.hiddenUTF16SpansForTesting.isEmpty)
     }
 
     @Test func mirroredSiblingEditIntoFoldUnfolds() async {
