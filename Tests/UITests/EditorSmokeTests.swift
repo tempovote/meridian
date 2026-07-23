@@ -216,6 +216,13 @@ final class EditorSmokeTests: XCTestCase {
         let value = textView.value as? String ?? ""
         XCTAssertTrue(value.contains("let a = 1"), "original content lost after Fold All: \(value)")
         XCTAssertTrue(value.contains("still typing"), "typing after Fold All did not land: \(value)")
+
+        // Leave a clean slate for later tests: this document is dirty and
+        // untitled, and other tests in this suite (e.g.
+        // testOpenTypeSaveQuit, which runs after this one alphabetically)
+        // assume a fresh launch with no pre-existing unsaved windows that
+        // would surface an unexpected "review changes" prompt on quit.
+        app.terminate()
     }
 
     private func waitForDisappearance(of element: XCUIElement, timeout: TimeInterval) -> Bool {
