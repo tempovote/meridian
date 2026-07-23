@@ -173,22 +173,6 @@ public extension TextKit2Engine {
         return merged
     }
 
-    /// A lighter relayout than `refreshViewportLayout()`: invalidates
-    /// layout and re-lays-out only the current viewport, without
-    /// `ensureLayout(for: documentRange)`. Folding must not force a
-    /// full-document layout pass on every toggle — that would defeat
-    /// TextKit 2's viewport laziness on large files, turning an O(visible
-    /// lines) operation into O(document lines). `refreshViewportLayout()`
-    /// itself is intentionally left alone: the split-pane fresh-frame nudge
-    /// it exists for genuinely needs the full-document `ensureLayout`.
-    private func relayoutForFoldChange() {
-        guard let tlm = textView.textLayoutManager else { return }
-        tlm.invalidateLayout(for: tlm.documentRange)
-        tlm.textViewportLayoutController.layoutViewport()
-        textView.needsDisplay = true
-        rulerView?.needsDisplay = true
-    }
-
     /// True when the paragraph starting at UTF-16 offset `offset` lies in a
     /// hidden span. Binary search over the sorted spans.
     internal func isHiddenParagraph(startingAt offset: Int) -> Bool {
