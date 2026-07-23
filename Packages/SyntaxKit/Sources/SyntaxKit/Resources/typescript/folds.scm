@@ -5,5 +5,5 @@
 (object) @fold
 (array) @fold
 (comment) @fold
-(interface_declaration) @fold
+(interface_body) @fold
 (enum_body) @fold
