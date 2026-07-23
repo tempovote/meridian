@@ -202,15 +202,17 @@ final class EditorSmokeTests: XCTestCase {
         textView.click()
         app.typeText("func f() {\n    let a = 1\n}\n")
 
-        // "Fold All" lives under View ▸ Fold; XCUITest flattens submenu
-        // items into menuItems, so the direct query works without
-        // navigating the View menu open first.
-        let foldAll = app.menuBars.menuItems["Fold All"]
-        XCTAssertTrue(foldAll.waitForExistence(timeout: 10))
-        foldAll.click()
+        // Trigger Fold All via its assigned shortcut (⌘⌥⇧←), mirroring this
+        // suite's proven keystroke idiom rather than menu hit-testing — the
+        // menu item itself (title, placement under View ▸ Fold, enabling)
+        // is already covered by Task 7's AX verification and command-palette
+        // registration, so this exercises the identical foldAll: action
+        // without introducing an unproven query into a suite that can't be
+        // run locally to shake out flakiness.
+        app.typeKey(.leftArrow, modifierFlags: [.command, .option, .shift])
 
         textView.click()
-        app.typeKey(.end, modifierFlags: .command) // caret to document end
+        app.typeKey(.downArrow, modifierFlags: .command) // caret to document end (moveToEndOfDocument:)
         app.typeText("// still typing\n")
 
         let value = textView.value as? String ?? ""
