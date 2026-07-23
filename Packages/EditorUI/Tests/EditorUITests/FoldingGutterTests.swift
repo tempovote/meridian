@@ -87,4 +87,68 @@ struct FoldingGutterTests {
 
         #expect(clickedLine == 0)
     }
+
+    /// Lays out fully and returns the first fragment reached from the
+    /// document's start — used below to read line 0's real frame/
+    /// typographic bounds for placeholder-click coordinate math. Mirrors
+    /// `FoldingRenderTests`'s enumeration pattern.
+    private func firstLayoutFragment(_ tlm: NSTextLayoutManager) -> NSTextLayoutFragment? {
+        tlm.ensureLayout(for: tlm.documentRange)
+        var first: NSTextLayoutFragment?
+        tlm.enumerateTextLayoutFragments(from: tlm.documentRange.location, options: [.ensuresLayout]) { fragment in
+            first = fragment
+            return false
+        }
+        return first
+    }
+
+    /// Covers `handleFoldPlaceholderClick` — wired to `MeridianTextView
+    /// .onFoldPlaceholderClick` by `configureFoldGutter()` — which had no
+    /// automated test despite being the click-to-unfold path for the "…"
+    /// badge drawn past a folded region's visible first line. Drives the
+    /// callback directly with a point derived from the real layout
+    /// fragment's typographic bounds: same "point -> fragment -> line"
+    /// coordinate convention `mouseDownOnChevronBandResolvesToCorrectLine`
+    /// exercises for the ruler, minus that test's extra ruler-space hop
+    /// since this click already originates in the text view's own
+    /// coordinate space.
+    @Test func placeholderClickPastTypographicEndUnfoldsRegionAndBeforeItDoesNot() async throws {
+        let engine = makeEngine()
+        engine.languageID = "swift"
+        engine.view.frame = NSRect(x: 0, y: 0, width: 600, height: 400)
+        engine.load(buffer: TextBuffer("func f() {\n    let a = 1\n}\n"))
+        await engine.waitForParseForTesting()
+
+        engine.rulerViewForTesting.onFoldChevronClick?(0)
+        #expect(engine.foldModelForTesting.folded.count == 1)
+
+        let tlm = try #require(engine.textView.textLayoutManager)
+        let containerOriginY = engine.textView.textContainerOrigin.y
+
+        let fragment = try #require(firstLayoutFragment(tlm))
+        let lineMaxX = try #require(fragment.textLineFragments.last).typographicBounds.maxX
+        let frame = fragment.layoutFragmentFrame
+        let rowY = frame.origin.y + frame.height / 2 + containerOriginY
+
+        // Past the "…" badge zone (line's typographic end): unfolds and
+        // reports the click as handled.
+        let pastEndPoint = NSPoint(x: frame.origin.x + lineMaxX + 5, y: rowY)
+        #expect(engine.textView.onFoldPlaceholderClick?(pastEndPoint) == true)
+        #expect(engine.foldModelForTesting.folded.isEmpty)
+        #expect(engine.hiddenUTF16SpansForTesting.isEmpty)
+
+        // Fold again, then click inside the visible text itself (before
+        // the typographic end): must leave the fold intact and report the
+        // click as unhandled, so normal caret placement proceeds instead.
+        engine.rulerViewForTesting.onFoldChevronClick?(0)
+        #expect(engine.foldModelForTesting.folded.count == 1)
+
+        let refoldedFragment = try #require(firstLayoutFragment(tlm))
+        let refoldedRowY = refoldedFragment.layoutFragmentFrame.origin.y
+            + refoldedFragment.layoutFragmentFrame.height / 2 + containerOriginY
+        let insideTextPoint = NSPoint(x: refoldedFragment.layoutFragmentFrame.origin.x + 2, y: refoldedRowY)
+        #expect(engine.textView.onFoldPlaceholderClick?(insideTextPoint) == false)
+        #expect(engine.foldModelForTesting.folded.count == 1)
+        #expect(!engine.hiddenUTF16SpansForTesting.isEmpty)
+    }
 }
