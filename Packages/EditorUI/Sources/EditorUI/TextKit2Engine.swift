@@ -13,9 +13,8 @@ import ThemeKit
 public final class TextKit2Engine: NSObject, TextLayoutEngine {
     private let scrollView: NSScrollView
     let textView: MeridianTextView
-    /// Internal, not private: `TextKit2Engine+Folding.swift`'s lighter
-    /// fold-only relayout needs to invalidate the ruler too, without going
-    /// through `refreshViewportLayout()` (see that method's doc comment).
+    /// Internal, not private: fold-only relayout needs to invalidate the
+    /// ruler too, without going through `refreshViewportLayout()`.
     var rulerView: LineNumberRulerView?
     /// The engine-local mirror snapshot. Invariant: equals the storage's
     /// string after every load/apply/user edit. Only ever touched from
@@ -85,6 +84,11 @@ public final class TextKit2Engine: NSObject, TextLayoutEngine {
     /// kept only so the DEBUG-only `waitForParseForTesting` hook can await
     /// its completion deterministically instead of sleeping in tests.
     var lastParseTask: Task<Void, Never>?
+    #if DEBUG
+        /// Test-only: counts `relayoutForFoldChange()` calls — asserts the
+        /// relayout/purge path was skipped when nothing fold-related changed.
+        var foldRelayoutInvocationCountForTesting = 0
+    #endif
 
     public var onUserEdit: ((EditTransaction) -> Void)?
 
@@ -180,6 +184,12 @@ public final class TextKit2Engine: NSObject, TextLayoutEngine {
     public func load(buffer newBuffer: TextBuffer) {
         buffer = newBuffer
         loadGeneration += 1
+        // Reset fold state: a revert/reload otherwise leaves stale hidden
+        // spans hiding lines of the new content (see `loadGeneration` doc).
+        foldModel = FoldModel()
+        hiddenUTF16Spans = []
+        foldedFirstLineUTF16Starts = [:]
+        hasPendingDeferredFoldRelayout = false
         isMirroring = true
         defer { isMirroring = false }
         contentStorage.performEditingTransaction {

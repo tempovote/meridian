@@ -34,8 +34,9 @@ extension TextKit2Engine {
                   buffer.version == requestedVersion
             else { return }
             applyHighlighting(output.tokens, against: snapshot)
+            let foldableBefore = foldModel.foldable
             foldModel.updateFoldable(output.folds)
-            refreshFoldLayout()
+            refreshFoldLayoutIfChanged(foldableChanged: foldModel.foldable != foldableBefore)
         }
     }
 

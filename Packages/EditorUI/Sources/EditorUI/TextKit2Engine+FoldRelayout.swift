@@ -20,6 +20,9 @@ extension TextKit2Engine {
     /// the range and `needsDisplay = true` drives the final relayout on the
     /// display pass, so one explicit `layoutViewport()` suffices.
     func relayoutForFoldChange() {
+        #if DEBUG
+            foldRelayoutInvocationCountForTesting += 1
+        #endif
         guard let tlm = textView.textLayoutManager else { return }
         tlm.invalidateLayout(for: tlm.documentRange)
         tlm.textViewportLayoutController.layoutViewport()

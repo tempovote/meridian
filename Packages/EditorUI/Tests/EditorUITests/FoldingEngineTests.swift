@@ -73,6 +73,91 @@ struct FoldingEngineTests {
         #expect(engine.hiddenUTF16SpansForTesting.isEmpty)
     }
 
+    /// F1 regression: `NSDocument` revert reuses the same engine instance
+    /// via `load(buffer:)` again — stale fold state from the OLD content
+    /// must not survive into the newly loaded buffer (it would hide
+    /// arbitrary lines of unrelated content until, if ever, a fresh parse
+    /// lands).
+    @Test func loadResetsStaleFoldState() async throws {
+        let engine = await makeSwiftEngine()
+        engine.setSelection(SelectionSet(caretAt: ByteOffset(0)), in: engine.snapshotForTesting)
+        engine.foldAtCaret()
+        #expect(!engine.foldModelForTesting.folded.isEmpty)
+        #expect(!engine.hiddenUTF16SpansForTesting.isEmpty)
+
+        engine.load(buffer: TextBuffer("line0\nline1\nline2\nline3\n"))
+
+        #expect(engine.foldModelForTesting.folded.isEmpty)
+        #expect(engine.foldModelForTesting.foldable.isEmpty)
+        #expect(engine.hiddenUTF16SpansForTesting.isEmpty)
+
+        // No zero-height (folded) fragments should remain from the old
+        // document's collapsed lines.
+        let tlm = try #require(engine.textView.textLayoutManager)
+        tlm.ensureLayout(for: tlm.documentRange)
+        var sawZeroHeight = false
+        tlm.enumerateTextLayoutFragments(from: tlm.documentRange.location, options: [.ensuresLayout]) { fragment in
+            if fragment.layoutFragmentFrame.height == 0 {
+                sawZeroHeight = true
+            }
+            return true
+        }
+        #expect(!sawZeroHeight)
+    }
+
+    /// F2 regression: the post-parse path (`highlightCurrentBuffer`'s
+    /// completion) must not run the expensive TextKit 2 relayout/purge
+    /// (`relayoutForFoldChange`, gated by `refreshFoldLayoutIfChanged`) on
+    /// every reparse — only when hidden spans actually change. Also proves
+    /// the purge path STILL fires on a real fold toggle (the opposite
+    /// regression this fix must avoid introducing).
+    @Test func postParseRefreshSkipsRelayoutWhenFoldStateUnchanged() async {
+        let engine = await makeSwiftEngine()
+        #expect(engine.foldRelayoutInvocationCountForTesting == 0) // initial parse: no folds yet, no relayout needed.
+
+        engine.setSelection(SelectionSet(caretAt: ByteOffset(0)), in: engine.snapshotForTesting)
+        engine.foldAtCaret()
+        #expect(!engine.hiddenUTF16SpansForTesting.isEmpty)
+        #expect(engine.foldRelayoutInvocationCountForTesting == 1) // real fold toggle: purge DOES fire.
+
+        let baseline = engine.foldRelayoutInvocationCountForTesting
+
+        // Type elsewhere — past the folded region, so neither the folded
+        // anchor nor any foldable region's bytes are affected — and let
+        // the resulting reparse land.
+        let endOfDocument = engine.snapshotForTesting.utf16Count
+        engine.simulateUserTypingForTesting(replacing: NSRange(location: endOfDocument, length: 0), with: "z")
+        await engine.waitForParseForTesting()
+
+        #expect(engine.foldRelayoutInvocationCountForTesting == baseline) // unchanged: relayout was skipped.
+        #expect(!engine.hiddenUTF16SpansForTesting.isEmpty) // fold itself is still intact.
+    }
+
+    /// F3 regression: folding with the caret mid-BODY (not on the region's
+    /// first line, which is unaffected by folding) must not strand the
+    /// caret inside the newly hidden text — else the very next selection
+    /// change trips `unfoldIfSelectionEnteredHiddenText` and silently
+    /// reverts the fold the user just requested.
+    @Test func foldAtCaretMidBodyKeepsCaretVisible() async throws {
+        let engine = await makeSwiftEngine()
+        // "func f() {\n    let a = 1\n    let b = 2\n}\nlet tail = 3\n" — byte
+        // 15 lands inside "    let a = 1" (line 1, the fold's hidden body).
+        let midBodyOffset = ByteOffset(15)
+        engine.setSelection(SelectionSet(caretAt: midBodyOffset), in: engine.snapshotForTesting)
+        engine.foldAtCaret()
+
+        #expect(engine.foldModelForTesting.folded.count == 1) // fold still applied...
+        let caretAfter = engine.selection(in: engine.snapshotForTesting).ranges.first?.lowerBound
+        #expect(caretAfter != nil)
+        // ...and the caret is NOT left inside the hidden text.
+        #expect(try !engine.foldModelForTesting.isInsideHiddenText(#require(caretAfter), in: engine.snapshotForTesting))
+
+        // A subsequent selection-change to that same (now-visible) location
+        // must not trip the hidden-text guard and unfold it.
+        try engine.setSelection(SelectionSet(caretAt: #require(caretAfter)), in: engine.snapshotForTesting)
+        #expect(engine.foldModelForTesting.folded.count == 1)
+    }
+
     @Test func mirroredSiblingEditIntoFoldUnfolds() async {
         // Split-pane rule: apply(_:base:restoreSelection:false) touching a
         // folded region unfolds it in THIS pane too.

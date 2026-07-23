@@ -20,6 +20,17 @@ public struct FoldModel: Equatable {
     public private(set) var foldable: [FoldRange] = []
     /// Folded regions' full byte ranges, sorted by `lowerBound`.
     public private(set) var folded: [Range<ByteOffset>] = []
+    /// `foldable`, indexed by `startLine`, rebuilt alongside it in
+    /// `updateFoldable` — lets `gutterMark` answer in O(1) instead of a
+    /// linear scan repeated on every ruler draw line (rulers redraw on
+    /// every keystroke/selection change; a large file can have 10^5+ fold
+    /// regions). Same "first wins" dedup as the array it replaces: since
+    /// `foldable` is sorted by `range.lowerBound` ascending (ties broken by
+    /// `range.upperBound` descending — see `foldable`'s doc comment), the
+    /// first candidate reached for a given `startLine` while building this
+    /// dictionary is the outermost/largest one, matching what
+    /// `foldable.first(where:)` used to return.
+    private var foldableByStartLine: [Int: FoldRange] = [:]
 
     public init() {}
 
@@ -35,6 +46,11 @@ public struct FoldModel: Equatable {
                 ? $0.range.lowerBound < $1.range.lowerBound
                 : $0.range.upperBound > $1.range.upperBound
         }
+        var byStartLine: [Int: FoldRange] = [:]
+        for candidate in foldable where byStartLine[candidate.startLine] == nil {
+            byStartLine[candidate.startLine] = candidate
+        }
+        foldableByStartLine = byStartLine
         var extentByStart: [ByteOffset: Range<ByteOffset>] = [:]
         for candidate in foldable where extentByStart[candidate.range.lowerBound] == nil {
             extentByStart[candidate.range.lowerBound] = candidate.range
@@ -169,9 +185,25 @@ public struct FoldModel: Equatable {
     /// Gutter mark for a line: none / foldable / folded. `buffer` is
     /// accepted for symmetry with `hiddenLineSpans`/`isInsideHiddenText`
     /// (byte-range foldable state, line-based query) but isn't needed here
-    /// — `foldable.startLine` is already the line-space anchor.
+    /// — `foldable.startLine` is already the line-space anchor. O(1) via
+    /// `foldableByStartLine` (see its doc comment).
     public func gutterMark(atLine line: Int, in _: TextBuffer) -> FoldGutterMark {
-        guard let region = foldable.first(where: { $0.startLine == line }) else { return .none }
+        guard let region = foldableByStartLine[line] else { return .none }
         return folded.contains(region.range) ? .folded : .foldable
+    }
+
+    /// Innermost folded region whose HIDDEN lines (its body, i.e. lines
+    /// `startLine+1...endLine` — never its own visible first line) contain
+    /// `line`. Used to reposition a caret a fold operation just buried
+    /// inside hidden text back onto the folded region's visible first
+    /// line (spec invariant: caret never lands inside hidden text).
+    /// `folded` is sorted by `lowerBound` ascending, so — mirroring
+    /// `foldableRegion(atLine:)` — the LAST match is the innermost.
+    public func foldedRegionHidingLine(_ line: Int, in buffer: TextBuffer) -> Range<ByteOffset>? {
+        folded.last { range in
+            let startLine = buffer.linePosition(of: range.lowerBound).line
+            let endLine = buffer.linePosition(of: range.upperBound).line
+            return line > startLine && line <= endLine
+        }
     }
 }

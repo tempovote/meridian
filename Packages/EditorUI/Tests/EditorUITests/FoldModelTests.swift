@@ -133,6 +133,43 @@ struct FoldModelTests {
         #expect(model.gutterMark(atLine: 6, in: buffer) == .folded)
     }
 
+    /// F4: `gutterMark` now answers from a `[Int: FoldRange]` dictionary
+    /// built once in `updateFoldable`, not a linear `foldable.first(where:)`
+    /// scan repeated on every ruler draw line. Pins the dedup semantics the
+    /// dictionary must preserve exactly: when two foldable regions share a
+    /// `startLine`, `foldable`'s sort (ties broken by `range.upperBound`
+    /// descending) puts the outer one first, so `gutterMark` must report
+    /// the OUTER region's folded state even when a nested region sharing
+    /// the same start line is the one actually folded.
+    @Test func gutterMarkPicksOutermostWhenRegionsShareStartLine() throws {
+        var model = FoldModel()
+        let outer = region(1, 8, depth: 1)
+        let inner = FoldRange(
+            range: outer.range.lowerBound ..< ByteOffset(outer.range.lowerBound.value + 11),
+            startLine: 1, endLine: 2, depth: 2,
+        )
+        model.updateFoldable([outer, inner])
+        try model.fold(#require(model.foldableRegion(atLine: 1))) // innermost via `.last` — folds `inner`.
+        #expect(model.folded == [inner.range])
+        // Outer (not folded) must still be what the dictionary reports.
+        #expect(model.gutterMark(atLine: 1, in: buffer) == .foldable)
+    }
+
+    /// F3 support: `foldedRegionHidingLine` (used by the engine to
+    /// reposition a caret a fold just buried) must find the enclosing
+    /// region whose HIDDEN body (excluding its own visible first line)
+    /// contains the given line, and nil when the line isn't hidden by any
+    /// fold (including a region's own first line).
+    @Test func foldedRegionHidingLineExcludesFirstLineAndOutsideFolds() throws {
+        var model = FoldModel()
+        model.updateFoldable([region(1, 4)])
+        try model.fold(#require(model.foldableRegion(atLine: 1)))
+        #expect(model.foldedRegionHidingLine(1, in: buffer) == nil) // region's own visible first line.
+        #expect(model.foldedRegionHidingLine(2, in: buffer) == region(1, 4).range) // hidden body line.
+        #expect(model.foldedRegionHidingLine(4, in: buffer) == region(1, 4).range) // last hidden line.
+        #expect(model.foldedRegionHidingLine(5, in: buffer) == nil) // after the region.
+    }
+
     /// Random edit scripts: FoldModel's incremental anchor adjustment must
     /// agree with recomputing from scratch. Reference semantics: a folded
     /// range survives a random edit iff the edit doesn't overlap it (a pure
