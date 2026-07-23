@@ -120,7 +120,46 @@ enum MainMenu {
             to: menu, title: "Split Vertically", action: Selector(("splitVertically:")),
             keyEquivalent: "\\", modifierMask: [.command, .shift],
         )
+        menu.addItem(.separator())
+        menu.addItem(foldMenuItem())
         return wrapped(menu)
+    }
+
+    /// Arrow-key equivalents use `NSEvent`'s function-key constants (imported
+    /// as `Int`); `UnicodeScalar`'s failable `Int` initializer is safe here
+    /// since both constants are well within the valid scalar range.
+    private static func foldMenuItem() -> NSMenuItem {
+        let foldMenu = NSMenu(title: "Fold")
+        let leftArrow = String(UnicodeScalar(NSLeftArrowFunctionKey)!)
+        let rightArrow = String(UnicodeScalar(NSRightArrowFunctionKey)!)
+        addCommand(
+            to: foldMenu, title: "Fold Current Region", action: Selector(("foldCurrentRegion:")),
+            keyEquivalent: leftArrow, modifierMask: [.command, .option],
+        )
+        addCommand(
+            to: foldMenu, title: "Unfold Current Region", action: Selector(("unfoldCurrentRegion:")),
+            keyEquivalent: rightArrow, modifierMask: [.command, .option],
+        )
+        foldMenu.addItem(.separator())
+        addCommand(
+            to: foldMenu, title: "Fold All", action: Selector(("foldAll:")),
+            keyEquivalent: leftArrow, modifierMask: [.command, .option, .shift],
+        )
+        addCommand(
+            to: foldMenu, title: "Unfold All", action: Selector(("unfoldAll:")),
+            keyEquivalent: rightArrow, modifierMask: [.command, .option, .shift],
+        )
+        foldMenu.addItem(.separator())
+        for level in 1 ... 5 {
+            addCommand(
+                to: foldMenu, title: "Fold Level \(level)", action: Selector(("foldLevel\(level):")),
+                keyEquivalent: "\(level)", modifierMask: [.command, .control],
+            )
+        }
+        let foldItem = NSMenuItem()
+        foldItem.title = "Fold"
+        foldItem.submenu = foldMenu
+        return foldItem
     }
 
     private static func windowMenuItem() -> NSMenuItem {
