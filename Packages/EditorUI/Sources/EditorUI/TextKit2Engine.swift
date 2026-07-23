@@ -53,6 +53,10 @@ public final class TextKit2Engine: NSObject, TextLayoutEngine {
     /// background color, so they can be cleared before a new pair (or
     /// none) is painted.
     var currentBracketHighlightRanges: [NSRange] = []
+    /// UTF-16 spans of the lines currently hidden by folding, sorted,
+    /// derived by `setHiddenLineSpans(_:)`. Read by the layout-manager
+    /// delegate on every fragment creation — keep sorted for binary search.
+    var hiddenUTF16Spans: [Range<Int>] = []
 
     public var onUserEdit: ((EditTransaction) -> Void)?
 
@@ -118,6 +122,7 @@ public final class TextKit2Engine: NSObject, TextLayoutEngine {
 
         storage.delegate = self
         textView.delegate = self
+        textView.textLayoutManager?.delegate = self
         textView.onEffectiveAppearanceChange = { [weak self] in
             self?.handleAppearanceChange()
         }

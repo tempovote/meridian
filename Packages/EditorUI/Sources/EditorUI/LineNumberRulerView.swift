@@ -87,6 +87,11 @@ public final class LineNumberRulerView: NSRulerView {
             options: [.ensuresLayout, .estimatesSize],
         ) { fragment in
             let frame = fragment.layoutFragmentFrame
+            // Folded-away lines produce zero-height fragments — skip them so
+            // numbering jumps over hidden lines (10 → 42, Notepad++ style).
+            if frame.height == 0 {
+                return true
+            }
             let viewY = frame.origin.y + textContainerOrigin.y
             let fragmentRectInTextView = NSRect(x: 0, y: viewY, width: 1, height: frame.height)
             let fragmentRectInRuler = self.convert(fragmentRectInTextView, from: textView)
