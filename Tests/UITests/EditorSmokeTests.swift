@@ -180,6 +180,44 @@ final class EditorSmokeTests: XCTestCase {
         app.terminate()
     }
 
+    /// Spec M6-P2: one thin smoke — fold all via menu, keep typing, content
+    /// intact. Everything richer is unit-tested in EditorUI.
+    ///
+    /// This also exercises the no-fold degradation path for free: the
+    /// document here is untitled (never saved), so it has no languageID and
+    /// therefore no fold ranges — "Fold All" on it must be a harmless no-op,
+    /// not a crash or a silent content loss. If that regresses, this test's
+    /// final assertions (content still present after Fold All + more typing)
+    /// will fail.
+    @MainActor
+    func testFoldAllThenTypeKeepsContentIntact() {
+        let app = XCUIApplication()
+        app.launch()
+
+        let window = app.windows.firstMatch
+        XCTAssertTrue(window.waitForExistence(timeout: 10))
+        let textView = window.textViews.firstMatch
+        XCTAssertTrue(textView.waitForExistence(timeout: 10))
+
+        textView.click()
+        app.typeText("func f() {\n    let a = 1\n}\n")
+
+        // "Fold All" lives under View ▸ Fold; XCUITest flattens submenu
+        // items into menuItems, so the direct query works without
+        // navigating the View menu open first.
+        let foldAll = app.menuBars.menuItems["Fold All"]
+        XCTAssertTrue(foldAll.waitForExistence(timeout: 10))
+        foldAll.click()
+
+        textView.click()
+        app.typeKey(.end, modifierFlags: .command) // caret to document end
+        app.typeText("// still typing\n")
+
+        let value = textView.value as? String ?? ""
+        XCTAssertTrue(value.contains("let a = 1"), "original content lost after Fold All: \(value)")
+        XCTAssertTrue(value.contains("still typing"), "typing after Fold All did not land: \(value)")
+    }
+
     private func waitForDisappearance(of element: XCUIElement, timeout: TimeInterval) -> Bool {
         let predicate = NSPredicate(format: "exists == false")
         let expectation = XCTNSPredicateExpectation(predicate: predicate, object: element)
