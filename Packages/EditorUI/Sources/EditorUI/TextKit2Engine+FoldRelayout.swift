@@ -10,14 +10,20 @@ extension TextKit2Engine {
     /// itself is intentionally left alone: the split-pane fresh-frame nudge
     /// it exists for genuinely needs the full-document `ensureLayout`.
     ///
-    /// The `purgeStaleViewportFragmentLayers` step in the middle is what
-    /// fixes the live-window post-fold glyph garbling — see its doc comment.
+    /// The `layoutViewport()` here does double duty: it re-lays the
+    /// invalidated fragments *and* populates `viewportRange`, which the
+    /// following `purgeStaleViewportFragmentLayers` step reads. That purge
+    /// is what fixes the live-window post-fold glyph garbling — see its doc
+    /// comment. A second `layoutViewport()` after the purge was tried and
+    /// found redundant (verified by on-screen screenshot across fold /
+    /// refold / foldAll+scroll-back): the purge's synthetic edit invalidates
+    /// the range and `needsDisplay = true` drives the final relayout on the
+    /// display pass, so one explicit `layoutViewport()` suffices.
     func relayoutForFoldChange() {
         guard let tlm = textView.textLayoutManager else { return }
         tlm.invalidateLayout(for: tlm.documentRange)
         tlm.textViewportLayoutController.layoutViewport()
         purgeStaleViewportFragmentLayers(tlm)
-        tlm.textViewportLayoutController.layoutViewport()
         textView.needsDisplay = true
         rulerView?.needsDisplay = true
     }
@@ -49,12 +55,29 @@ extension TextKit2Engine {
     /// for a user edit. Safe from `BreakOnEnumerateWhileEditing`: every
     /// caller reaches here outside any editing transaction (fold actions
     /// call it directly; the typing path defers it to a `Task` hop).
+    ///
+    /// Scope is deliberately the *current viewport only*, even for whole-
+    /// document ops like `foldAll()`/`foldLevel()` that collapse regions far
+    /// off-screen. Those off-screen regions need no purge here: TextKit 2
+    /// discards out-of-viewport fragments and re-vends them fresh when they
+    /// scroll back in, so their layers are never stale. Verified on-screen
+    /// with a ~240-line file — render all regions once by scrolling top to
+    /// bottom, `foldAll()` while parked at the bottom (so only the bottom
+    /// viewport is purged here), then scroll back up: every folded region,
+    /// including the ones never in this purge's range, rendered clean.
     private func purgeStaleViewportFragmentLayers(_ tlm: NSTextLayoutManager) {
         guard let viewport = tlm.textViewportLayoutController.viewportRange else { return }
         let start = tlm.offset(from: tlm.documentRange.location, to: viewport.location)
         let end = tlm.offset(from: tlm.documentRange.location, to: viewport.endLocation)
         let range = NSRange(location: start, length: max(0, end - start))
         guard range.length > 0, NSMaxRange(range) <= storage.length else { return }
+        // Defense-in-depth: the `.editedCharacters` delegate guard already
+        // bails on this attribute-only edit, but flag it as our own mirror
+        // write so a future reorder can't silently reintroduce phantom-edit
+        // risk. Restore (not force-false) in case a caller nests.
+        let wasMirroring = isMirroring
+        isMirroring = true
+        defer { isMirroring = wasMirroring }
         storage.beginEditing()
         storage.edited(.editedAttributes, range: range, changeInLength: 0)
         storage.endEditing()
