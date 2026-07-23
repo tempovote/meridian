@@ -141,6 +141,87 @@ extension TextKit2Engine {
         }
         return false
     }
+
+    /// Recomputes hidden spans from the fold model — the ONLY caller of
+    /// `setHiddenLineSpans` after Task 5; every fold mutation funnels here.
+    func refreshFoldLayout() {
+        setHiddenLineSpans(foldModel.hiddenLineSpans(in: buffer))
+    }
+
+    private var caretByteOffset: ByteOffset? {
+        let ranges = textView.selectedRanges.map(\.rangeValue)
+        guard ranges.count == 1, let sel = ranges.first, sel.length == 0,
+              sel.location <= buffer.utf16Count else { return nil }
+        return buffer.byteOffset(of: UTF16Offset(sel.location))
+    }
+
+    /// Folds the innermost foldable region containing the caret line.
+    public func foldAtCaret() {
+        guard let caret = caretByteOffset else { return }
+        let line = buffer.linePosition(of: caret).line
+        guard let region = foldModel.foldableRegion(atLine: line) else { return }
+        foldModel.fold(region)
+        refreshFoldLayout()
+    }
+
+    /// Unfolds at the caret: innermost folded region containing the caret.
+    public func unfoldAtCaret() {
+        guard let caret = caretByteOffset else { return }
+        // Innermost folded region whose first line or body contains the caret.
+        let line = buffer.linePosition(of: caret).line
+        guard let region = foldModel.foldableRegion(atLine: line),
+              foldModel.folded.contains(region.range) else {
+            foldModel.unfoldEnclosing(caret)
+            refreshFoldLayout()
+            return
+        }
+        foldModel.unfold(startingAt: region.range.lowerBound)
+        refreshFoldLayout()
+    }
+
+    public func foldAll() {
+        foldModel.foldAll()
+        refreshFoldLayout()
+    }
+
+    public func unfoldAll() {
+        foldModel.unfoldAll()
+        refreshFoldLayout()
+    }
+
+    /// Spec Fold Level N semantics (fold depth==n, unfold shallower).
+    public func foldLevel(_ level: Int) {
+        foldModel.foldLevel(level)
+        refreshFoldLayout()
+    }
+
+    /// Menu validation: is there a foldable region at the caret?
+    public var canFoldAtCaret: Bool {
+        guard let caret = caretByteOffset else { return false }
+        return foldModel.foldableRegion(atLine: buffer.linePosition(of: caret).line) != nil
+    }
+
+    public var canUnfoldAtCaret: Bool {
+        guard let caret = caretByteOffset else { return false }
+        if foldModel.isInsideHiddenText(caret, in: buffer) { return true }
+        let line = buffer.linePosition(of: caret).line
+        guard let region = foldModel.foldableRegion(atLine: line) else { return false }
+        return foldModel.folded.contains(region.range)
+    }
+
+    /// Caret-in-hidden-text guard (spec: "caret/edits never land inside
+    /// hidden text"): any selection change whose caret ends up inside a
+    /// folded body — goto-line, find navigation, character-wise arrow
+    /// movement — unfolds the enclosing chain. Vertical arrow movement
+    /// skips folds geometrically (zero-height fragments) and never
+    /// triggers this.
+    func unfoldIfSelectionEnteredHiddenText() {
+        guard storage.length == buffer.utf16Count else { return } // mid-transaction guard, same as updateBracketHighlight
+        guard let caret = caretByteOffset,
+              foldModel.isInsideHiddenText(caret, in: buffer) else { return }
+        foldModel.unfoldEnclosing(caret)
+        refreshFoldLayout()
+    }
 }
 
 extension TextKit2Engine: NSTextLayoutManagerDelegate {

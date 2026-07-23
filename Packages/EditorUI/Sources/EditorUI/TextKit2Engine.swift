@@ -60,6 +60,14 @@ public final class TextKit2Engine: NSObject, TextLayoutEngine {
     /// derived by `setHiddenLineSpans(_:)`. Read by the layout-manager
     /// delegate on every fragment creation — keep sorted for binary search.
     var hiddenUTF16Spans: [Range<Int>] = []
+    /// This pane's fold state, fed by every successful parse
+    /// (`highlightCurrentBuffer`) and mutated by the fold operations in
+    /// `TextKit2Engine+Folding.swift`.
+    var foldModel = FoldModel()
+    /// The most recent parse `Task` kicked off by `highlightCurrentBuffer`,
+    /// kept only so the DEBUG-only `waitForParseForTesting` hook can await
+    /// its completion deterministically instead of sleeping in tests.
+    var lastParseTask: Task<Void, Never>?
 
     public var onUserEdit: ((EditTransaction) -> Void)?
 
@@ -189,6 +197,11 @@ public final class TextKit2Engine: NSObject, TextLayoutEngine {
         }
         buffer.apply(transaction)
         assertMirrorInvariant()
+        let foldedBefore = foldModel.folded
+        foldModel.apply(transaction)
+        if foldModel.folded != foldedBefore {
+            refreshFoldLayout()
+        }
         highlightCurrentBuffer()
         if restoreSelection, !transaction.selectionAfter.ranges.isEmpty {
             setSelection(transaction.selectionAfter, in: buffer)
@@ -303,6 +316,11 @@ public final class TextKit2Engine: NSObject, TextLayoutEngine {
         )
         buffer.apply(transaction)
         assertMirrorInvariant()
+        let foldedBefore = foldModel.folded
+        foldModel.apply(transaction)
+        if foldModel.folded != foldedBefore {
+            refreshFoldLayout()
+        }
         highlightCurrentBuffer()
         onUserEdit?(transaction)
     }
@@ -319,6 +337,7 @@ extension TextKit2Engine: NSTextViewDelegate {
     public func textViewDidChangeSelection(_ notification: Notification) {
         textView.needsDisplay = true
         rulerView?.needsDisplay = true
+        unfoldIfSelectionEnteredHiddenText()
         updateBracketHighlight()
     }
 }
@@ -377,6 +396,22 @@ extension TextKit2Engine: NSTextStorageDelegate {
         /// NSTextView's insertText path does (delegate fires → user-edit path).
         func simulateUserTypingForTesting(replacing range: NSRange, with string: String) {
             storage.replaceCharacters(in: range, with: string)
+        }
+
+        var foldModelForTesting: FoldModel {
+            foldModel
+        }
+
+        var hiddenUTF16SpansForTesting: [Range<Int>] {
+            hiddenUTF16Spans
+        }
+
+        /// Awaits the in-flight highlight/fold parse kicked off by the last
+        /// `load`/`apply`/user edit, so tests can assert on `foldModel`
+        /// once the async `SyntaxService.parse` result has landed instead
+        /// of sleeping.
+        func waitForParseForTesting() async {
+            await lastParseTask?.value
         }
     }
 #endif
