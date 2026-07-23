@@ -32,12 +32,26 @@ public final class MeridianTextView: NSTextView {
     /// custom `NSWindow` subclass to observe first-responder changes.
     public var onBecomeFirstResponder: (() -> Void)?
 
+    /// Set by `TextKit2Engine`: returns true if the click point (in this
+    /// view's local coordinates) hit a fold `…` placeholder and was
+    /// handled (unfolded) — suppresses normal caret placement for that
+    /// click.
+    public var onFoldPlaceholderClick: ((NSPoint) -> Bool)?
+
     override public func becomeFirstResponder() -> Bool {
         let result = super.becomeFirstResponder()
         if result {
             onBecomeFirstResponder?()
         }
         return result
+    }
+
+    override public func mouseDown(with event: NSEvent) {
+        let point = convert(event.locationInWindow, from: nil)
+        if onFoldPlaceholderClick?(point) == true {
+            return
+        }
+        super.mouseDown(with: event)
     }
 
     override public func viewDidChangeEffectiveAppearance() {

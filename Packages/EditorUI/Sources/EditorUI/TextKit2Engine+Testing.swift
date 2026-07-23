@@ -35,6 +35,14 @@ import DocumentCore
             foldModel
         }
 
+        /// The line-number ruler, for gutter-chevron tests. Force-unwraps
+        /// `rulerView` — always set by `init`, so a nil here is a
+        /// programming error, not a runtime condition to handle.
+        var rulerViewForTesting: LineNumberRulerView {
+            guard let rulerView else { preconditionFailure("rulerView not configured") }
+            return rulerView
+        }
+
         var hiddenUTF16SpansForTesting: [Range<Int>] {
             hiddenUTF16Spans
         }

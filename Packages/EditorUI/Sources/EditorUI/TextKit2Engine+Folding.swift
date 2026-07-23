@@ -30,14 +30,30 @@ final class FoldAwareTextLayoutFragment: NSTextLayoutFragment {
         return collapsed
     }
 
+    /// Draws normally when visible; when this fragment is the still-
+    /// visible first line of a folded region, additionally appends a "…"
+    /// badge past the line's typographic end. Same "re-evaluate live, no
+    /// second class" reasoning as `isFolded` below applies here too — the
+    /// badge must appear/disappear as folds toggle without TextKit 2 ever
+    /// re-vending this fragment.
     override func draw(at point: CGPoint, in context: CGContext) {
         guard !isFolded else { return }
         super.draw(at: point, in: context)
+        if isFoldedFirstLine {
+            drawEllipsisBadge(at: point, in: context)
+        }
+    }
+
+    /// This fragment's paragraph-start offset in document UTF-16
+    /// coordinates — the shared lookup key for both `isFolded` and
+    /// `isFoldedFirstLine`.
+    private var documentOffset: Int? {
+        guard let tlm = textLayoutManager else { return nil }
+        return tlm.offset(from: tlm.documentRange.location, to: rangeInElement.location)
     }
 
     private var isFolded: Bool {
-        guard let engine, let tlm = textLayoutManager else { return false }
-        let offset = tlm.offset(from: tlm.documentRange.location, to: rangeInElement.location)
+        guard let engine, let offset = documentOffset else { return false }
         // `engine` is a `@MainActor` final class and therefore implicitly
         // `Sendable` (same reasoning as the `NSTextStorageDelegate`
         // conformance's doc comment below); `offset`/the `Bool` result are
@@ -49,6 +65,29 @@ final class FoldAwareTextLayoutFragment: NSTextLayoutFragment {
         return MainActor.assumeIsolated {
             engine.isHiddenParagraph(startingAt: offset)
         }
+    }
+
+    /// True when this fragment is the visible first line of a currently
+    /// folded region (see `TextKit2Engine.foldedFirstLineUTF16Starts`'s
+    /// doc comment for how the lookup is kept in sync).
+    private var isFoldedFirstLine: Bool {
+        guard let engine, let offset = documentOffset else { return false }
+        assert(Thread.isMainThread, "NSTextLayoutFragment folded check off the main thread")
+        return MainActor.assumeIsolated {
+            engine.foldedFirstLineUTF16Starts[offset] != nil
+        }
+    }
+
+    private func drawEllipsisBadge(at point: CGPoint, in context: CGContext) {
+        let badge = NSAttributedString(string: " …", attributes: [
+            .font: NSFont.systemFont(ofSize: 11),
+            .foregroundColor: NSColor.secondaryLabelColor,
+        ])
+        let lineWidth = textLineFragments.last.map(\.typographicBounds.maxX) ?? 0
+        NSGraphicsContext.saveGraphicsState()
+        NSGraphicsContext.current = NSGraphicsContext(cgContext: context, flipped: true)
+        badge.draw(at: CGPoint(x: point.x + lineWidth + 4, y: point.y))
+        NSGraphicsContext.restoreGraphicsState()
     }
 }
 
@@ -97,6 +136,23 @@ public extension TextKit2Engine {
         // overlapping/adjacent spans here, once, rather than pushing that
         // requirement onto every caller.
         hiddenUTF16Spans = Self.mergeSortedSpans(converted)
+        // Derived from `foldModel.folded` directly (not from `spans`):
+        // production callers always pass `foldModel.hiddenLineSpans(in:
+        // buffer)` here, so the two are in lockstep, but going straight to
+        // the source avoids re-deriving a region's first line from a
+        // merged span (multiple folds can merge into one span, losing
+        // per-region identity). `unfold(startingAt:)` needs the region's
+        // byte lower bound, not the line-space span, hence the `ByteOffset`
+        // value.
+        foldedFirstLineUTF16Starts = Dictionary(
+            foldModel.folded.compactMap { region -> (Int, ByteOffset)? in
+                let firstLine = buffer.linePosition(of: region.lowerBound).line
+                guard firstLine < buffer.lineCount else { return nil }
+                let utf16Start = buffer.utf16Offset(of: buffer.byteRange(ofLine: firstLine).lowerBound).value
+                return (utf16Start, region.lowerBound)
+            },
+            uniquingKeysWith: { first, _ in first },
+        )
     }
 
     /// Merges overlapping or adjacent ranges in an already-sorted-by-
@@ -262,6 +318,58 @@ public extension TextKit2Engine {
               foldModel.isInsideHiddenText(caret, in: buffer) else { return }
         foldModel.unfoldEnclosing(caret)
         refreshFoldLayout()
+    }
+
+    /// Wires the ruler's chevron gutter and the text view's `…` placeholder
+    /// click to this engine's fold state. Called once from `init` — split
+    /// out of `TextKit2Engine.swift` to keep that file under the swiftlint
+    /// `file_length` limit.
+    internal func configureFoldGutter() {
+        rulerView?.foldMarkProvider = { [weak self] line in
+            guard let self else { return .none }
+            return foldModel.gutterMark(atLine: line, in: buffer)
+        }
+        rulerView?.onFoldChevronClick = { [weak self] line in
+            self?.toggleFold(atLine: line)
+        }
+        textView.onFoldPlaceholderClick = { [weak self] point in
+            self?.handleFoldPlaceholderClick(at: point) ?? false
+        }
+    }
+
+    /// Chevron click: folds an unfolded foldable region at `line`, or
+    /// unfolds an already-folded one. A no-op if `line` has no foldable
+    /// region (a stale click racing a reparse — see the `gutterMark`
+    /// staleness note above).
+    private func toggleFold(atLine line: Int) {
+        guard let region = foldModel.foldableRegion(atLine: line) else { return }
+        if foldModel.folded.contains(region.range) {
+            foldModel.unfold(startingAt: region.range.lowerBound)
+        } else {
+            foldModel.fold(region)
+        }
+        refreshFoldLayout()
+    }
+
+    /// Hit-tests a click in `textView`'s local coordinates against the `…`
+    /// badge drawn past a folded first line's text (see
+    /// `FoldAwareTextLayoutFragment.drawEllipsisBadge`); unfolds and
+    /// returns true if the click landed on the badge. Mirrors the ruler's
+    /// point → container-space conversion (`LineNumberRulerView
+    /// .mouseDown`'s doc comment), but with no extra ruler-to-text-view
+    /// hop since the click already originates in `textView`.
+    private func handleFoldPlaceholderClick(at point: NSPoint) -> Bool {
+        guard let tlm = textView.textLayoutManager else { return false }
+        let pointInContainer = NSPoint(x: point.x, y: point.y - textView.textContainerOrigin.y)
+        guard let fragment = tlm.textLayoutFragment(for: pointInContainer) else { return false }
+        let offset = tlm.offset(from: tlm.documentRange.location, to: fragment.rangeInElement.location)
+        guard let regionStart = foldedFirstLineUTF16Starts[offset] else { return false }
+        let lineMaxX = fragment.textLineFragments.last.map(\.typographicBounds.maxX) ?? 0
+        let localX = pointInContainer.x - fragment.layoutFragmentFrame.origin.x
+        guard localX > lineMaxX else { return false }
+        foldModel.unfold(startingAt: regionStart)
+        refreshFoldLayout()
+        return true
     }
 }
 

@@ -60,6 +60,13 @@ public final class TextKit2Engine: NSObject, TextLayoutEngine {
     /// derived by `setHiddenLineSpans(_:)`. Read by the layout-manager
     /// delegate on every fragment creation — keep sorted for binary search.
     var hiddenUTF16Spans: [Range<Int>] = []
+    /// UTF-16 offset of each folded region's still-visible first line ->
+    /// that region's byte-range lower bound (the key `FoldModel.unfold
+    /// (startingAt:)` expects). Updated alongside `hiddenUTF16Spans`; lets
+    /// the `…` placeholder fragment and its click-to-unfold hit test
+    /// answer "am I/is this a folded first line?" in O(1) without walking
+    /// `foldModel.folded`.
+    var foldedFirstLineUTF16Starts: [Int: ByteOffset] = [:]
     /// This pane's fold state, fed by every successful parse
     /// (`highlightCurrentBuffer`) and mutated by the fold operations in
     /// `TextKit2Engine+Folding.swift`.
@@ -142,6 +149,7 @@ public final class TextKit2Engine: NSObject, TextLayoutEngine {
         rulerView = ruler
 
         storage.delegate = self
+        configureFoldGutter()
         textView.delegate = self
         textView.textLayoutManager?.delegate = self
         textView.onEffectiveAppearanceChange = { [weak self] in
