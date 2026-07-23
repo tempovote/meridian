@@ -52,12 +52,22 @@ final class FoldAwareTextLayoutFragment: NSTextLayoutFragment {
     }
 }
 
-extension TextKit2Engine {
+public extension TextKit2Engine {
     /// Replaces the set of hidden line spans (0-based, end-exclusive) and
     /// forces a fold-only relayout (see `relayoutForFoldChange` below). The
     /// single choke point for fold visibility changes — later fold
     /// operations all funnel through here.
-    func setHiddenLineSpans(_ spans: [Range<Int>]) {
+    internal func setHiddenLineSpans(_ spans: [Range<Int>]) {
+        storeHiddenLineSpans(spans)
+        relayoutForFoldChange()
+    }
+
+    /// The pure-state half of `setHiddenLineSpans`: computes and stores
+    /// `hiddenUTF16Spans` without touching TextKit 2 layout. Split out so
+    /// `refreshFoldLayoutDeferred()` can update this synchronously (cheap,
+    /// no AppKit calls) while still deferring the actual relayout pass —
+    /// see that method's doc comment.
+    private func storeHiddenLineSpans(_ spans: [Range<Int>]) {
         let converted: [Range<Int>] = spans.compactMap { span in
             // An empty span (e.g. `0..<0`) hides nothing; `endLine` below
             // would otherwise go negative and `byteRange(ofLine:)` would
@@ -87,7 +97,6 @@ extension TextKit2Engine {
         // overlapping/adjacent spans here, once, rather than pushing that
         // requirement onto every caller.
         hiddenUTF16Spans = Self.mergeSortedSpans(converted)
-        relayoutForFoldChange()
     }
 
     /// Merges overlapping or adjacent ranges in an already-sorted-by-
@@ -96,7 +105,7 @@ extension TextKit2Engine {
     /// overlapping — folding lines `0..<2` and `2..<4` should coalesce into
     /// one hidden run, not leave a zero-width gap `isHiddenParagraph` could
     /// disagree about.
-    static func mergeSortedSpans(_ sorted: [Range<Int>]) -> [Range<Int>] {
+    internal static func mergeSortedSpans(_ sorted: [Range<Int>]) -> [Range<Int>] {
         var merged: [Range<Int>] = []
         for span in sorted {
             if let last = merged.last, span.lowerBound <= last.upperBound {
@@ -126,7 +135,7 @@ extension TextKit2Engine {
 
     /// True when the paragraph starting at UTF-16 offset `offset` lies in a
     /// hidden span. Binary search over the sorted spans.
-    func isHiddenParagraph(startingAt offset: Int) -> Bool {
+    internal func isHiddenParagraph(startingAt offset: Int) -> Bool {
         var low = 0, high = hiddenUTF16Spans.count - 1
         while low <= high {
             let mid = (low + high) / 2
@@ -144,8 +153,36 @@ extension TextKit2Engine {
 
     /// Recomputes hidden spans from the fold model — the ONLY caller of
     /// `setHiddenLineSpans` after Task 5; every fold mutation funnels here.
-    func refreshFoldLayout() {
+    internal func refreshFoldLayout() {
         setHiddenLineSpans(foldModel.hiddenLineSpans(in: buffer))
+    }
+
+    /// Same effect as `refreshFoldLayout()`, but safe to call from inside
+    /// `NSTextStorageDelegate.didProcessEditing` (`handleUserEdit`'s real
+    /// typing path): `NSTextStorage.replaceCharacters` invokes that
+    /// delegate callback synchronously, still on the stack, before AppKit
+    /// itself relayouts the edit — calling `relayoutForFoldChange()`
+    /// (`invalidateLayout`/`layoutViewport`, which enumerate the content
+    /// storage) from in there re-enters TextKit 2 mid-edit and trips
+    /// `NSTextContentStorageBreakOnEnumerateWhileEditing`. `apply(_:base:)`
+    /// never has this problem — it calls `setHiddenLineSpans` only after
+    /// `performEditingTransaction`'s closure has already returned — so it
+    /// keeps calling `refreshFoldLayout()` synchronously, unchanged.
+    ///
+    /// `hiddenUTF16Spans` itself (the state fold-aware fragments and
+    /// `foldModelForTesting`/`hiddenUTF16SpansForTesting` observe) is still
+    /// updated synchronously here — only the TextKit 2 relayout pass is
+    /// deferred, coalesced via `hasPendingDeferredFoldRelayout` so a burst
+    /// of edits before the hop fires still only relayouts once.
+    internal func refreshFoldLayoutDeferred() {
+        storeHiddenLineSpans(foldModel.hiddenLineSpans(in: buffer))
+        guard !hasPendingDeferredFoldRelayout else { return }
+        hasPendingDeferredFoldRelayout = true
+        deferredFoldRelayoutTask = Task { @MainActor [weak self] in
+            guard let self else { return }
+            hasPendingDeferredFoldRelayout = false
+            relayoutForFoldChange()
+        }
     }
 
     private var caretByteOffset: ByteOffset? {
@@ -156,7 +193,7 @@ extension TextKit2Engine {
     }
 
     /// Folds the innermost foldable region containing the caret line.
-    public func foldAtCaret() {
+    func foldAtCaret() {
         guard let caret = caretByteOffset else { return }
         let line = buffer.linePosition(of: caret).line
         guard let region = foldModel.foldableRegion(atLine: line) else { return }
@@ -165,12 +202,13 @@ extension TextKit2Engine {
     }
 
     /// Unfolds at the caret: innermost folded region containing the caret.
-    public func unfoldAtCaret() {
+    func unfoldAtCaret() {
         guard let caret = caretByteOffset else { return }
         // Innermost folded region whose first line or body contains the caret.
         let line = buffer.linePosition(of: caret).line
         guard let region = foldModel.foldableRegion(atLine: line),
-              foldModel.folded.contains(region.range) else {
+              foldModel.folded.contains(region.range)
+        else {
             foldModel.unfoldEnclosing(caret)
             refreshFoldLayout()
             return
@@ -179,31 +217,33 @@ extension TextKit2Engine {
         refreshFoldLayout()
     }
 
-    public func foldAll() {
+    func foldAll() {
         foldModel.foldAll()
         refreshFoldLayout()
     }
 
-    public func unfoldAll() {
+    func unfoldAll() {
         foldModel.unfoldAll()
         refreshFoldLayout()
     }
 
     /// Spec Fold Level N semantics (fold depth==n, unfold shallower).
-    public func foldLevel(_ level: Int) {
+    func foldLevel(_ level: Int) {
         foldModel.foldLevel(level)
         refreshFoldLayout()
     }
 
     /// Menu validation: is there a foldable region at the caret?
-    public var canFoldAtCaret: Bool {
+    var canFoldAtCaret: Bool {
         guard let caret = caretByteOffset else { return false }
         return foldModel.foldableRegion(atLine: buffer.linePosition(of: caret).line) != nil
     }
 
-    public var canUnfoldAtCaret: Bool {
+    var canUnfoldAtCaret: Bool {
         guard let caret = caretByteOffset else { return false }
-        if foldModel.isInsideHiddenText(caret, in: buffer) { return true }
+        if foldModel.isInsideHiddenText(caret, in: buffer) {
+            return true
+        }
         let line = buffer.linePosition(of: caret).line
         guard let region = foldModel.foldableRegion(atLine: line) else { return false }
         return foldModel.folded.contains(region.range)
@@ -215,8 +255,9 @@ extension TextKit2Engine {
     /// movement — unfolds the enclosing chain. Vertical arrow movement
     /// skips folds geometrically (zero-height fragments) and never
     /// triggers this.
-    func unfoldIfSelectionEnteredHiddenText() {
-        guard storage.length == buffer.utf16Count else { return } // mid-transaction guard, same as updateBracketHighlight
+    internal func unfoldIfSelectionEnteredHiddenText() {
+        guard storage.length == buffer.utf16Count
+        else { return } // mid-transaction guard, same as updateBracketHighlight
         guard let caret = caretByteOffset,
               foldModel.isInsideHiddenText(caret, in: buffer) else { return }
         foldModel.unfoldEnclosing(caret)

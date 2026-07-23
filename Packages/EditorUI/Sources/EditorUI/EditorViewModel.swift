@@ -108,17 +108,37 @@ public final class EditorViewModel {
     }
 
     /// Folds the innermost foldable region containing the caret line.
-    public func foldAtCaret() { engine.foldAtCaret() }
+    public func foldAtCaret() {
+        engine.foldAtCaret()
+    }
+
     /// Unfolds at the caret: innermost folded region containing the caret.
-    public func unfoldAtCaret() { engine.unfoldAtCaret() }
-    public func foldAll() { engine.foldAll() }
-    public func unfoldAll() { engine.unfoldAll() }
+    public func unfoldAtCaret() {
+        engine.unfoldAtCaret()
+    }
+
+    public func foldAll() {
+        engine.foldAll()
+    }
+
+    public func unfoldAll() {
+        engine.unfoldAll()
+    }
+
     /// Spec Fold Level N semantics (fold depth==n, unfold shallower).
-    public func foldLevel(_ level: Int) { engine.foldLevel(level) }
+    public func foldLevel(_ level: Int) {
+        engine.foldLevel(level)
+    }
+
     /// Menu validation: is there a foldable region at the caret?
-    public var canFoldAtCaret: Bool { engine.canFoldAtCaret }
+    public var canFoldAtCaret: Bool {
+        engine.canFoldAtCaret
+    }
+
     /// Menu validation: is there something to unfold at the caret?
-    public var canUnfoldAtCaret: Bool { engine.canUnfoldAtCaret }
+    public var canUnfoldAtCaret: Bool {
+        engine.canUnfoldAtCaret
+    }
 
     /// Applies a programmatic transaction: rope first, then mirror into
     /// the engine. `transaction.baseVersion` must equal the current

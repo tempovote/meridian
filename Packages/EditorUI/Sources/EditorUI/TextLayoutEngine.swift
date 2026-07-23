@@ -88,8 +88,13 @@ public extension TextLayoutEngine {
     func foldAll() {}
     func unfoldAll() {}
     func foldLevel(_ level: Int) {}
-    var canFoldAtCaret: Bool { false }
-    var canUnfoldAtCaret: Bool { false }
+    var canFoldAtCaret: Bool {
+        false
+    }
+
+    var canUnfoldAtCaret: Bool {
+        false
+    }
 
     /// Convenience overload preserving every existing call site — always
     /// restores selection, matching this method's original (pre-split-editor)
