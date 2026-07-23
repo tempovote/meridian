@@ -1,0 +1,2 @@
+(element) @fold
+(comment) @fold

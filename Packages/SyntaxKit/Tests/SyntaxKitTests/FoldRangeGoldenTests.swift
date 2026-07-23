@@ -72,15 +72,18 @@ struct FoldRangeGoldenTests {
         #expect(result.isEmpty)
     }
 
-    @Test func languageWithoutFoldQueryReturnsEmpty() async throws {
-        // Until Task 3 ships folds.scm for every grammar, any language
-        // without one must degrade to "no folding", never throw.
-        // (After Task 3, retarget this test at a hypothetical language by
-        // deleting — no: keep it meaningful by asserting the API contract
-        // through GrammarRegistry directly instead.)
+    @Test func everyGrammarBundlesAFoldQuery() async throws {
+        // Coverage guard: every registered grammar must bundle a working
+        // folds.scm — a missing or broken one degrades silently to "no
+        // folding" elsewhere, so assert it here where a regression is loud.
         let registry = GrammarRegistry()
-        _ = try await registry.grammar(for: "toml") // loads fine without folds.scm
-        let foldQuery = try await registry.foldQuery(for: "toml")
-        #expect(foldQuery == nil)
+        for languageID in [
+            "bash", "c", "cpp", "css", "go", "html", "java", "javascript",
+            "json", "markdown", "php", "python", "ruby", "rust", "swift",
+            "toml", "typescript", "xml", "yaml",
+        ] {
+            let query = try await registry.foldQuery(for: languageID)
+            #expect(query != nil, "missing or broken folds.scm for \(languageID)")
+        }
     }
 }
