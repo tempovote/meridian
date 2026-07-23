@@ -17,19 +17,21 @@ public actor SyntaxService {
         self.registry = registry
     }
 
+    /// Combined parse: highlight tokens + fold ranges from one tree.
     /// Parses (or incrementally re-parses, if `edit` and a prior tree
     /// for `documentID` both exist) `snapshot`, runs the language's
     /// highlight query over the whole resulting tree (whole-document
     /// scope this phase — see design spec Decision 4), and returns the
-    /// resulting token runs. `version` is echoed back to the caller's
-    /// own bookkeeping; this actor does not compare it against anything.
-    public func reparse(
+    /// resulting token runs plus fold ranges from the same tree (spec:
+    /// "no extra parse"). `version` is echoed back to the caller's own
+    /// bookkeeping; this actor does not compare it against anything.
+    public func parse(
         documentID: DocumentID,
         languageID: String,
         snapshot: TextBuffer,
         version: BufferVersion,
         edit: InputEdit?,
-    ) async throws -> [TokenRun] {
+    ) async throws -> ParseOutput {
         let (language, query) = try await registry.grammar(for: languageID)
 
         let parser: Parser
@@ -73,13 +75,93 @@ public actor SyntaxService {
         let namedRanges = cursor
             .filter { Self.predicatesPass(for: $0, snapshot: snapshot) }
             .highlights()
-        return namedRanges.map { namedRange in
+        let tokens = namedRanges.map { namedRange in
             TokenRun(
                 range: ByteOffset(Int(namedRange.tsRange.bytes.lowerBound)) ..<
                     ByteOffset(Int(namedRange.tsRange.bytes.upperBound)),
                 type: TokenType(captureName: namedRange.name),
             )
         }
+
+        let folds = try await extractFolds(languageID: languageID, tree: newTree, snapshot: snapshot)
+        return ParseOutput(tokens: tokens, folds: folds)
+    }
+
+    /// Existing API, preserved so the 22 golden-highlight test files and
+    /// incremental-equivalence tests stay untouched.
+    public func reparse(
+        documentID: DocumentID,
+        languageID: String,
+        snapshot: TextBuffer,
+        version: BufferVersion,
+        edit: InputEdit?,
+    ) async throws -> [TokenRun] {
+        try await parse(
+            documentID: documentID, languageID: languageID,
+            snapshot: snapshot, version: version, edit: edit,
+        ).tokens
+    }
+
+    /// Runs the language's fold query (if any) over `tree`, drops
+    /// sub-2-line regions, merges same-start-line regions keeping the
+    /// largest, and computes 1-based nesting depth by containment.
+    private func extractFolds(
+        languageID: String, tree: MutableTree, snapshot: TextBuffer,
+    ) async throws -> [FoldRange] {
+        guard let foldQuery = try await registry.foldQuery(for: languageID) else { return [] }
+        let cursor = foldQuery.execute(in: tree)
+        var byteRanges: [Range<ByteOffset>] = []
+        for match in cursor {
+            for capture in match.captures where capture.name == "fold" {
+                let byteRange = capture.node.byteRange
+                byteRanges.append(
+                    ByteOffset(Int(byteRange.lowerBound)) ..< ByteOffset(Int(byteRange.upperBound)),
+                )
+            }
+        }
+        // Map to lines, drop < 2-line regions.
+        var candidates: [FoldCandidate] = byteRanges.compactMap { range in
+            let startLine = snapshot.linePosition(of: range.lowerBound).line
+            let endLine = snapshot.linePosition(of: range.upperBound).line
+            guard endLine > startLine else { return nil }
+            return FoldCandidate(range: range, startLine: startLine, endLine: endLine)
+        }
+        // Merge same start line, keeping the largest (latest upperBound).
+        candidates.sort {
+            $0.startLine != $1.startLine
+                ? $0.startLine < $1.startLine
+                : $0.range.upperBound > $1.range.upperBound
+        }
+        var merged: [FoldCandidate] = []
+        for candidate in candidates where candidate.startLine != merged.last?.startLine {
+            merged.append(candidate)
+        }
+        // Depth by containment: sorted by (start asc, end desc), a stack of
+        // enclosing ends gives 1-based nesting depth.
+        var result: [FoldRange] = []
+        var enclosingEnds: [ByteOffset] = []
+        for candidate in merged {
+            while let last = enclosingEnds.last, last <= candidate.range.lowerBound {
+                enclosingEnds.removeLast()
+            }
+            enclosingEnds.append(candidate.range.upperBound)
+            result.append(FoldRange(
+                range: candidate.range,
+                startLine: candidate.startLine,
+                endLine: candidate.endLine,
+                depth: enclosingEnds.count,
+            ))
+        }
+        return result
+    }
+
+    /// A fold-query capture mapped to line coordinates, ahead of the final
+    /// depth pass. Not `FoldRange` itself: `depth` isn't known until the
+    /// containment scan below sees the whole (sorted, merged) sequence.
+    private struct FoldCandidate {
+        let range: Range<ByteOffset>
+        let startLine: Int
+        let endLine: Int
     }
 
     /// Evaluates `match`'s `#match?`/`#eq?`/... predicates against `snapshot`.
