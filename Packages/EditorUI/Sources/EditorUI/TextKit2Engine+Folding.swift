@@ -54,27 +54,74 @@ final class FoldAwareTextLayoutFragment: NSTextLayoutFragment {
 
 extension TextKit2Engine {
     /// Replaces the set of hidden line spans (0-based, end-exclusive) and
-    /// forces a viewport relayout. The single choke point for fold
-    /// visibility changes — later fold operations all funnel through here.
+    /// forces a fold-only relayout (see `relayoutForFoldChange` below). The
+    /// single choke point for fold visibility changes — later fold
+    /// operations all funnel through here.
     func setHiddenLineSpans(_ spans: [Range<Int>]) {
-        hiddenUTF16Spans = spans.compactMap { span in
-            guard span.lowerBound < buffer.lineCount else { return nil }
+        let converted: [Range<Int>] = spans.compactMap { span in
+            // An empty span (e.g. `0..<0`) hides nothing; `endLine` below
+            // would otherwise go negative and `byteRange(ofLine:)` would
+            // trap. Guard it out before any coordinate conversion.
+            guard !span.isEmpty, span.lowerBound < buffer.lineCount else { return nil }
             let startByte = buffer.byteRange(ofLine: span.lowerBound).lowerBound
-            let endLine = min(span.upperBound, buffer.lineCount) - 1
-            let endByte = buffer.byteRange(ofLine: endLine).upperBound
             let start = buffer.utf16Offset(of: startByte).value
-            let end = buffer.utf16Offset(of: endByte).value
+            let clampedUpperLine = min(span.upperBound, buffer.lineCount)
+            // `byteRange(ofLine:)` excludes a line's trailing `\n`, so using
+            // the *last hidden line's own* end would, for a blank last
+            // line, equal that line's start — collapsing the span to empty
+            // and leaving the blank line visible. Use the *next* line's
+            // start instead (or the buffer's end, if the span reaches the
+            // last line), which correctly includes the hidden lines'
+            // trailing newlines up to the first non-hidden paragraph.
+            let end = if clampedUpperLine < buffer.lineCount {
+                buffer.utf16Offset(of: buffer.byteRange(ofLine: clampedUpperLine).lowerBound).value
+            } else {
+                buffer.utf16Count
+            }
             return start ..< end
         }.sorted { $0.lowerBound < $1.lowerBound }
-        // `FoldAwareTextLayoutFragment.isFolded` re-derives its state from
-        // `hiddenUTF16Spans` on every access, so invalidating layout
-        // (forcing existing fragments to recompute their frames) is enough
-        // — no re-vend from the delegate is required or, per the class doc
-        // comment above, even obtainable here.
-        if let tlm = textView.textLayoutManager {
-            tlm.invalidateLayout(for: tlm.documentRange)
+        // Fold spans may come from callers (e.g. a future `FoldModel`) that
+        // don't guarantee disjointness — nested/overlapping regions are a
+        // legitimate input, not a caller bug. `isHiddenParagraph`'s binary
+        // search requires disjoint, sorted spans to be correct, so merge
+        // overlapping/adjacent spans here, once, rather than pushing that
+        // requirement onto every caller.
+        hiddenUTF16Spans = Self.mergeSortedSpans(converted)
+        relayoutForFoldChange()
+    }
+
+    /// Merges overlapping or adjacent ranges in an already-sorted-by-
+    /// `lowerBound` array into the minimal disjoint set. `adjacent` here
+    /// means touching (`a.upperBound == b.lowerBound`), not just
+    /// overlapping — folding lines `0..<2` and `2..<4` should coalesce into
+    /// one hidden run, not leave a zero-width gap `isHiddenParagraph` could
+    /// disagree about.
+    static func mergeSortedSpans(_ sorted: [Range<Int>]) -> [Range<Int>] {
+        var merged: [Range<Int>] = []
+        for span in sorted {
+            if let last = merged.last, span.lowerBound <= last.upperBound {
+                merged[merged.count - 1] = last.lowerBound ..< Swift.max(last.upperBound, span.upperBound)
+            } else {
+                merged.append(span)
+            }
         }
-        refreshViewportLayout()
+        return merged
+    }
+
+    /// A lighter relayout than `refreshViewportLayout()`: invalidates
+    /// layout and re-lays-out only the current viewport, without
+    /// `ensureLayout(for: documentRange)`. Folding must not force a
+    /// full-document layout pass on every toggle — that would defeat
+    /// TextKit 2's viewport laziness on large files, turning an O(visible
+    /// lines) operation into O(document lines). `refreshViewportLayout()`
+    /// itself is intentionally left alone: the split-pane fresh-frame nudge
+    /// it exists for genuinely needs the full-document `ensureLayout`.
+    private func relayoutForFoldChange() {
+        guard let tlm = textView.textLayoutManager else { return }
+        tlm.invalidateLayout(for: tlm.documentRange)
+        tlm.textViewportLayoutController.layoutViewport()
+        textView.needsDisplay = true
+        rulerView?.needsDisplay = true
     }
 
     /// True when the paragraph starting at UTF-16 offset `offset` lies in a

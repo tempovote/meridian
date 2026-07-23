@@ -13,7 +13,10 @@ import ThemeKit
 public final class TextKit2Engine: NSObject, TextLayoutEngine {
     private let scrollView: NSScrollView
     let textView: MeridianTextView
-    private var rulerView: LineNumberRulerView?
+    /// Internal, not private: `TextKit2Engine+Folding.swift`'s lighter
+    /// fold-only relayout needs to invalidate the ruler too, without going
+    /// through `refreshViewportLayout()` (see that method's doc comment).
+    var rulerView: LineNumberRulerView?
     /// The engine-local mirror snapshot. Invariant: equals the storage's
     /// string after every load/apply/user edit. Only ever touched from
     /// within `MainActor.assumeIsolated` (directly, or via the `@MainActor`
