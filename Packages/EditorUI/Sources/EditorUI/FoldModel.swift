@@ -159,7 +159,9 @@ public struct FoldModel: Equatable {
     /// 0-based end-exclusive line spans currently hidden, merged, derived
     /// from `folded` against the CURRENT buffer (lines computed fresh —
     /// never cached, so post-edit line drift can't desync). Feed straight
-    /// into `TextKit2Engine.setHiddenLineSpans(_:)`.
+    /// into `TextKit2Engine.setHiddenLineSpans(_:)`. Returns a strictly
+    /// sorted and disjoint array of ranges (`Range<Int>`), co-dependent with
+    /// `TextKit2Engine.hiddenUTF16Spans`'s binary search requirement.
     public func hiddenLineSpans(in buffer: TextBuffer) -> [Range<Int>] {
         // Hidden = the region's lines after its first, i.e.
         // startLine+1 ..< endLine+1 (end-exclusive).
@@ -185,11 +187,26 @@ public struct FoldModel: Equatable {
     /// Gutter mark for a line: none / foldable / folded. `buffer` is
     /// accepted for symmetry with `hiddenLineSpans`/`isInsideHiddenText`
     /// (byte-range foldable state, line-based query) but isn't needed here
-    /// — `foldable.startLine` is already the line-space anchor. O(1) via
-    /// `foldableByStartLine` (see its doc comment).
+    /// — `foldable.startLine` is already the line-space anchor. O(1) start-line
+    /// lookup via `foldableByStartLine` and O(log n) folded check via binary
+    /// search over `folded` (which is kept sorted by `lowerBound`).
     public func gutterMark(atLine line: Int, in _: TextBuffer) -> FoldGutterMark {
         guard let region = foldableByStartLine[line] else { return .none }
-        return folded.contains(region.range) ? .folded : .foldable
+        let targetStart = region.range.lowerBound
+        var low = 0
+        var high = folded.count - 1
+        while low <= high {
+            let mid = (low + high) / 2
+            let midStart = folded[mid].lowerBound
+            if midStart == targetStart {
+                return folded[mid] == region.range ? .folded : .foldable
+            } else if midStart < targetStart {
+                low = mid + 1
+            } else {
+                high = mid - 1
+            }
+        }
+        return .foldable
     }
 
     /// Innermost folded region whose HIDDEN lines (its body, i.e. lines

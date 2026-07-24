@@ -116,4 +116,62 @@ final class DocumentAndEditorPerfTests: XCTestCase {
             )
         }
     }
+
+    @MainActor
+    func testFoldPerformanceAtScale() throws {
+        let regionCount = 50_000
+        var lines: [String] = []
+        lines.reserveCapacity(regionCount * 2)
+        var foldRanges: [FoldRange] = []
+        foldRanges.reserveCapacity(regionCount)
+
+        var byteOffset = 0
+        for i in 0 ..< regionCount {
+            let startLine = i * 2
+            let endLine = startLine + 1
+            let line1 = "{\n"
+            let line2 = "}\n"
+            let rangeStart = ByteOffset(byteOffset)
+            let rangeEnd = ByteOffset(byteOffset + line1.utf8.count + line2.utf8.count - 1)
+            lines.append(line1)
+            lines.append(line2)
+            byteOffset += line1.utf8.count + line2.utf8.count
+            foldRanges.append(FoldRange(
+                range: rangeStart ..< rangeEnd,
+                startLine: startLine,
+                endLine: endLine,
+                depth: 1
+            ))
+        }
+
+        let buffer = TextBuffer(lines.joined())
+        var model = FoldModel()
+        model.updateFoldable(foldRanges)
+        model.foldAll()
+
+        let clock = ContinuousClock()
+        let start = clock.now
+
+        let hiddenSpans = model.hiddenLineSpans(in: buffer)
+        XCTAssertEqual(hiddenSpans.count, regionCount)
+
+        var foldedMarkCount = 0
+        for line in 0 ..< (regionCount * 2) {
+            if model.gutterMark(atLine: line, in: buffer) == .folded {
+                foldedMarkCount += 1
+            }
+        }
+        XCTAssertEqual(foldedMarkCount, regionCount)
+
+        let duration = start.duration(to: clock.now)
+
+        if !Self.isDebugBuild {
+            let scale = Self.scale
+            let budget = Duration.milliseconds(200 * scale)
+            XCTAssertLessThan(
+                duration, budget,
+                "Fold at scale performance regressed: \(duration) (budget: \(budget))",
+            )
+        }
+    }
 }

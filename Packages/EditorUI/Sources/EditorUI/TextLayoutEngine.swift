@@ -75,6 +75,8 @@ public protocol TextLayoutEngine: AnyObject {
     var canFoldAtCaret: Bool { get }
     /// Menu validation: is there something to unfold at the caret?
     var canUnfoldAtCaret: Bool { get }
+    var canFoldAll: Bool { get }
+    var canUnfoldAll: Bool { get }
 }
 
 public extension TextLayoutEngine {
@@ -93,6 +95,14 @@ public extension TextLayoutEngine {
     }
 
     var canUnfoldAtCaret: Bool {
+        false
+    }
+
+    var canFoldAll: Bool {
+        false
+    }
+
+    var canUnfoldAll: Bool {
         false
     }
 

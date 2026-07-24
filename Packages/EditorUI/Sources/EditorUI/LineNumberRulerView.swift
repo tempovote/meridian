@@ -166,8 +166,13 @@ public final class LineNumberRulerView: NSRulerView {
 
         if isFirstOfLine, let mark = foldMarkProvider?(linePos.line), mark != .none {
             let symbol = mark == .folded ? "▸" : "▾"
-            NSAttributedString(string: symbol, attributes: context.textAttributes)
-                .draw(at: NSPoint(x: ruleThickness - Self.chevronBandWidth + 2, y: drawY))
+            let chevronFont = NSFont.systemFont(ofSize: font.pointSize + 2, weight: .regular)
+            var chevronAttr = context.textAttributes
+            chevronAttr[.font] = chevronFont
+            let chevronSize = (symbol as NSString).size(withAttributes: chevronAttr)
+            let chevronY = fragmentRectInRuler.minY + (fragmentRectInRuler.height - chevronSize.height) / 2
+            NSAttributedString(string: symbol, attributes: chevronAttr)
+                .draw(at: NSPoint(x: ruleThickness - Self.chevronBandWidth + 1, y: chevronY))
         }
     }
 
@@ -204,6 +209,10 @@ public final class LineNumberRulerView: NSRulerView {
             from: textLayoutManager.documentRange.location, to: fragment.rangeInElement.location,
         )
         let line = buffer.linePosition(of: buffer.byteOffset(of: UTF16Offset(offset))).line
+        guard let mark = foldMarkProvider?(line), mark != .none else {
+            super.mouseDown(with: event)
+            return
+        }
         onFoldChevronClick?(line)
     }
 }

@@ -663,6 +663,20 @@ final class MeridianDocument: NSDocument {
         if menuItem.action == #selector(unfoldCurrentRegion(_:)) {
             return focusedViewModel?.canUnfoldAtCaret == true
         }
+        if menuItem.action == #selector(foldAll(_:)) {
+            return focusedViewModel?.canFoldAll == true
+        }
+        if menuItem.action == #selector(unfoldAll(_:)) {
+            return focusedViewModel?.canUnfoldAll == true
+        }
+        if menuItem.action == #selector(foldLevel1(_:)) ||
+            menuItem.action == #selector(foldLevel2(_:)) ||
+            menuItem.action == #selector(foldLevel3(_:)) ||
+            menuItem.action == #selector(foldLevel4(_:)) ||
+            menuItem.action == #selector(foldLevel5(_:))
+        {
+            return focusedViewModel?.canFoldAll == true
+        }
         return super.validateMenuItem(menuItem)
     }
 

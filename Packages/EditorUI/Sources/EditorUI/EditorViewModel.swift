@@ -140,6 +140,16 @@ public final class EditorViewModel {
         engine.canUnfoldAtCaret
     }
 
+    /// Menu validation: are there foldable regions in the document?
+    public var canFoldAll: Bool {
+        engine.canFoldAll
+    }
+
+    /// Menu validation: are there folded regions in the document?
+    public var canUnfoldAll: Bool {
+        engine.canUnfoldAll
+    }
+
     /// Applies a programmatic transaction: rope first, then mirror into
     /// the engine. `transaction.baseVersion` must equal the current
     /// buffer version.

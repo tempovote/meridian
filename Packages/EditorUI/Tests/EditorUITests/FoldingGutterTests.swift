@@ -151,4 +151,34 @@ struct FoldingGutterTests {
         #expect(engine.foldModelForTesting.folded.count == 1)
         #expect(!engine.hiddenUTF16SpansForTesting.isEmpty)
     }
+
+    @Test func mouseDownOnBodyLineChevronBandDoesNotFold() async throws {
+        let engine = makeEngine()
+        engine.languageID = "swift"
+        engine.view.frame = NSRect(x: 0, y: 0, width: 600, height: 400)
+        engine.load(buffer: TextBuffer("func f() {\n    let a = 1\n}\n"))
+        await engine.waitForParseForTesting()
+
+        let window = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 600, height: 400),
+            styleMask: [.titled], backing: .buffered, defer: false,
+        )
+        window.contentView = engine.view
+
+        let ruler = engine.rulerViewForTesting
+        var clickedLine: Int?
+        ruler.onFoldChevronClick = { clickedLine = $0 }
+
+        // Inside the reserved trailing chevron strip on line 1's row (body line with no chevron).
+        let clickPoint = NSPoint(x: ruler.ruleThickness - 4, y: 25)
+        let screenPoint = ruler.convert(clickPoint, to: nil)
+        let event = try #require(NSEvent.mouseEvent(
+            with: .leftMouseDown, location: screenPoint, modifierFlags: [], timestamp: 0,
+            windowNumber: window.windowNumber, context: nil, eventNumber: 0, clickCount: 1, pressure: 1,
+        ))
+        ruler.mouseDown(with: event)
+
+        #expect(clickedLine == nil)
+        #expect(engine.foldModelForTesting.folded.isEmpty)
+    }
 }

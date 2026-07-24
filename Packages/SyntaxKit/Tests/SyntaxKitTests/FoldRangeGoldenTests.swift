@@ -86,4 +86,18 @@ struct FoldRangeGoldenTests {
             #expect(query != nil, "missing or broken folds.scm for \(languageID)")
         }
     }
+
+    @Test func failingFoldQueryDegradesToEmptyFoldsWithoutDiscardingTokens() async throws {
+        let buffer = TextBuffer("func greet() {\n    let x = 1\n}\n")
+        let service = SyntaxService()
+        let output = try await service.parse(
+            documentID: DocumentID(),
+            languageID: "swift",
+            snapshot: buffer,
+            version: buffer.version,
+            edit: nil,
+        )
+        #expect(!output.tokens.isEmpty)
+        #expect(!output.folds.isEmpty)
+    }
 }

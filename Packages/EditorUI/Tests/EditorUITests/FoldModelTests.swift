@@ -228,4 +228,57 @@ struct FoldModelTests {
             }
         }
     }
+
+    @Test func multiEditTransactionShiftsAndUnfoldsFoldedRegions() throws {
+        var model = FoldModel()
+        let r1 = region(2, 3) // bytes 12 ..< 23
+        let r2 = region(6, 7) // bytes 36 ..< 47
+        model.updateFoldable([r1, r2])
+        model.fold(r1)
+        model.fold(r2)
+
+        #expect(model.folded == [r1.range, r2.range])
+
+        // Multi-edit transaction with two non-overlapping edits:
+        // Edit A at byte 0 (+2 bytes) shifts r1 (+2) and r2 (+2)
+        // Edit B at byte 30 (+3 bytes) is after r1, shifts r2 (+3)
+        let txShiftBoth = EditTransaction(
+            baseVersion: buffer.version,
+            edits: [
+                Edit(range: ByteOffset(0) ..< ByteOffset(0), replacement: "XY"),
+                Edit(range: ByteOffset(30) ..< ByteOffset(30), replacement: "123"),
+            ],
+            selectionBefore: SelectionSet(caretAt: ByteOffset(0)),
+            selectionAfter: SelectionSet(caretAt: ByteOffset(0)),
+            coalescingKey: nil,
+            origin: .user,
+        )
+
+        model.apply(txShiftBoth)
+        // r1 (originally 12..<23) shifted by +2 -> 14..<25.
+        // r2 (originally 36..<47) shifted by +2 and +3 -> 41..<52.
+        #expect(model.folded == [
+            ByteOffset(14) ..< ByteOffset(25),
+            ByteOffset(41) ..< ByteOffset(52),
+        ])
+
+        // Multi-edit transaction where one edit overlaps r1 and one shifts r2:
+        // Edit C at byte 20 (inside r1: 14..<25) -> unfolds r1
+        // Edit D at byte 35 (before r2: 41..<52) -> shifts r2 (+1 byte)
+        let txUnfoldOne = EditTransaction(
+            baseVersion: buffer.version,
+            edits: [
+                Edit(range: ByteOffset(20) ..< ByteOffset(20), replacement: "Z"),
+                Edit(range: ByteOffset(35) ..< ByteOffset(35), replacement: "Q"),
+            ],
+            selectionBefore: SelectionSet(caretAt: ByteOffset(20)),
+            selectionAfter: SelectionSet(caretAt: ByteOffset(21)),
+            coalescingKey: nil,
+            origin: .user,
+        )
+
+        model.apply(txUnfoldOne)
+        // r1 unfolded because of Edit C overlap. r2 shifted by +1 from Edit C (at 20) and +1 from Edit D (at 35) -> 43..<54.
+        #expect(model.folded == [ByteOffset(43) ..< ByteOffset(54)])
+    }
 }

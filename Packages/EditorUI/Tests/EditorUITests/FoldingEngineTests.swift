@@ -223,4 +223,32 @@ struct FoldingEngineTests {
         engine.apply(tx, base: base, restoreSelection: false)
         #expect(engine.foldModelForTesting.folded.isEmpty)
     }
+
+    @Test func coalescedDeferredFoldRelayoutFiresSingleRelayoutForBurstEdits() async {
+        let engine = await makeSwiftEngine()
+        engine.setSelection(SelectionSet(caretAt: ByteOffset(0)), in: engine.snapshotForTesting)
+        engine.foldAtCaret()
+        #expect(!engine.foldModelForTesting.folded.isEmpty)
+
+        // Rapid user typing edits inside the fold body schedule deferred fold relayout passes.
+        let utf16 = engine.snapshotForTesting.utf16Offset(of: ByteOffset(15)).value
+        engine.simulateUserTypingForTesting(replacing: NSRange(location: utf16, length: 0), with: "a")
+        engine.simulateUserTypingForTesting(replacing: NSRange(location: utf16 + 1, length: 0), with: "b")
+
+        await engine.waitForDeferredFoldRelayoutForTesting()
+        // Editing into the folded region unfolds it, and the deferred task completes safely.
+        #expect(engine.foldModelForTesting.folded.isEmpty)
+    }
+
+    @Test func foldAtCaretWorksWithNonEmptySelection() async {
+        let engine = await makeSwiftEngine()
+        // Select range 0..<5 ("func ")
+        engine.setSelection(SelectionSet(ranges: [ByteOffset(0) ..< ByteOffset(5)]), in: engine.snapshotForTesting)
+        #expect(engine.canFoldAtCaret)
+        engine.foldAtCaret()
+        #expect(engine.foldModelForTesting.folded.count == 1)
+        #expect(engine.canUnfoldAtCaret)
+        engine.unfoldAtCaret()
+        #expect(engine.foldModelForTesting.folded.isEmpty)
+    }
 }

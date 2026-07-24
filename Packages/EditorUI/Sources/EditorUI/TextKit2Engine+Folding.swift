@@ -9,7 +9,7 @@ import DocumentCore
 public extension TextKit2Engine {
     private var caretByteOffset: ByteOffset? {
         let ranges = textView.selectedRanges.map(\.rangeValue)
-        guard ranges.count == 1, let sel = ranges.first, sel.length == 0,
+        guard ranges.count == 1, let sel = ranges.first,
               sel.location <= buffer.utf16Count else { return nil }
         return buffer.byteOffset(of: UTF16Offset(sel.location))
     }
@@ -72,6 +72,14 @@ public extension TextKit2Engine {
         let line = buffer.linePosition(of: caret).line
         guard let region = foldModel.foldableRegion(atLine: line) else { return false }
         return foldModel.folded.contains(region.range)
+    }
+
+    var canFoldAll: Bool {
+        !foldModel.foldable.isEmpty
+    }
+
+    var canUnfoldAll: Bool {
+        !foldModel.folded.isEmpty
     }
 
     /// Caret-in-hidden-text guard (spec: "caret/edits never land inside

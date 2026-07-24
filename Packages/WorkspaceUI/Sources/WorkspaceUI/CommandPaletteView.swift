@@ -103,7 +103,7 @@ public struct CommandPaletteView: View {
     /// than an explicit modifier for menu items that don't otherwise need
     /// a custom mask. Uppercasing the key for display without accounting
     /// for this would make Find Next and Find Previous both read "⌘G".
-    private static func shortcutDisplayString(modifierMask: NSEvent.ModifierFlags, keyEquivalent: String) -> String {
+    static func shortcutDisplayString(modifierMask: NSEvent.ModifierFlags, keyEquivalent: String) -> String {
         let impliesShift = keyEquivalent != keyEquivalent.lowercased()
         var glyphs = ""
         if modifierMask.contains(.control) {
@@ -118,6 +118,13 @@ public struct CommandPaletteView: View {
         if modifierMask.contains(.command) {
             glyphs += "⌘"
         }
-        return glyphs + keyEquivalent.uppercased()
+        let keyGlyph: String = switch keyEquivalent {
+        case String(UnicodeScalar(NSLeftArrowFunctionKey)!): "←"
+        case String(UnicodeScalar(NSRightArrowFunctionKey)!): "→"
+        case String(UnicodeScalar(NSUpArrowFunctionKey)!): "↑"
+        case String(UnicodeScalar(NSDownArrowFunctionKey)!): "↓"
+        default: keyEquivalent.uppercased()
+        }
+        return glyphs + keyGlyph
     }
 }
