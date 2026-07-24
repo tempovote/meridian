@@ -634,50 +634,41 @@ final class MeridianDocument: NSDocument {
     }
 
     override func validateMenuItem(_ menuItem: NSMenuItem) -> Bool {
-        if menuItem.action == #selector(findNext(_:)) || menuItem.action == #selector(findPrevious(_:)) {
+        switch menuItem.action {
+        case #selector(findNext(_:)), #selector(findPrevious(_:)):
             return !(findBarViewModel?.matches.isEmpty ?? true)
-        }
-        if menuItem.action == #selector(toggleLineNumbers(_:)) {
+        case #selector(toggleLineNumbers(_:)):
             menuItem.state = (focusedViewModel?.isGutterVisible == true) ? .on : .off
             return true
-        }
-        if menuItem.action == #selector(toggleSoftWrap(_:)) {
+        case #selector(toggleSoftWrap(_:)):
             menuItem.state = (focusedViewModel?.isSoftWrapEnabled == true) ? .on : .off
             return true
-        }
-        if menuItem.action == #selector(toggleStatusBar(_:)) {
+        case #selector(toggleStatusBar(_:)):
             menuItem.state = (focusedViewModel?.isStatusBarVisible == true) ? .on : .off
             return true
-        }
-        if menuItem.action == #selector(splitHorizontally(_:)) {
+        case #selector(splitHorizontally(_:)):
             menuItem.state = (currentSplitOrientation == .horizontal) ? .on : .off
             return true
-        }
-        if menuItem.action == #selector(splitVertically(_:)) {
+        case #selector(splitVertically(_:)):
             menuItem.state = (currentSplitOrientation == .vertical) ? .on : .off
             return true
-        }
-        if menuItem.action == #selector(foldCurrentRegion(_:)) {
+        case #selector(foldCurrentRegion(_:)):
             return focusedViewModel?.canFoldAtCaret == true
-        }
-        if menuItem.action == #selector(unfoldCurrentRegion(_:)) {
+        case #selector(unfoldCurrentRegion(_:)):
             return focusedViewModel?.canUnfoldAtCaret == true
-        }
-        if menuItem.action == #selector(foldAll(_:)) {
+        case #selector(foldAll(_:)):
             return focusedViewModel?.canFoldAll == true
-        }
-        if menuItem.action == #selector(unfoldAll(_:)) {
+        case #selector(unfoldAll(_:)):
             return focusedViewModel?.canUnfoldAll == true
-        }
-        if menuItem.action == #selector(foldLevel1(_:)) ||
-            menuItem.action == #selector(foldLevel2(_:)) ||
-            menuItem.action == #selector(foldLevel3(_:)) ||
-            menuItem.action == #selector(foldLevel4(_:)) ||
-            menuItem.action == #selector(foldLevel5(_:))
-        {
+        case #selector(foldLevel1(_:)),
+             #selector(foldLevel2(_:)),
+             #selector(foldLevel3(_:)),
+             #selector(foldLevel4(_:)),
+             #selector(foldLevel5(_:)):
             return focusedViewModel?.canFoldAll == true
+        default:
+            return super.validateMenuItem(menuItem)
         }
-        return super.validateMenuItem(menuItem)
     }
 
     /// One NSUndoManager registration per new UndoStack entry, replayed
