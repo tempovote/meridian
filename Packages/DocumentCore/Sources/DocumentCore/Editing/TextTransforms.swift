@@ -168,6 +168,98 @@ public enum TextTransforms {
         )
     }
 
+    /// Sorts lines covered by `selection` (or entire buffer if selection is empty/caret).
+    public static func sortLines(
+        in buffer: TextBuffer,
+        selection: SelectionSet = .empty,
+        ascending: Bool = true,
+        caseSensitive: Bool = true,
+    ) -> EditTransaction {
+        let (startByte, endByte) = coveredLineByteBounds(in: buffer, selection: selection)
+        let blockText = buffer.slice(startByte ..< endByte)
+        let hasTrailingNewline = blockText.hasSuffix("\n")
+        var lines = blockText.components(separatedBy: "\n")
+        if hasTrailingNewline, lines.last == "" {
+            lines.removeLast()
+        }
+
+        lines.sort { lineA, lineB in
+            let cmp: ComparisonResult = if caseSensitive {
+                lineA.compare(lineB)
+            } else {
+                lineA.caseInsensitiveCompare(lineB)
+            }
+            return ascending ? cmp == .orderedAscending : cmp == .orderedDescending
+        }
+
+        var sortedText = lines.joined(separator: "\n")
+        if hasTrailingNewline {
+            sortedText.append("\n")
+        }
+
+        if sortedText == blockText {
+            return emptyTransaction(in: buffer, selection: selection)
+        }
+
+        let edit = Edit(range: startByte ..< endByte, replacement: sortedText)
+        let newEndByte = ByteOffset(startByte.value + sortedText.utf8.count)
+        let selectionAfter = SelectionSet(ranges: [startByte ..< newEndByte])
+        return EditTransaction(
+            baseVersion: buffer.version,
+            edits: [edit],
+            selectionBefore: selection,
+            selectionAfter: selectionAfter,
+            origin: .user,
+        )
+    }
+
+    /// Removes duplicate lines covered by `selection` (or entire buffer if selection is empty/caret), keeping first
+    /// occurrence.
+    public static func deduplicateLines(
+        in buffer: TextBuffer,
+        selection: SelectionSet = .empty,
+        caseSensitive: Bool = true,
+    ) -> EditTransaction {
+        let (startByte, endByte) = coveredLineByteBounds(in: buffer, selection: selection)
+        let blockText = buffer.slice(startByte ..< endByte)
+        let hasTrailingNewline = blockText.hasSuffix("\n")
+        var lines = blockText.components(separatedBy: "\n")
+        if hasTrailingNewline, lines.last == "" {
+            lines.removeLast()
+        }
+
+        var seen = Set<String>()
+        var dedupedLines: [String] = []
+
+        for line in lines {
+            let key = caseSensitive ? line : line.lowercased()
+            if !seen.contains(key) {
+                seen.insert(key)
+                dedupedLines.append(line)
+            }
+        }
+
+        var dedupedText = dedupedLines.joined(separator: "\n")
+        if hasTrailingNewline {
+            dedupedText.append("\n")
+        }
+
+        if dedupedText == blockText {
+            return emptyTransaction(in: buffer, selection: selection)
+        }
+
+        let edit = Edit(range: startByte ..< endByte, replacement: dedupedText)
+        let newEndByte = ByteOffset(startByte.value + dedupedText.utf8.count)
+        let selectionAfter = SelectionSet(ranges: [startByte ..< newEndByte])
+        return EditTransaction(
+            baseVersion: buffer.version,
+            edits: [edit],
+            selectionBefore: selection,
+            selectionAfter: selectionAfter,
+            origin: .user,
+        )
+    }
+
     // MARK: - Private Helpers
 
     private static func emptyTransaction(in buffer: TextBuffer, selection: SelectionSet = .empty) -> EditTransaction {
@@ -182,7 +274,7 @@ public enum TextTransforms {
 
     private static func coveredLineIndices(in buffer: TextBuffer, selection: SelectionSet) -> (start: Int, end: Int) {
         guard let primary = selection.ranges.first else {
-            return (0, 0)
+            return (0, max(0, buffer.lineCount - 1))
         }
         let startLine = buffer.linePosition(of: primary.lowerBound).line
         let endLine = buffer.linePosition(of: primary.upperBound).line

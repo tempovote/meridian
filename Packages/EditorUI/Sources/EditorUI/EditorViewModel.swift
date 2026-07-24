@@ -1,5 +1,7 @@
 import DocumentCore
+import Foundation
 import Observation
+import SearchKit
 
 /// A single pane's view onto a document: owns this pane's
 /// ``TextLayoutEngine`` and per-pane display settings, and delegates all
@@ -148,6 +150,147 @@ public final class EditorViewModel {
     /// Menu validation: are there folded regions in the document?
     public var canUnfoldAll: Bool {
         engine.canUnfoldAll
+    }
+
+    // MARK: - Multi-Cursor & Selection Operations
+
+    /// Adds a caret on the line directly above each existing selection range/caret.
+    public func addCaretAbove() {
+        var newRanges = selection.ranges
+        for range in selection.ranges {
+            let pos = buffer.linePosition(of: range.lowerBound)
+            if pos.line > 0 {
+                let targetLine = pos.line - 1
+                let lineRange = buffer.byteRange(ofLine: targetLine)
+                let startUTF16 = buffer.utf16Offset(of: lineRange.lowerBound).value
+                let endUTF16 = buffer.utf16Offset(of: lineRange.upperBound).value
+                let maxCol = max(0, endUTF16 - startUTF16)
+                let col = min(pos.utf16Column, maxCol)
+                let targetByte = buffer.byteOffset(of: LinePosition(line: targetLine, utf16Column: col))
+                newRanges.append(targetByte ..< targetByte)
+            }
+        }
+        setSelection(SelectionSet.normalized(newRanges))
+    }
+
+    /// Adds a caret on the line directly below each existing selection range/caret.
+    public func addCaretBelow() {
+        var newRanges = selection.ranges
+        for range in selection.ranges {
+            let pos = buffer.linePosition(of: range.lowerBound)
+            if pos.line + 1 < buffer.lineCount {
+                let targetLine = pos.line + 1
+                let lineRange = buffer.byteRange(ofLine: targetLine)
+                let startUTF16 = buffer.utf16Offset(of: lineRange.lowerBound).value
+                let endUTF16 = buffer.utf16Offset(of: lineRange.upperBound).value
+                let maxCol = max(0, endUTF16 - startUTF16)
+                let col = min(pos.utf16Column, maxCol)
+                let targetByte = buffer.byteOffset(of: LinePosition(line: targetLine, utf16Column: col))
+                newRanges.append(targetByte ..< targetByte)
+            }
+        }
+        setSelection(SelectionSet.normalized(newRanges))
+    }
+
+    /// Finds and selects the next occurrence of the current selection (or word under primary caret).
+    public func selectNextOccurrence() {
+        guard let (query, searchStart) = currentQueryAndSearchStart() else { return }
+        if let match = findNextOccurrence(of: query, startingFrom: searchStart) {
+            let newRanges = selection.ranges + [match]
+            setSelection(SelectionSet.normalized(newRanges))
+        }
+    }
+
+    /// Unselects the primary range and selects the next occurrence instead.
+    public func skipAndAddNextOccurrence() {
+        guard let (query, searchStart) = currentQueryAndSearchStart() else { return }
+        if let match = findNextOccurrence(of: query, startingFrom: searchStart) {
+            var newRanges = selection.ranges
+            if !newRanges.isEmpty {
+                newRanges.removeLast()
+            }
+            newRanges.append(match)
+            setSelection(SelectionSet.normalized(newRanges))
+        }
+    }
+
+    /// Finds and selects all occurrences of the current selection (or word under primary caret).
+    public func selectAllOccurrences() {
+        guard let (query, _) = currentQueryAndSearchStart() else { return }
+        let matches = findAllOccurrences(of: query)
+        if !matches.isEmpty {
+            setSelection(SelectionSet.normalized(matches))
+        }
+    }
+
+    /// Sets a rectangular column selection across lines from `startLine` to `endLine` between `startCol` and `endCol`.
+    public func selectColumn(fromLine startLine: Int, startCol: Int, toLine endLine: Int, endCol: Int) {
+        let minLine = max(0, min(startLine, endLine))
+        let maxLine = min(buffer.lineCount - 1, max(startLine, endLine))
+        let minCol = min(startCol, endCol)
+        let maxCol = max(startCol, endCol)
+
+        var newRanges: [Range<ByteOffset>] = []
+        for line in minLine ... maxLine {
+            let lineRange = buffer.byteRange(ofLine: line)
+            let lineMaxCol = buffer.linePosition(of: lineRange.upperBound).utf16Column
+            let colStart = min(minCol, lineMaxCol)
+            let colEnd = min(maxCol, lineMaxCol)
+
+            let byteStart = buffer.byteOffset(of: LinePosition(line: line, utf16Column: colStart))
+            let byteEnd = buffer.byteOffset(of: LinePosition(line: line, utf16Column: colEnd))
+            newRanges.append(byteStart ..< byteEnd)
+        }
+        setSelection(SelectionSet.normalized(newRanges))
+    }
+
+    private func currentQueryAndSearchStart() -> (query: String, searchStart: ByteOffset)? {
+        let currentSelection = selection
+        guard let primaryRange = currentSelection.ranges.last else { return nil }
+
+        if !primaryRange.isEmpty {
+            let start = buffer.utf16Offset(of: primaryRange.lowerBound).value
+            let end = buffer.utf16Offset(of: primaryRange.upperBound).value
+            let nsText = buffer.string as NSString
+            guard start < nsText.length, end <= nsText.length, start < end else { return nil }
+            let query = nsText.substring(with: NSRange(location: start, length: end - start))
+            return (query, primaryRange.upperBound)
+        } else {
+            let caret = primaryRange.lowerBound
+            let text = buffer.string
+            let nsText = text as NSString
+            let utf16Caret = buffer.utf16Offset(of: caret).value
+            guard nsText.length > 0 else { return nil }
+
+            var start = min(utf16Caret, nsText.length)
+            while start > 0 {
+                let char = nsText.character(at: start - 1)
+                guard let scalar = UnicodeScalar(char),
+                      CharacterSet.alphanumerics.contains(scalar) || scalar == "_" else { break }
+                start -= 1
+            }
+            var end = min(utf16Caret, nsText.length)
+            while end < nsText.length {
+                let char = nsText.character(at: end)
+                guard let scalar = UnicodeScalar(char),
+                      CharacterSet.alphanumerics.contains(scalar) || scalar == "_" else { break }
+                end += 1
+            }
+            guard end > start else { return nil }
+            let query = nsText.substring(with: NSRange(location: start, length: end - start))
+            let endByte = buffer.byteOffset(of: UTF16Offset(end))
+            return (query, endByte)
+        }
+    }
+
+    private func findNextOccurrence(of query: String, startingFrom offset: ByteOffset) -> Range<ByteOffset>? {
+        let searchEngine = SearchEngine()
+        return searchEngine.findNext(query: query, startingAt: offset, in: buffer, options: [.caseSensitive])?.range
+    }
+
+    private func findAllOccurrences(of query: String) -> [Range<ByteOffset>] {
+        let searchEngine = SearchEngine()
+        return searchEngine.findAll(query: query, in: buffer, options: [.caseSensitive]).map(\.range)
     }
 
     /// Applies a programmatic transaction: rope first, then mirror into

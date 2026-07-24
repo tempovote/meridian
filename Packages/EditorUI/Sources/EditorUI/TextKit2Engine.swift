@@ -159,10 +159,114 @@ public final class TextKit2Engine: NSObject, TextLayoutEngine {
         textView.onEffectiveAppearanceChange = { [weak self] in
             self?.handleAppearanceChange()
         }
+        textView.onOptionClick = { [weak self] point in
+            self?.handleOptionClick(at: point)
+        }
+        textView.onAddCaretAbove = { [weak self] in
+            self?.handleAddCaretAbove()
+        }
+        textView.onAddCaretBelow = { [weak self] in
+            self?.handleAddCaretBelow()
+        }
         settingsStore.onChange { [weak self] settings in
             self?.applyEditorSettings(settings.editor)
         }
         applyEditorColors()
+    }
+
+    private func handleOptionClick(at point: NSPoint) {
+        print("[MultiCaret Debug] handleOptionClick at point=\(point)")
+        let utf16Offset: Int
+        if let tlm = textView.textLayoutManager {
+            let pointInContainer = NSPoint(
+                x: point.x - textView.textContainerOrigin.x,
+                y: point.y - textView.textContainerOrigin.y
+            )
+            print("[MultiCaret Debug] pointInContainer=\(pointInContainer)")
+            guard let fragment = tlm.textLayoutFragment(for: pointInContainer) else {
+                print("[MultiCaret Debug] tlm.textLayoutFragment for \(pointInContainer) returned NIL!")
+                return
+            }
+            let startOffset = tlm.offset(from: tlm.documentRange.location, to: fragment.rangeInElement.location)
+            var lineCharIndex = 0
+            for lineFragment in fragment.textLineFragments {
+                let lineOriginX = fragment.layoutFragmentFrame.origin.x + lineFragment.typographicBounds.origin.x
+                let lineOriginY = fragment.layoutFragmentFrame.origin.y + lineFragment.typographicBounds.origin.y
+                let pointInLine = NSPoint(
+                    x: pointInContainer.x - lineOriginX,
+                    y: pointInContainer.y - lineOriginY
+                )
+                let idx = lineFragment.characterIndex(for: pointInLine)
+                if idx != NSNotFound {
+                    lineCharIndex = lineFragment.characterRange.location + idx
+                    break
+                }
+            }
+            utf16Offset = startOffset + lineCharIndex
+            print("[MultiCaret Debug] TextKit 2 resolved utf16Offset=\(utf16Offset)")
+        } else {
+            guard let window = textView.window else { return }
+            let windowPoint = textView.convert(point, to: nil)
+            let screenPoint = window.convertPoint(toScreen: windowPoint)
+            let charIndex = textView.characterIndex(for: screenPoint)
+            guard charIndex != NSNotFound, charIndex >= 0 else {
+                print("[MultiCaret Debug] TextKit 1 fallback characterIndex returned NSNotFound")
+                return
+            }
+            utf16Offset = charIndex
+            print("[MultiCaret Debug] TextKit 1 resolved utf16Offset=\(utf16Offset)")
+        }
+
+        guard utf16Offset >= 0, utf16Offset <= buffer.utf16Count else {
+            print("[MultiCaret Debug] utf16Offset \(utf16Offset) out of bounds (0..<\(buffer.utf16Count))")
+            return
+        }
+        let byteOffset = buffer.byteOffset(of: UTF16Offset(utf16Offset))
+        let currentSelection = selection(in: buffer)
+        print("[MultiCaret Debug] currentSelection ranges count=\(currentSelection.ranges.count)")
+        let newSelection = currentSelection.togglingCaret(at: byteOffset)
+        print("[MultiCaret Debug] newSelection ranges count=\(newSelection.ranges.count), ranges=\(newSelection.ranges)")
+        setSelection(newSelection, in: buffer)
+    }
+
+    private func handleAddCaretAbove() {
+        print("[MultiCaret Debug] handleAddCaretAbove in TextKit2Engine")
+        let currentSelection = selection(in: buffer)
+        var newRanges = currentSelection.ranges
+        for range in currentSelection.ranges {
+            let pos = buffer.linePosition(of: range.lowerBound)
+            if pos.line > 0 {
+                let targetLine = pos.line - 1
+                let lineRange = buffer.byteRange(ofLine: targetLine)
+                let startUTF16 = buffer.utf16Offset(of: lineRange.lowerBound).value
+                let endUTF16 = buffer.utf16Offset(of: lineRange.upperBound).value
+                let maxCol = max(0, endUTF16 - startUTF16)
+                let col = min(pos.utf16Column, maxCol)
+                let targetByte = buffer.byteOffset(of: LinePosition(line: targetLine, utf16Column: col))
+                newRanges.append(targetByte ..< targetByte)
+            }
+        }
+        setSelection(SelectionSet.normalized(newRanges), in: buffer)
+    }
+
+    private func handleAddCaretBelow() {
+        print("[MultiCaret Debug] handleAddCaretBelow in TextKit2Engine")
+        let currentSelection = selection(in: buffer)
+        var newRanges = currentSelection.ranges
+        for range in currentSelection.ranges {
+            let pos = buffer.linePosition(of: range.lowerBound)
+            if pos.line + 1 < buffer.lineCount {
+                let targetLine = pos.line + 1
+                let lineRange = buffer.byteRange(ofLine: targetLine)
+                let startUTF16 = buffer.utf16Offset(of: lineRange.lowerBound).value
+                let endUTF16 = buffer.utf16Offset(of: lineRange.upperBound).value
+                let maxCol = max(0, endUTF16 - startUTF16)
+                let col = min(pos.utf16Column, maxCol)
+                let targetByte = buffer.byteOffset(of: LinePosition(line: targetLine, utf16Column: col))
+                newRanges.append(targetByte ..< targetByte)
+            }
+        }
+        setSelection(SelectionSet.normalized(newRanges), in: buffer)
     }
 
     /// The TextKit 2 backing store. Trapping here is correct: a nil
@@ -246,13 +350,21 @@ public final class TextKit2Engine: NSObject, TextLayoutEngine {
     }
 
     public func setSelection(_ selection: SelectionSet, in buffer: TextBuffer) {
-        let nsRanges = selection.ranges.map { range in
-            let location = buffer.utf16Offset(of: range.lowerBound).value
-            let length = buffer.utf16Offset(of: range.upperBound).value - location
+        let maxByte = buffer.utf8Count
+        let maxUtf16 = buffer.utf16Count
+        let nsRanges = selection.ranges.compactMap { range -> NSValue? in
+            let lowerByte = min(range.lowerBound.value, maxByte)
+            let upperByte = min(range.upperBound.value, maxByte)
+            let location = buffer.utf16Offset(of: ByteOffset(lowerByte)).value
+            let length = buffer.utf16Offset(of: ByteOffset(upperByte)).value - location
+            guard location <= maxUtf16, (location + length) <= maxUtf16 else { return nil }
             return NSValue(range: NSRange(location: location, length: length))
         }
+        print("[MultiCaret Debug] setSelection: incoming ranges=\(selection.ranges.count), nsRanges=\(nsRanges.map(\.rangeValue))")
         guard !nsRanges.isEmpty else { return }
         textView.selectedRanges = nsRanges
+        print("[MultiCaret Debug] textView.selectedRanges after set: count=\(textView.selectedRanges.count), ranges=\(textView.selectedRanges.map(\.rangeValue))")
+        textView.needsDisplay = true
     }
 
     public func scrollTo(_ offset: ByteOffset, in buffer: TextBuffer) {
@@ -363,6 +475,14 @@ extension TextKit2Engine: NSTextViewDelegate {
     /// text view's own (empty, since `allowsUndo = false`) one.
     public func undoManager(for view: NSTextView) -> UndoManager? {
         documentUndoManager
+    }
+
+    public func textView(
+        _ textView: NSTextView,
+        willChangeSelectionFromCharacterRanges oldSelectedCharRanges: [NSValue],
+        toCharacterRanges newSelectedCharRanges: [NSValue],
+    ) -> [NSValue] {
+        newSelectedCharRanges
     }
 
     public func textViewDidChangeSelection(_ notification: Notification) {

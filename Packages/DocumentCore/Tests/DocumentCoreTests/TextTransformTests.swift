@@ -89,4 +89,22 @@ struct TextTransformTests {
 
         #expect(buffer.string == "Line 1\nLine 2")
     }
+
+    @Test func sortLinesAscendingAndDescending() {
+        var buffer = TextBuffer("banana\napple\ncherry\n")
+        let txAsc = TextTransforms.sortLines(in: buffer, ascending: true)
+        buffer.apply(txAsc)
+        #expect(buffer.string == "apple\nbanana\ncherry\n")
+
+        let txDesc = TextTransforms.sortLines(in: buffer, ascending: false)
+        buffer.apply(txDesc)
+        #expect(buffer.string == "cherry\nbanana\napple\n")
+    }
+
+    @Test func deduplicateLinesPreservesFirstOccurrence() {
+        var buffer = TextBuffer("apple\nbanana\napple\ncherry\nbanana\n")
+        let tx = TextTransforms.deduplicateLines(in: buffer)
+        buffer.apply(tx)
+        #expect(buffer.string == "apple\nbanana\ncherry\n")
+    }
 }

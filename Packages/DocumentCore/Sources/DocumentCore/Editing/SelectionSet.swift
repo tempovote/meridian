@@ -33,4 +33,54 @@ public struct SelectionSet: Hashable, Sendable {
 
     /// The selection set with no ranges.
     public static let empty = SelectionSet(ranges: [])
+
+    /// Creates a selection set by sorting `inputRanges` and merging any overlapping
+    /// or touching ranges.
+    public static func normalized(_ inputRanges: [Range<ByteOffset>]) -> SelectionSet {
+        guard !inputRanges.isEmpty else { return .empty }
+        let sorted = inputRanges.sorted { r1, r2 in
+            if r1.lowerBound != r2.lowerBound {
+                return r1.lowerBound < r2.lowerBound
+            }
+            return r1.upperBound < r2.upperBound
+        }
+
+        var merged: [Range<ByteOffset>] = []
+        for range in sorted {
+            guard let last = merged.last else {
+                merged.append(range)
+                continue
+            }
+
+            if range.lowerBound < last
+                .upperBound || (range.lowerBound == last.upperBound && (range.isEmpty || last.isEmpty))
+            {
+                let newStart = min(last.lowerBound, range.lowerBound)
+                let newEnd = max(last.upperBound, range.upperBound)
+                merged[merged.count - 1] = newStart ..< newEnd
+            } else {
+                merged.append(range)
+            }
+        }
+        return SelectionSet(ranges: merged)
+    }
+
+    /// Returns a new `SelectionSet` with a caret added at `offset`.
+    public func addingCaret(at offset: ByteOffset) -> SelectionSet {
+        var newRanges = ranges
+        newRanges.append(offset ..< offset)
+        return SelectionSet.normalized(newRanges)
+    }
+
+    /// Returns a new `SelectionSet` with the caret at `offset` toggled: removed if
+    /// a caret exists at `offset`, or added if not.
+    public func togglingCaret(at offset: ByteOffset) -> SelectionSet {
+        if let index = ranges.firstIndex(where: { $0.isEmpty && $0.lowerBound == offset }) {
+            var newRanges = ranges
+            newRanges.remove(at: index)
+            return SelectionSet(ranges: newRanges)
+        } else {
+            return addingCaret(at: offset)
+        }
+    }
 }

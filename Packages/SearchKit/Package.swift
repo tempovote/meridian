@@ -9,9 +9,10 @@ let package = Package(
     ],
     dependencies: [
         .package(path: "../DocumentCore"),
+        .package(path: "../FileKit"),
     ],
     targets: [
-        .target(name: "SearchKit", dependencies: ["DocumentCore"]),
+        .target(name: "SearchKit", dependencies: ["DocumentCore", "FileKit"]),
         .testTarget(name: "SearchKitTests", dependencies: ["SearchKit"]),
     ],
 )

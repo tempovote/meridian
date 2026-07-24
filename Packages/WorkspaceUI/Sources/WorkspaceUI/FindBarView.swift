@@ -135,7 +135,7 @@ public struct FindBarView: View {
     }
 }
 
-private struct ToggleOptionButton: View {
+struct ToggleOptionButton: View {
     let title: String
     @Binding var isSelected: Bool
     let onChange: () -> Void

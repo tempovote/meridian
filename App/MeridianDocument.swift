@@ -3,6 +3,7 @@ import AppKit
 import DocumentCore
 import EditorUI
 import FileKit
+import SearchKit
 import SwiftUI
 import ThemeKit
 import WorkspaceUI
@@ -596,6 +597,45 @@ final class MeridianDocument: NSDocument {
         viewModel.perform(TextTransforms.convertLineEndings(in: viewModel.buffer, to: .crlf))
     }
 
+    @objc func addCaretAbove(_ sender: Any?) {
+        focusedViewModel?.addCaretAbove()
+    }
+
+    @objc func addCaretBelow(_ sender: Any?) {
+        focusedViewModel?.addCaretBelow()
+    }
+
+    @objc func selectNextOccurrence(_ sender: Any?) {
+        focusedViewModel?.selectNextOccurrence()
+    }
+
+    @objc func selectAllOccurrences(_ sender: Any?) {
+        focusedViewModel?.selectAllOccurrences()
+    }
+
+    @objc func sortLinesAscending(_ sender: Any?) {
+        guard let viewModel = focusedViewModel else { return }
+        viewModel.perform(TextTransforms.sortLines(
+            in: viewModel.buffer,
+            selection: viewModel.selection,
+            ascending: true,
+        ))
+    }
+
+    @objc func sortLinesDescending(_ sender: Any?) {
+        guard let viewModel = focusedViewModel else { return }
+        viewModel.perform(TextTransforms.sortLines(
+            in: viewModel.buffer,
+            selection: viewModel.selection,
+            ascending: false,
+        ))
+    }
+
+    @objc func deduplicateLines(_ sender: Any?) {
+        guard let viewModel = focusedViewModel else { return }
+        viewModel.perform(TextTransforms.deduplicateLines(in: viewModel.buffer, selection: viewModel.selection))
+    }
+
     private func showFindBar(startExpanded: Bool) {
         guard let viewModel = focusedViewModel, findBarHost == nil else { return }
         // Reuse the existing search state (query/matches/current index) if
@@ -623,6 +663,69 @@ final class MeridianDocument: NSDocument {
             containerStack.insertView(host, at: 0, in: .top)
             window.makeFirstResponder(host)
         }
+    }
+
+    private var findInFilesWindowController: NSWindowController?
+
+    @objc func performFindInFiles(_ sender: Any?) {
+        showFindInFiles()
+    }
+
+    private func showFindInFiles() {
+        if let existing = findInFilesWindowController {
+            existing.showWindow(nil)
+            existing.window?.makeKeyAndOrderFront(nil)
+            return
+        }
+
+        let folder = findWorkspaceFolder()
+        let vm = FindInFilesViewModel(searchFolder: folder)
+        vm.onSelectMatch = { [weak self] fileURL, match in
+            self?.openAndSelectMatch(fileURL: fileURL, match: match)
+        }
+
+        let view = FindInFilesView(viewModel: vm)
+        let hostingController = NSHostingController(rootView: view)
+        let window = NSWindow(contentViewController: hostingController)
+        window.title = "Find in Files — Meridian"
+        window.setContentSize(NSSize(width: 450, height: 500))
+        window.styleMask = [.titled, .closable, .resizable, .miniaturizable]
+
+        let controller = NSWindowController(window: window)
+        findInFilesWindowController = controller
+        controller.showWindow(nil)
+        window.makeKeyAndOrderFront(nil)
+    }
+
+    private func openAndSelectMatch(fileURL: URL, match: FileMatch) {
+        NSDocumentController.shared.openDocument(withContentsOf: fileURL, display: true) { doc, _, _ in
+            if let document = doc as? MeridianDocument, let vm = document.focusedViewModel {
+                let range = match.range
+                vm.setSelection(SelectionSet(ranges: [range]))
+            }
+        }
+    }
+
+    private func findWorkspaceFolder() -> URL {
+        if let fileURL {
+            var current = fileURL.deletingLastPathComponent()
+            let fm = FileManager.default
+            while current.path != "/", current.path.count > 1 {
+                let gitPath = current.appendingPathComponent(".git").path
+                let pkgPath = current.appendingPathComponent("Package.swift").path
+                let projPath = current.appendingPathComponent("project.yml").path
+                if fm.fileExists(atPath: gitPath) || fm.fileExists(atPath: pkgPath) || fm.fileExists(atPath: projPath) {
+                    return current
+                }
+                current = current.deletingLastPathComponent()
+            }
+            return fileURL.deletingLastPathComponent()
+        }
+        let pwd = FileManager.default.currentDirectoryPath
+        if !pwd.isEmpty {
+            return URL(fileURLWithPath: pwd)
+        }
+        return URL(fileURLWithPath: NSHomeDirectory())
     }
 
     private func hideFindBar() {

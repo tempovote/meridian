@@ -65,6 +65,48 @@ enum MainMenu {
         addCommand(to: menu, title: "Delete Line", action: Selector(("deleteLine:")), keyEquivalent: "K")
         addCommand(
             to: menu,
+            title: "Sort Lines Ascending",
+            action: Selector(("sortLinesAscending:")),
+            keyEquivalent: "",
+        )
+        addCommand(
+            to: menu,
+            title: "Sort Lines Descending",
+            action: Selector(("sortLinesDescending:")),
+            keyEquivalent: "",
+        )
+        addCommand(to: menu, title: "Deduplicate Lines", action: Selector(("deduplicateLines:")), keyEquivalent: "")
+        menu.addItem(.separator())
+        addCommand(
+            to: menu,
+            title: "Add Caret Above",
+            action: Selector(("addCaretAbove:")),
+            keyEquivalent: String(UnicodeScalar(NSUpArrowFunctionKey)!),
+            modifierMask: [.option, .command],
+        )
+        addCommand(
+            to: menu,
+            title: "Add Caret Below",
+            action: Selector(("addCaretBelow:")),
+            keyEquivalent: String(UnicodeScalar(NSDownArrowFunctionKey)!),
+            modifierMask: [.option, .command],
+        )
+        addCommand(
+            to: menu,
+            title: "Select Next Occurrence",
+            action: Selector(("selectNextOccurrence:")),
+            keyEquivalent: "d",
+        )
+        addCommand(
+            to: menu,
+            title: "Select All Occurrences",
+            action: Selector(("selectAllOccurrences:")),
+            keyEquivalent: "l",
+            modifierMask: [.command, .shift],
+        )
+        menu.addItem(.separator())
+        addCommand(
+            to: menu,
             title: "Trim Trailing Whitespace",
             action: Selector(("trimTrailingWhitespace:")),
             keyEquivalent: "",
@@ -89,6 +131,10 @@ enum MainMenu {
         addCommand(
             to: menu, title: "Find and Replace…", action: Selector(("performFindAndReplace:")),
             keyEquivalent: "f", modifierMask: [.command, .option],
+        )
+        addCommand(
+            to: menu, title: "Find in Files…", action: Selector(("performFindInFiles:")),
+            keyEquivalent: "F", modifierMask: [.command, .shift],
         )
         addCommand(to: menu, title: "Find Next", action: Selector(("findNext:")), keyEquivalent: "g")
         addCommand(to: menu, title: "Find Previous", action: Selector(("findPrevious:")), keyEquivalent: "G")

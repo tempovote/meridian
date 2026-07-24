@@ -28,11 +28,14 @@ final class MockLayoutEngine: TextLayoutEngine {
         applied.append((transaction, base, restoreSelection))
     }
 
+    var currentSelection: SelectionSet = .empty
+
     func selection(in buffer: TextBuffer) -> SelectionSet {
-        .empty
+        currentSelection
     }
 
     func setSelection(_ selection: SelectionSet, in buffer: TextBuffer) {
+        currentSelection = selection
         selectionsSet.append(selection)
     }
 
@@ -209,5 +212,76 @@ struct EditorViewModelTests {
         vm.undo()
         #expect(firedCount == 3)
         #expect(vm.buffer.string == "cd")
+    }
+
+    @Test func addCaretAboveAndBelowAddsCaretsOnAdjacentLines() {
+        let text = "hello\nworld\nmeridian\n"
+        let engine = MockLayoutEngine()
+        let vm = makeViewModel(TextBuffer(text), engine: engine)
+
+        // Caret on line 1 ("world") at offset 7 ('o')
+        vm.setSelection(SelectionSet(caretAt: ByteOffset(7)))
+        #expect(vm.selection.ranges.count == 1)
+
+        vm.addCaretAbove()
+        #expect(vm.selection.ranges.count == 2)
+        #expect(vm.selection.ranges[0] == ByteOffset(1) ..< ByteOffset(1)) // "hello" line 0 col 1
+        #expect(vm.selection.ranges[1] == ByteOffset(7) ..< ByteOffset(7)) // "world" line 1 col 1
+
+        vm.addCaretBelow()
+        #expect(vm.selection.ranges.count == 3)
+    }
+
+    @Test func selectNextAndAllOccurrencesFindsMatches() {
+        let text = "foo bar foo baz foo"
+        let engine = MockLayoutEngine()
+        let vm = makeViewModel(TextBuffer(text), engine: engine)
+
+        // Select first "foo" (0..<3)
+        vm.setSelection(SelectionSet(ranges: [ByteOffset(0) ..< ByteOffset(3)]))
+
+        vm.selectNextOccurrence()
+        #expect(vm.selection.ranges.count == 2)
+        #expect(vm.selection.ranges[1] == ByteOffset(8) ..< ByteOffset(11))
+
+        vm.selectAllOccurrences()
+        #expect(vm.selection.ranges.count == 3)
+        #expect(vm.selection.ranges[2] == ByteOffset(16) ..< ByteOffset(19))
+    }
+
+    @Test func selectColumnConstructsRectangularSelectionRanges() {
+        let text = "12345\n12345\n12345\n"
+        let engine = MockLayoutEngine()
+        let vm = makeViewModel(TextBuffer(text), engine: engine)
+
+        vm.selectColumn(fromLine: 0, startCol: 1, toLine: 2, endCol: 3)
+        #expect(vm.selection.ranges.count == 3)
+        #expect(vm.selection.ranges[0] == ByteOffset(1) ..< ByteOffset(3))
+        #expect(vm.selection.ranges[1] == ByteOffset(7) ..< ByteOffset(9))
+        #expect(vm.selection.ranges[2] == ByteOffset(13) ..< ByteOffset(15))
+    }
+
+    @Test func addCaretAboveAndBelowHandlesUnevenLineLengthsSafely() {
+        let text = "short\na very long line here\n\nend"
+        let engine = MockLayoutEngine()
+        let vm = makeViewModel(TextBuffer(text), engine: engine)
+
+        // Caret on line 1 ("a very long line here") at col 15
+        let pos15 = LinePosition(line: 1, utf16Column: 15)
+        let offset15 = vm.buffer.byteOffset(of: pos15)
+        vm.setSelection(SelectionSet(caretAt: offset15))
+
+        // addCaretAbove to line 0 ("short", len 5): col should clamp to 5 without crashing
+        vm.addCaretAbove()
+        #expect(vm.selection.ranges.count == 2)
+        #expect(vm.selection.ranges[0] == ByteOffset(5) ..< ByteOffset(5)) // end of "short"
+
+        // Caret on line 1 col 15 -> addCaretBelow to line 2 (empty ""): col should clamp to 0 without crashing
+        let vm2 = makeViewModel(TextBuffer(text), engine: engine)
+        vm2.setSelection(SelectionSet(caretAt: offset15))
+        vm2.addCaretBelow()
+        #expect(vm2.selection.ranges.count == 2)
+        let line2Offset = vm2.buffer.byteOffset(of: LinePosition(line: 2, utf16Column: 0))
+        #expect(vm2.selection.ranges[1] == line2Offset ..< line2Offset)
     }
 }
