@@ -13,7 +13,9 @@ import ThemeKit
 public final class TextKit2Engine: NSObject, TextLayoutEngine {
     private let scrollView: NSScrollView
     let textView: MeridianTextView
-    private var rulerView: LineNumberRulerView?
+    /// Internal, not private: fold-only relayout needs to invalidate the
+    /// ruler too, without going through `refreshViewportLayout()`.
+    var rulerView: LineNumberRulerView?
     /// The engine-local mirror snapshot. Invariant: equals the storage's
     /// string after every load/apply/user edit. Only ever touched from
     /// within `MainActor.assumeIsolated` (directly, or via the `@MainActor`
@@ -53,6 +55,40 @@ public final class TextKit2Engine: NSObject, TextLayoutEngine {
     /// background color, so they can be cleared before a new pair (or
     /// none) is painted.
     var currentBracketHighlightRanges: [NSRange] = []
+    /// UTF-16 spans of the lines currently hidden by folding, sorted,
+    /// derived by `setHiddenLineSpans(_:)`. Read by the layout-manager
+    /// delegate on every fragment creation — keep sorted for binary search.
+    var hiddenUTF16Spans: [Range<Int>] = []
+    /// UTF-16 offset of each folded region's still-visible first line ->
+    /// that region's byte-range lower bound (the key `FoldModel.unfold
+    /// (startingAt:)` expects). Updated alongside `hiddenUTF16Spans`; lets
+    /// the `…` placeholder fragment and its click-to-unfold hit test
+    /// answer "am I/is this a folded first line?" in O(1) without walking
+    /// `foldModel.folded`.
+    var foldedFirstLineUTF16Starts: [Int: ByteOffset] = [:]
+    /// This pane's fold state, fed by every successful parse
+    /// (`highlightCurrentBuffer`) and mutated by the fold operations in
+    /// `TextKit2Engine+Folding.swift`.
+    var foldModel = FoldModel()
+    /// True while a `refreshFoldLayoutDeferred()` relayout hop is already
+    /// scheduled — coalesces a burst of real-typing edits (each of which
+    /// calls `refreshFoldLayoutDeferred()` from `handleUserEdit`) down to
+    /// one deferred `relayoutForFoldChange()` call. See that method's doc
+    /// comment.
+    var hasPendingDeferredFoldRelayout = false
+    /// The most recently scheduled deferred fold relayout `Task`, kept
+    /// only so the DEBUG-only `waitForDeferredFoldRelayoutForTesting` hook
+    /// can await it deterministically instead of sleeping in tests.
+    var deferredFoldRelayoutTask: Task<Void, Never>?
+    /// The most recent parse `Task` kicked off by `highlightCurrentBuffer`,
+    /// kept only so the DEBUG-only `waitForParseForTesting` hook can await
+    /// its completion deterministically instead of sleeping in tests.
+    var lastParseTask: Task<Void, Never>?
+    #if DEBUG
+        /// Test-only: counts `relayoutForFoldChange()` calls — asserts the
+        /// relayout/purge path was skipped when nothing fold-related changed.
+        var foldRelayoutInvocationCountForTesting = 0
+    #endif
 
     public var onUserEdit: ((EditTransaction) -> Void)?
 
@@ -117,7 +153,9 @@ public final class TextKit2Engine: NSObject, TextLayoutEngine {
         rulerView = ruler
 
         storage.delegate = self
+        configureFoldGutter()
         textView.delegate = self
+        textView.textLayoutManager?.delegate = self
         textView.onEffectiveAppearanceChange = { [weak self] in
             self?.handleAppearanceChange()
         }
@@ -146,6 +184,12 @@ public final class TextKit2Engine: NSObject, TextLayoutEngine {
     public func load(buffer newBuffer: TextBuffer) {
         buffer = newBuffer
         loadGeneration += 1
+        // Reset fold state: a revert/reload otherwise leaves stale hidden
+        // spans hiding lines of the new content (see `loadGeneration` doc).
+        foldModel = FoldModel()
+        hiddenUTF16Spans = []
+        foldedFirstLineUTF16Starts = [:]
+        hasPendingDeferredFoldRelayout = false
         isMirroring = true
         defer { isMirroring = false }
         contentStorage.performEditingTransaction {
@@ -181,6 +225,11 @@ public final class TextKit2Engine: NSObject, TextLayoutEngine {
         }
         buffer.apply(transaction)
         assertMirrorInvariant()
+        let foldedBefore = foldModel.folded
+        foldModel.apply(transaction)
+        if foldModel.folded != foldedBefore {
+            refreshFoldLayout()
+        }
         highlightCurrentBuffer()
         if restoreSelection, !transaction.selectionAfter.ranges.isEmpty {
             setSelection(transaction.selectionAfter, in: buffer)
@@ -295,6 +344,14 @@ public final class TextKit2Engine: NSObject, TextLayoutEngine {
         )
         buffer.apply(transaction)
         assertMirrorInvariant()
+        let foldedBefore = foldModel.folded
+        foldModel.apply(transaction)
+        if foldModel.folded != foldedBefore {
+            // Deferred, not `refreshFoldLayout()`: we're still inside
+            // `NSTextStorageDelegate.didProcessEditing`'s callstack here —
+            // see `refreshFoldLayoutDeferred()`'s doc comment.
+            refreshFoldLayoutDeferred()
+        }
         highlightCurrentBuffer()
         onUserEdit?(transaction)
     }
@@ -311,6 +368,7 @@ extension TextKit2Engine: NSTextViewDelegate {
     public func textViewDidChangeSelection(_ notification: Notification) {
         textView.needsDisplay = true
         rulerView?.needsDisplay = true
+        unfoldIfSelectionEnteredHiddenText()
         updateBracketHighlight()
     }
 }
@@ -340,35 +398,3 @@ extension TextKit2Engine: NSTextStorageDelegate {
         }
     }
 }
-
-#if DEBUG
-    extension TextKit2Engine {
-        /// Test hooks — compiled out of release builds.
-        var storageStringForTesting: String {
-            storage.string
-        }
-
-        /// Reads a single storage attribute at a UTF-16 offset — used by
-        /// bracket-match tests to confirm a `.backgroundColor` attribute
-        /// is (or isn't) present at a specific location, without needing
-        /// to know the exact `NSColor` value.
-        func storageAttributeForTesting(_ key: NSAttributedString.Key, at utf16Offset: Int) -> Any? {
-            guard utf16Offset < storage.length else { return nil }
-            return storage.attribute(key, at: utf16Offset, effectiveRange: nil)
-        }
-
-        var snapshotStringForTesting: String {
-            buffer.string
-        }
-
-        var snapshotForTesting: TextBuffer {
-            buffer
-        }
-
-        /// Simulates user typing by mutating the storage directly, exactly as
-        /// NSTextView's insertText path does (delegate fires → user-edit path).
-        func simulateUserTypingForTesting(replacing range: NSRange, with string: String) {
-            storage.replaceCharacters(in: range, with: string)
-        }
-    }
-#endif

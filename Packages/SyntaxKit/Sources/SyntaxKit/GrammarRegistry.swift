@@ -25,6 +25,7 @@ import TreeSitterYaml
 /// normal use.
 public actor GrammarRegistry {
     private var cache: [String: (language: Language, query: Query)] = [:]
+    private var foldCache: [String: Query?] = [:]
 
     public init() {}
 
@@ -35,6 +36,38 @@ public actor GrammarRegistry {
         let loaded = try Self.loadGrammar(languageID: languageID)
         cache[languageID] = loaded
         return loaded
+    }
+
+    /// The compiled `folds.scm` query for `languageID`, or nil when the
+    /// grammar bundles no fold query (that language has no folding).
+    /// A malformed bundled query is a programmer error and throws.
+    public func foldQuery(for languageID: String) throws -> Query? {
+        // Subscript lookup on [String: Query?] yields Query?? — a cached
+        // "no fold query" (nil inner value) still hits this branch and is
+        // returned correctly.
+        if let cached = foldCache[languageID] {
+            return cached
+        }
+        let (language, _) = try grammar(for: languageID)
+        guard let queryURL = Bundle.module.url(
+            forResource: "folds",
+            withExtension: "scm",
+            subdirectory: "Resources/\(languageID)",
+        ) else {
+            // `foldCache[languageID] = nil` would REMOVE the key (the
+            // classic optional-of-optional dictionary trap) — updateValue
+            // stores an actual nil value so the bundle-miss is cached.
+            foldCache.updateValue(nil, forKey: languageID)
+            return nil
+        }
+        do {
+            let queryData = try Data(contentsOf: queryURL)
+            let query = try Query(language: language, data: queryData)
+            foldCache[languageID] = query
+            return query
+        } catch {
+            throw SyntaxKitError.queryCompilationFailed(languageID: languageID, underlying: error)
+        }
     }
 
     /// Maps a `languageID` to its vendored grammar's C entry point. Add one

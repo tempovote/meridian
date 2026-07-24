@@ -1,0 +1,9 @@
+(function_declaration) @fold
+(method_definition) @fold
+(class_body) @fold
+(statement_block) @fold
+(object) @fold
+(array) @fold
+(comment) @fold
+(interface_body) @fold
+(enum_body) @fold

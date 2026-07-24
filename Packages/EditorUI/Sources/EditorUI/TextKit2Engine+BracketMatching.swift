@@ -16,11 +16,11 @@ extension TextKit2Engine {
         let snapshot = buffer
         let requestedVersion = snapshot.version
         let requestedGeneration = loadGeneration
-        Task { @MainActor [weak self] in
+        lastParseTask = Task { @MainActor [weak self] in
             guard let self else { return }
-            let runs: [TokenRun]
+            let output: ParseOutput
             do {
-                runs = try await syntaxService.reparse(
+                output = try await syntaxService.parse(
                     documentID: syntaxDocumentID,
                     languageID: languageID,
                     snapshot: snapshot,
@@ -33,7 +33,10 @@ extension TextKit2Engine {
             guard loadGeneration == requestedGeneration,
                   buffer.version == requestedVersion
             else { return }
-            applyHighlighting(runs, against: snapshot)
+            applyHighlighting(output.tokens, against: snapshot)
+            let foldableBefore = foldModel.foldable
+            foldModel.updateFoldable(output.folds)
+            refreshFoldLayoutIfChanged(foldableChanged: foldModel.foldable != foldableBefore)
         }
     }
 

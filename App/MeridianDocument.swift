@@ -260,6 +260,42 @@ final class MeridianDocument: NSDocument {
         setSplit(orientation: .vertical)
     }
 
+    @objc func foldCurrentRegion(_ sender: Any?) {
+        focusedViewModel?.foldAtCaret()
+    }
+
+    @objc func unfoldCurrentRegion(_ sender: Any?) {
+        focusedViewModel?.unfoldAtCaret()
+    }
+
+    @objc func foldAll(_ sender: Any?) {
+        focusedViewModel?.foldAll()
+    }
+
+    @objc func unfoldAll(_ sender: Any?) {
+        focusedViewModel?.unfoldAll()
+    }
+
+    @objc func foldLevel1(_ sender: Any?) {
+        focusedViewModel?.foldLevel(1)
+    }
+
+    @objc func foldLevel2(_ sender: Any?) {
+        focusedViewModel?.foldLevel(2)
+    }
+
+    @objc func foldLevel3(_ sender: Any?) {
+        focusedViewModel?.foldLevel(3)
+    }
+
+    @objc func foldLevel4(_ sender: Any?) {
+        focusedViewModel?.foldLevel(4)
+    }
+
+    @objc func foldLevel5(_ sender: Any?) {
+        focusedViewModel?.foldLevel(5)
+    }
+
     /// Choosing the already-active orientation removes the split;
     /// choosing the other orientation while split re-orients in place;
     /// choosing either while unsplit creates the second pane.
@@ -620,6 +656,12 @@ final class MeridianDocument: NSDocument {
         if menuItem.action == #selector(splitVertically(_:)) {
             menuItem.state = (currentSplitOrientation == .vertical) ? .on : .off
             return true
+        }
+        if menuItem.action == #selector(foldCurrentRegion(_:)) {
+            return focusedViewModel?.canFoldAtCaret == true
+        }
+        if menuItem.action == #selector(unfoldCurrentRegion(_:)) {
+            return focusedViewModel?.canUnfoldAtCaret == true
         }
         return super.validateMenuItem(menuItem)
     }

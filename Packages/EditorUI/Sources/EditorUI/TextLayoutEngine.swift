@@ -62,11 +62,39 @@ public protocol TextLayoutEngine: AnyObject {
     /// interacting with (e.g. to drive which pane's state the status bar
     /// reflects, when a document has more than one pane open).
     var onBecomeFirstResponder: (() -> Void)? { get set }
+
+    /// Folds the innermost foldable region containing the caret line.
+    func foldAtCaret()
+    /// Unfolds at the caret: innermost folded region containing the caret.
+    func unfoldAtCaret()
+    func foldAll()
+    func unfoldAll()
+    /// Spec Fold Level N semantics (fold depth==n, unfold shallower).
+    func foldLevel(_ level: Int)
+    /// Menu validation: is there a foldable region at the caret?
+    var canFoldAtCaret: Bool { get }
+    /// Menu validation: is there something to unfold at the caret?
+    var canUnfoldAtCaret: Bool { get }
 }
 
 public extension TextLayoutEngine {
     func setSoftWrap(_ enabled: Bool) {}
     func setGutterVisible(_ enabled: Bool) {}
+
+    // Folding no-op defaults: any conformer (e.g. a future M7 CoreText
+    // engine) compiles without implementing folding until it's ready to.
+    func foldAtCaret() {}
+    func unfoldAtCaret() {}
+    func foldAll() {}
+    func unfoldAll() {}
+    func foldLevel(_ level: Int) {}
+    var canFoldAtCaret: Bool {
+        false
+    }
+
+    var canUnfoldAtCaret: Bool {
+        false
+    }
 
     /// Convenience overload preserving every existing call site — always
     /// restores selection, matching this method's original (pre-split-editor)
