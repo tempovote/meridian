@@ -179,7 +179,7 @@ public final class TextKit2Engine: NSObject, TextLayoutEngine {
         if let tlm = textView.textLayoutManager {
             let pointInContainer = NSPoint(
                 x: point.x - textView.textContainerOrigin.x,
-                y: point.y - textView.textContainerOrigin.y
+                y: point.y - textView.textContainerOrigin.y,
             )
             guard let fragment = tlm.textLayoutFragment(for: pointInContainer) else { return }
             let startOffset = tlm.offset(from: tlm.documentRange.location, to: fragment.rangeInElement.location)
@@ -189,7 +189,7 @@ public final class TextKit2Engine: NSObject, TextLayoutEngine {
                 let lineOriginY = fragment.layoutFragmentFrame.origin.y + lineFragment.typographicBounds.origin.y
                 let pointInLine = NSPoint(
                     x: pointInContainer.x - lineOriginX,
-                    y: pointInContainer.y - lineOriginY
+                    y: pointInContainer.y - lineOriginY,
                 )
                 let idx = lineFragment.characterIndex(for: pointInLine)
                 if idx != NSNotFound {

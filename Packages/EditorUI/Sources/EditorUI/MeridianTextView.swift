@@ -100,7 +100,7 @@ public final class MeridianTextView: NSTextView {
 
     override public var selectedRanges: [NSValue] {
         get {
-            return customSelectedRanges ?? super.selectedRanges
+            customSelectedRanges ?? super.selectedRanges
         }
         set {
             // Route through applyMultiCaretRanges so multi-caret intent is
@@ -112,7 +112,7 @@ public final class MeridianTextView: NSTextView {
     override public func setSelectedRanges(
         _ ranges: [NSValue],
         affinity: NSSelectionAffinity,
-        stillSelecting: Bool
+        stillSelecting: Bool,
     ) {
         if ranges.count > 1 {
             // Explicit multi-caret call from our own code.
@@ -151,10 +151,10 @@ public final class MeridianTextView: NSTextView {
         let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
         if flags == [.option, .command] {
             if event.keyCode == 126 { // Up arrow
-                NSApp.sendAction(Selector(("addCaretAbove:")), to: nil, from: self)
+                NSApp.sendAction(#selector(addCaretAbove(_:)), to: nil, from: self)
                 return
             } else if event.keyCode == 125 { // Down arrow
-                NSApp.sendAction(Selector(("addCaretBelow:")), to: nil, from: self)
+                NSApp.sendAction(#selector(addCaretBelow(_:)), to: nil, from: self)
                 return
             }
         }
@@ -277,7 +277,11 @@ public final class MeridianTextView: NSTextView {
 
         for lineFragment in fragment.textLineFragments {
             let lineRange = lineFragment.characterRange
-            if charOffsetInElement >= lineRange.location && charOffsetInElement <= (lineRange.location + lineRange.length) {
+            let lowerBound = lineRange.location
+            let upperBound = lineRange.location + lineRange.length
+            if charOffsetInElement >= lowerBound,
+               charOffsetInElement <= upperBound
+            {
                 let indexInLine = charOffsetInElement - lineRange.location
                 let locInLine = lineFragment.locationForCharacter(at: indexInLine)
                 originX += locInLine.x
