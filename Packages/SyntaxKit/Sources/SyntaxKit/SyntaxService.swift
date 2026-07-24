@@ -83,7 +83,7 @@ public actor SyntaxService {
             )
         }
 
-        let folds = (try? await extractFolds(languageID: languageID, tree: newTree, snapshot: snapshot)) ?? []
+        let folds = await (try? extractFolds(languageID: languageID, tree: newTree, snapshot: snapshot)) ?? []
         return ParseOutput(tokens: tokens, folds: folds)
     }
 

@@ -66,10 +66,14 @@ struct CommandPaletteViewModelTests {
         #expect(viewModel.selectedCommand?.title == "Save")
     }
 
-    @Test func shortcutDisplayStringMapsArrowFunctionKeysToGlyphs() {
-        let leftArrow = String(UnicodeScalar(NSLeftArrowFunctionKey)!)
-        let rightArrow = String(UnicodeScalar(NSRightArrowFunctionKey)!)
-        #expect(CommandPaletteView.shortcutDisplayString(modifierMask: [.command, .option], keyEquivalent: leftArrow) == "⌥⌘←")
-        #expect(CommandPaletteView.shortcutDisplayString(modifierMask: [.command, .option, .shift], keyEquivalent: rightArrow) == "⌥⇧⌘→")
+    @Test func shortcutDisplayStringMapsArrowFunctionKeysToGlyphs() throws {
+        let leftArrow = try String(#require(UnicodeScalar(NSLeftArrowFunctionKey)))
+        let rightArrow = try String(#require(UnicodeScalar(NSRightArrowFunctionKey)))
+        #expect(CommandPaletteView
+            .shortcutDisplayString(modifierMask: [.command, .option], keyEquivalent: leftArrow) == "⌥⌘←")
+        #expect(CommandPaletteView.shortcutDisplayString(
+            modifierMask: [.command, .option, .shift],
+            keyEquivalent: rightArrow,
+        ) == "⌥⇧⌘→")
     }
 }

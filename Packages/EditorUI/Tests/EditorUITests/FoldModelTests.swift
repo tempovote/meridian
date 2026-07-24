@@ -229,7 +229,7 @@ struct FoldModelTests {
         }
     }
 
-    @Test func multiEditTransactionShiftsAndUnfoldsFoldedRegions() throws {
+    @Test func multiEditTransactionShiftsAndUnfoldsFoldedRegions() {
         var model = FoldModel()
         let r1 = region(2, 3) // bytes 12 ..< 23
         let r2 = region(6, 7) // bytes 36 ..< 47
@@ -278,7 +278,8 @@ struct FoldModelTests {
         )
 
         model.apply(txUnfoldOne)
-        // r1 unfolded because of Edit C overlap. r2 shifted by +1 from Edit C (at 20) and +1 from Edit D (at 35) -> 43..<54.
+        // r1 unfolded because of Edit C overlap. r2 shifted by +1 from Edit C (at 20) and +1 from Edit D (at 35) ->
+        // 43..<54.
         #expect(model.folded == [ByteOffset(43) ..< ByteOffset(54)])
     }
 }

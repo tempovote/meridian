@@ -3,6 +3,7 @@ import EditorUI
 import FileKit
 import Foundation
 import SearchKit
+import SyntaxKit
 import XCTest
 @testable import Meridian
 
@@ -118,8 +119,8 @@ final class DocumentAndEditorPerfTests: XCTestCase {
     }
 
     @MainActor
-    func testFoldPerformanceAtScale() throws {
-        let regionCount = 50_000
+    func testFoldPerformanceAtScale() {
+        let regionCount = 50000
         var lines: [String] = []
         lines.reserveCapacity(regionCount * 2)
         var foldRanges: [FoldRange] = []
@@ -140,7 +141,7 @@ final class DocumentAndEditorPerfTests: XCTestCase {
                 range: rangeStart ..< rangeEnd,
                 startLine: startLine,
                 endLine: endLine,
-                depth: 1
+                depth: 1,
             ))
         }
 
