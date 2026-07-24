@@ -69,33 +69,73 @@ public final class MeridianTextView: NSTextView {
     /// Set by `TextKit2Engine`: handles Option-click to toggle carets at the clicked point.
     public var onOptionClick: ((NSPoint) -> Void)?
 
+    // MARK: - Multi-Caret Support
+
+    /// Stores multiple caret ranges that AppKit would otherwise discard.
+    /// AppKit's `NSTextView` silently collapses zero-length (insertion-point)
+    /// ranges to a single cursor when `selectedRanges` is set with multiple
+    /// entries. We preserve the full list here and return it from the getter.
     private var customSelectedRanges: [NSValue]?
+
+    /// Set to `true` only while WE are deliberately applying a multi-caret
+    /// selection. During that window, AppKit's own internal re-entrant
+    /// `setSelectedRanges` calls must NOT clear `customSelectedRanges`.
+    private var isSettingMultiCaret: Bool = false
+
+    /// Applies `ranges` as a persistent multi-caret selection.
+    /// Use this instead of assigning `selectedRanges` directly when
+    /// `ranges.count > 1`.
+    public func applyMultiCaretRanges(_ ranges: [NSValue]) {
+        guard ranges.count > 1 else {
+            // Single caret — clear multi-caret state and let AppKit handle it.
+            customSelectedRanges = nil
+            super.selectedRanges = ranges
+            return
+        }
+        isSettingMultiCaret = true
+        customSelectedRanges = ranges
+        super.selectedRanges = ranges
+        isSettingMultiCaret = false
+    }
 
     override public var selectedRanges: [NSValue] {
         get {
-            if let customSelectedRanges {
-                return customSelectedRanges
-            }
-            return super.selectedRanges
+            return customSelectedRanges ?? super.selectedRanges
         }
         set {
-            if newValue.count > 1 {
-                customSelectedRanges = newValue
-            } else {
-                customSelectedRanges = nil
-            }
-            super.selectedRanges = newValue
+            // Route through applyMultiCaretRanges so multi-caret intent is
+            // always declared explicitly.
+            applyMultiCaretRanges(newValue)
         }
     }
 
-    override public func setSelectedRanges(_ ranges: [NSValue], affinity: NSSelectionAffinity, stillSelecting: Bool) {
+    override public func setSelectedRanges(
+        _ ranges: [NSValue],
+        affinity: NSSelectionAffinity,
+        stillSelecting: Bool
+    ) {
         if ranges.count > 1 {
+            // Explicit multi-caret call from our own code.
+            isSettingMultiCaret = true
             customSelectedRanges = ranges
+            super.setSelectedRanges(ranges, affinity: affinity, stillSelecting: stillSelecting)
+            isSettingMultiCaret = false
+        } else if isSettingMultiCaret {
+            // AppKit's own internal re-entrant call during our multi-caret
+            // apply — let it through but keep customSelectedRanges intact.
+            super.setSelectedRanges(ranges, affinity: affinity, stillSelecting: stillSelecting)
+        } else if customSelectedRanges != nil {
+            // AppKit is trying to collapse our multi-caret to a single range
+            // (e.g. cursor-blink timer, internal layout pass). Suppress it.
+            return
         } else {
+            // Normal single-caret path.
             customSelectedRanges = nil
+            super.setSelectedRanges(ranges, affinity: affinity, stillSelecting: stillSelecting)
         }
-        super.setSelectedRanges(ranges, affinity: affinity, stillSelecting: stillSelecting)
     }
+
+    // MARK: - First Responder
 
     override public func becomeFirstResponder() -> Bool {
         let result = super.becomeFirstResponder()
@@ -105,16 +145,15 @@ public final class MeridianTextView: NSTextView {
         return result
     }
 
+    // MARK: - Key Events
+
     override public func keyDown(with event: NSEvent) {
         let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
-        print("[MultiCaret Debug] MeridianTextView.keyDown: keyCode=\(event.keyCode), flags=\(flags)")
         if flags == [.option, .command] {
             if event.keyCode == 126 { // Up arrow
-                print("[MultiCaret Debug] Triggering addCaretAbove:")
                 NSApp.sendAction(Selector(("addCaretAbove:")), to: nil, from: self)
                 return
             } else if event.keyCode == 125 { // Down arrow
-                print("[MultiCaret Debug] Triggering addCaretBelow:")
                 NSApp.sendAction(Selector(("addCaretBelow:")), to: nil, from: self)
                 return
             }
@@ -122,54 +161,53 @@ public final class MeridianTextView: NSTextView {
         super.keyDown(with: event)
     }
 
+    // MARK: - Add Caret Actions
+
     /// Set by `TextKit2Engine`: handles Option+Cmd+Up action.
     public var onAddCaretAbove: (() -> Void)?
     /// Set by `TextKit2Engine`: handles Option+Cmd+Down action.
     public var onAddCaretBelow: (() -> Void)?
 
     @objc public func addCaretAbove(_ sender: Any?) {
-        print("[MultiCaret Debug] MeridianTextView.addCaretAbove action invoked")
         onAddCaretAbove?()
     }
 
     @objc public func addCaretBelow(_ sender: Any?) {
-        print("[MultiCaret Debug] MeridianTextView.addCaretBelow action invoked")
         onAddCaretBelow?()
     }
+
+    // MARK: - Mouse Events
 
     override public func mouseDown(with event: NSEvent) {
         let point = convert(event.locationInWindow, from: nil)
         let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
-        print("[MultiCaret Debug] MeridianTextView.mouseDown: point=\(point), flags=\(flags), hasOptionClick=\(onOptionClick != nil)")
         if onFoldPlaceholderClick?(point) == true {
-            print("[MultiCaret Debug] Handled by fold placeholder click")
             return
         }
         if flags.contains(.option) || flags.contains(.command) {
             if window?.firstResponder != self {
-                print("[MultiCaret Debug] Making MeridianTextView first responder")
                 window?.makeFirstResponder(self)
             }
-            if let onOptionClick {
-                print("[MultiCaret Debug] Invoking onOptionClick(at: \(point))")
-                onOptionClick(point)
-            } else {
-                print("[MultiCaret Debug] WARNING: onOptionClick is nil!")
-            }
+            onOptionClick?(point)
             return
         }
+        // Plain click: explicitly clear multi-caret state so AppKit can
+        // position a single cursor normally.
+        customSelectedRanges = nil
         super.mouseDown(with: event)
     }
 
     override public func mouseUp(with event: NSEvent) {
         let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
-        print("[MultiCaret Debug] MeridianTextView.mouseUp: flags=\(flags), customSelectedRangesCount=\(customSelectedRanges?.count ?? 0)")
-        if flags.contains(.option) || flags.contains(.command) || (customSelectedRanges?.count ?? 0) > 1 {
-            print("[MultiCaret Debug] Suppressing super.mouseUp for multi-caret selection")
+        // Suppress mouseUp only for modifier-based clicks (Option/Command add caret)
+        // so AppKit does not move the insertion point after we placed a new caret.
+        if flags.contains(.option) || flags.contains(.command) {
             return
         }
         super.mouseUp(with: event)
     }
+
+    // MARK: - Drawing
 
     override public func viewDidChangeEffectiveAppearance() {
         super.viewDidChangeEffectiveAppearance()
@@ -190,28 +228,18 @@ public final class MeridianTextView: NSTextView {
 
     private func drawCarets(in rect: NSRect) {
         let ranges = selectedRanges.map(\.rangeValue)
-        if ranges.count > 1 {
-            print("[MultiCaret Debug] MeridianTextView.drawCarets: selectedRanges.count=\(ranges.count), ranges=\(ranges)")
-        }
         guard ranges.count > 1 else { return }
 
         NSGraphicsContext.saveGraphicsState()
         let caretColor = insertionPointColor ?? NSColor.controlAccentColor
         caretColor.setFill()
 
-        var drawnCount = 0
         for selected in ranges where selected.length == 0 {
-            guard let caretRect = caretRect(for: selected) else {
-                print("[MultiCaret Debug] Could not compute caretRect for selected range: \(selected)")
-                continue
-            }
-            print("[MultiCaret Debug] Caret rect for range \(selected): \(caretRect)")
+            guard let caretRect = caretRect(for: selected) else { continue }
             if caretRect.intersects(rect) {
                 caretRect.fill()
-                drawnCount += 1
             }
         }
-        print("[MultiCaret Debug] drawCarets finished drawing \(drawnCount) carets")
         NSGraphicsContext.restoreGraphicsState()
     }
 

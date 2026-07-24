@@ -175,18 +175,13 @@ public final class TextKit2Engine: NSObject, TextLayoutEngine {
     }
 
     private func handleOptionClick(at point: NSPoint) {
-        print("[MultiCaret Debug] handleOptionClick at point=\(point)")
         let utf16Offset: Int
         if let tlm = textView.textLayoutManager {
             let pointInContainer = NSPoint(
                 x: point.x - textView.textContainerOrigin.x,
                 y: point.y - textView.textContainerOrigin.y
             )
-            print("[MultiCaret Debug] pointInContainer=\(pointInContainer)")
-            guard let fragment = tlm.textLayoutFragment(for: pointInContainer) else {
-                print("[MultiCaret Debug] tlm.textLayoutFragment for \(pointInContainer) returned NIL!")
-                return
-            }
+            guard let fragment = tlm.textLayoutFragment(for: pointInContainer) else { return }
             let startOffset = tlm.offset(from: tlm.documentRange.location, to: fragment.rangeInElement.location)
             var lineCharIndex = 0
             for lineFragment in fragment.textLineFragments {
@@ -203,34 +198,23 @@ public final class TextKit2Engine: NSObject, TextLayoutEngine {
                 }
             }
             utf16Offset = startOffset + lineCharIndex
-            print("[MultiCaret Debug] TextKit 2 resolved utf16Offset=\(utf16Offset)")
         } else {
             guard let window = textView.window else { return }
             let windowPoint = textView.convert(point, to: nil)
             let screenPoint = window.convertPoint(toScreen: windowPoint)
             let charIndex = textView.characterIndex(for: screenPoint)
-            guard charIndex != NSNotFound, charIndex >= 0 else {
-                print("[MultiCaret Debug] TextKit 1 fallback characterIndex returned NSNotFound")
-                return
-            }
+            guard charIndex != NSNotFound, charIndex >= 0 else { return }
             utf16Offset = charIndex
-            print("[MultiCaret Debug] TextKit 1 resolved utf16Offset=\(utf16Offset)")
         }
 
-        guard utf16Offset >= 0, utf16Offset <= buffer.utf16Count else {
-            print("[MultiCaret Debug] utf16Offset \(utf16Offset) out of bounds (0..<\(buffer.utf16Count))")
-            return
-        }
+        guard utf16Offset >= 0, utf16Offset <= buffer.utf16Count else { return }
         let byteOffset = buffer.byteOffset(of: UTF16Offset(utf16Offset))
         let currentSelection = selection(in: buffer)
-        print("[MultiCaret Debug] currentSelection ranges count=\(currentSelection.ranges.count)")
         let newSelection = currentSelection.togglingCaret(at: byteOffset)
-        print("[MultiCaret Debug] newSelection ranges count=\(newSelection.ranges.count), ranges=\(newSelection.ranges)")
         setSelection(newSelection, in: buffer)
     }
 
     private func handleAddCaretAbove() {
-        print("[MultiCaret Debug] handleAddCaretAbove in TextKit2Engine")
         let currentSelection = selection(in: buffer)
         var newRanges = currentSelection.ranges
         for range in currentSelection.ranges {
@@ -250,7 +234,6 @@ public final class TextKit2Engine: NSObject, TextLayoutEngine {
     }
 
     private func handleAddCaretBelow() {
-        print("[MultiCaret Debug] handleAddCaretBelow in TextKit2Engine")
         let currentSelection = selection(in: buffer)
         var newRanges = currentSelection.ranges
         for range in currentSelection.ranges {
@@ -360,10 +343,12 @@ public final class TextKit2Engine: NSObject, TextLayoutEngine {
             guard location <= maxUtf16, (location + length) <= maxUtf16 else { return nil }
             return NSValue(range: NSRange(location: location, length: length))
         }
-        print("[MultiCaret Debug] setSelection: incoming ranges=\(selection.ranges.count), nsRanges=\(nsRanges.map(\.rangeValue))")
         guard !nsRanges.isEmpty else { return }
-        textView.selectedRanges = nsRanges
-        print("[MultiCaret Debug] textView.selectedRanges after set: count=\(textView.selectedRanges.count), ranges=\(textView.selectedRanges.map(\.rangeValue))")
+        if nsRanges.count > 1 {
+            textView.applyMultiCaretRanges(nsRanges)
+        } else {
+            textView.selectedRanges = nsRanges
+        }
         textView.needsDisplay = true
     }
 
