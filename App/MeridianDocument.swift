@@ -634,6 +634,16 @@ final class MeridianDocument: NSDocument {
     }
 
     override func validateMenuItem(_ menuItem: NSMenuItem) -> Bool {
+        if let valid = validateEditorMenuItem(menuItem) {
+            return valid
+        }
+        if let valid = validateFoldMenuItem(menuItem) {
+            return valid
+        }
+        return super.validateMenuItem(menuItem)
+    }
+
+    private func validateEditorMenuItem(_ menuItem: NSMenuItem) -> Bool? {
         switch menuItem.action {
         case #selector(findNext(_:)), #selector(findPrevious(_:)):
             return !(findBarViewModel?.matches.isEmpty ?? true)
@@ -652,22 +662,24 @@ final class MeridianDocument: NSDocument {
         case #selector(splitVertically(_:)):
             menuItem.state = (currentSplitOrientation == .vertical) ? .on : .off
             return true
-        case #selector(foldCurrentRegion(_:)):
-            return focusedViewModel?.canFoldAtCaret == true
-        case #selector(unfoldCurrentRegion(_:)):
-            return focusedViewModel?.canUnfoldAtCaret == true
-        case #selector(foldAll(_:)):
-            return focusedViewModel?.canFoldAll == true
-        case #selector(unfoldAll(_:)):
-            return focusedViewModel?.canUnfoldAll == true
-        case #selector(foldLevel1(_:)),
-             #selector(foldLevel2(_:)),
-             #selector(foldLevel3(_:)),
-             #selector(foldLevel4(_:)),
-             #selector(foldLevel5(_:)):
-            return focusedViewModel?.canFoldAll == true
         default:
-            return super.validateMenuItem(menuItem)
+            return nil
+        }
+    }
+
+    private func validateFoldMenuItem(_ menuItem: NSMenuItem) -> Bool? {
+        switch menuItem.action {
+        case #selector(foldCurrentRegion(_:)):
+            focusedViewModel?.canFoldAtCaret == true
+        case #selector(unfoldCurrentRegion(_:)):
+            focusedViewModel?.canUnfoldAtCaret == true
+        case #selector(foldAll(_:)), #selector(unfoldAll(_:)),
+             #selector(foldLevel1(_:)), #selector(foldLevel2(_:)),
+             #selector(foldLevel3(_:)), #selector(foldLevel4(_:)),
+             #selector(foldLevel5(_:)):
+            focusedViewModel?.canFoldAll == true
+        default:
+            nil
         }
     }
 
