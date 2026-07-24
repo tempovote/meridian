@@ -52,6 +52,17 @@ enum MainMenu {
 
     private static func editMenuItem() -> NSMenuItem {
         let menu = NSMenu(title: "Edit")
+        addBasicEditCommands(to: menu)
+        menu.addItem(.separator())
+        addLineEditingCommands(to: menu)
+        menu.addItem(.separator())
+        addMultiCaretCommands(to: menu)
+        menu.addItem(.separator())
+        addTransformCommands(to: menu)
+        return wrapped(menu)
+    }
+
+    private static func addBasicEditCommands(to menu: NSMenu) {
         addCommand(to: menu, title: "Undo", action: Selector(("undo:")), keyEquivalent: "z")
         addCommand(to: menu, title: "Redo", action: Selector(("redo:")), keyEquivalent: "Z")
         menu.addItem(.separator())
@@ -59,8 +70,9 @@ enum MainMenu {
         addCommand(to: menu, title: "Copy", action: #selector(NSText.copy(_:)), keyEquivalent: "c")
         addCommand(to: menu, title: "Paste", action: #selector(NSText.paste(_:)), keyEquivalent: "v")
         addCommand(to: menu, title: "Select All", action: #selector(NSText.selectAll(_:)), keyEquivalent: "a")
-        menu.addItem(.separator())
+    }
 
+    private static func addLineEditingCommands(to menu: NSMenu) {
         addCommand(to: menu, title: "Duplicate Line", action: Selector(("duplicateLine:")), keyEquivalent: "D")
         addCommand(to: menu, title: "Delete Line", action: Selector(("deleteLine:")), keyEquivalent: "K")
         addCommand(
@@ -76,7 +88,9 @@ enum MainMenu {
             keyEquivalent: "",
         )
         addCommand(to: menu, title: "Deduplicate Lines", action: Selector(("deduplicateLines:")), keyEquivalent: "")
-        menu.addItem(.separator())
+    }
+
+    private static func addMultiCaretCommands(to menu: NSMenu) {
         addCommand(
             to: menu,
             title: "Add Caret Above",
@@ -104,7 +118,9 @@ enum MainMenu {
             keyEquivalent: "l",
             modifierMask: [.command, .shift],
         )
-        menu.addItem(.separator())
+    }
+
+    private static func addTransformCommands(to menu: NSMenu) {
         addCommand(
             to: menu,
             title: "Trim Trailing Whitespace",
@@ -121,8 +137,6 @@ enum MainMenu {
             to: menu, title: "Convert Line Endings to CRLF",
             action: Selector(("convertLineEndingsToCRLF:")), keyEquivalent: "",
         )
-
-        return wrapped(menu)
     }
 
     private static func findMenuItem() -> NSMenuItem {

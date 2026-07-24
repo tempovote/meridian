@@ -152,9 +152,12 @@ public enum TextTransforms {
             origin: .user,
         )
     }
+}
 
-    /// Rewrites every line break in `buffer` to `target`.
-    public static func convertLineEndings(in buffer: TextBuffer, to target: LineEnding) -> EditTransaction {
+// MARK: - Line Operations & Helpers
+
+public extension TextTransforms {
+    static func convertLineEndings(in buffer: TextBuffer, to target: LineEnding) -> EditTransaction {
         let convertedText = buffer.convertingLineEndings(to: target).string
         if convertedText == buffer.string {
             return emptyTransaction(in: buffer)
@@ -169,7 +172,7 @@ public enum TextTransforms {
     }
 
     /// Sorts lines covered by `selection` (or entire buffer if selection is empty/caret).
-    public static func sortLines(
+    static func sortLines(
         in buffer: TextBuffer,
         selection: SelectionSet = .empty,
         ascending: Bool = true,
@@ -215,7 +218,7 @@ public enum TextTransforms {
 
     /// Removes duplicate lines covered by `selection` (or entire buffer if selection is empty/caret), keeping first
     /// occurrence.
-    public static func deduplicateLines(
+    static func deduplicateLines(
         in buffer: TextBuffer,
         selection: SelectionSet = .empty,
         caseSensitive: Bool = true,

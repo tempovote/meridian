@@ -277,11 +277,9 @@ public final class MeridianTextView: NSTextView {
 
         for lineFragment in fragment.textLineFragments {
             let lineRange = lineFragment.characterRange
-            let lowerBound = lineRange.location
-            let upperBound = lineRange.location + lineRange.length
-            if charOffsetInElement >= lowerBound,
-               charOffsetInElement <= upperBound
-            {
+            let inRange = charOffsetInElement >= lineRange.location
+                && charOffsetInElement <= lineRange.location + lineRange.length
+            if inRange {
                 let indexInLine = charOffsetInElement - lineRange.location
                 let locInLine = lineFragment.locationForCharacter(at: indexInLine)
                 originX += locInLine.x
@@ -305,8 +303,12 @@ public final class MeridianTextView: NSTextView {
 
         return NSRect(x: 0, y: originY, width: bounds.width, height: height)
     }
+}
 
-    private func drawIndentGuides(in rect: NSRect) {
+// MARK: - Indent Guides (private extension to keep type body length in check)
+
+private extension MeridianTextView {
+    func drawIndentGuides(in rect: NSRect) {
         guard isIndentGuidesEnabled, tabWidth > 0, let font else { return }
         guard let textLayoutManager else { return }
 
@@ -317,13 +319,16 @@ public final class MeridianTextView: NSTextView {
         let selectedLocation = selectedRanges.first?.rangeValue.location ?? 0
         var activeIndentLevel = -1
 
-        if let docStart = textLayoutManager.documentRange.location as NSTextLocation?,
-           let caretLoc = textLayoutManager.location(docStart, offsetBy: selectedLocation),
-           let caretFragment = textLayoutManager.textLayoutFragment(for: caretLoc),
-           let paragraph = caretFragment.textElement as? NSTextParagraph
-        {
-            let caretLineText = paragraph.attributedString.string
-            activeIndentLevel = computeIndentLevel(for: caretLineText)
+        let caretParagraph: NSTextParagraph? = {
+            guard let docStart = textLayoutManager.documentRange.location as NSTextLocation?,
+                  let caretLoc = textLayoutManager.location(docStart, offsetBy: selectedLocation),
+                  let caretFragment = textLayoutManager.textLayoutFragment(for: caretLoc)
+            else { return nil }
+            return caretFragment.textElement as? NSTextParagraph
+        }()
+
+        if let paragraph = caretParagraph {
+            activeIndentLevel = computeIndentLevel(for: paragraph.attributedString.string)
         }
 
         NSGraphicsContext.saveGraphicsState()
@@ -345,8 +350,8 @@ public final class MeridianTextView: NSTextView {
             }
 
             for level in 1 ... indentLevel {
-                let x = textContainerOrigin.x + CGFloat(level) * indentStepWidth
-                let guideRect = NSRect(x: x, y: originY, width: 1.0, height: frame.height)
+                let xPos = textContainerOrigin.x + CGFloat(level) * indentStepWidth
+                let guideRect = NSRect(x: xPos, y: originY, width: 1.0, height: frame.height)
                 let color = (level == activeIndentLevel) ? activeIndentGuideColor : indentGuideColor
                 color.setFill()
                 guideRect.fill(using: .sourceOver)
@@ -356,7 +361,7 @@ public final class MeridianTextView: NSTextView {
         NSGraphicsContext.restoreGraphicsState()
     }
 
-    private func computeIndentLevel(for text: String) -> Int {
+    func computeIndentLevel(for text: String) -> Int {
         var spaces = 0
         for char in text {
             if char == " " {

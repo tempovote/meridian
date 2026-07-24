@@ -94,72 +94,92 @@ public final class FindInFilesEngine: Sendable {
                 break
             }
 
-            let path = fileURL.path
-            let fileName = fileURL.lastPathComponent
-
-            // Skip default ignored directories / files
-            if path.contains("/.git/") || path.contains("/.build/") || path.contains("/DerivedData/") {
+            if shouldSkipFile(fileURL, includes: includes, excludes: excludes) {
                 continue
             }
 
-            // Exclude pattern matching
-            if !excludes.isEmpty, matchesAnyPattern(fileName: fileName, path: path, patterns: excludes) {
-                continue
-            }
-
-            // Include pattern matching
-            if !includes.isEmpty, !matchesAnyPattern(fileName: fileName, path: path, patterns: includes) {
-                continue
-            }
-
-            guard let resourceValues = try? fileURL.resourceValues(forKeys: [.isRegularFileKey, .fileSizeKey]),
-                  resourceValues.isRegularFile == true,
-                  let size = resourceValues.fileSize,
-                  size > 0, size <= 10 * 1024 * 1024 // 10MB max per file
-            else { continue }
-
-            guard let loaded = try? TextFileIO.loadTextFile(at: fileURL) else { continue }
-            let buffer = loaded.buffer
-
-            let rawMatches = searchEngine.findAll(query: query.query, in: buffer, options: query.options)
-            if rawMatches.isEmpty {
-                continue
-            }
-
-            var fileMatches: [FileMatch] = []
-            for match in rawMatches {
-                let pos = buffer.linePosition(of: match.range.lowerBound)
-                let lineRange = buffer.byteRange(ofLine: pos.line)
-                let lineStart = buffer.utf16Offset(of: lineRange.lowerBound).value
-                let lineEnd = buffer.utf16Offset(of: lineRange.upperBound).value
-                let nsText = buffer.string as NSString
-
-                let snippet: String = if lineEnd > lineStart, lineEnd <= nsText.length {
-                    nsText.substring(with: NSRange(location: lineStart, length: lineEnd - lineStart))
-                        .trimmingCharacters(in: .whitespacesAndNewlines)
-                } else {
-                    ""
-                }
-
-                let fileMatch = FileMatch(
-                    line: pos.line + 1,
-                    column: pos.utf16Column + 1,
-                    range: match.range,
-                    lineSnippet: snippet,
-                )
-                fileMatches.append(fileMatch)
-                totalMatchesCount += 1
-                if totalMatchesCount >= maxTotalMatches {
-                    break
-                }
-            }
-
+            let maxRemaining = maxTotalMatches - totalMatchesCount
+            let fileMatches = processFile(
+                fileURL: fileURL,
+                query: query,
+                searchEngine: searchEngine,
+                maxMatches: maxRemaining,
+            )
             if !fileMatches.isEmpty {
+                totalMatchesCount += fileMatches.count
                 results.append(FileSearchResult(fileURL: fileURL, matches: fileMatches))
             }
         }
 
         return results
+    }
+
+    private func shouldSkipFile(_ fileURL: URL, includes: [String], excludes: [String]) -> Bool {
+        let path = fileURL.path
+        let fileName = fileURL.lastPathComponent
+
+        if path.contains("/.git/") || path.contains("/.build/") || path.contains("/DerivedData/") {
+            return true
+        }
+
+        if !excludes.isEmpty, matchesAnyPattern(fileName: fileName, path: path, patterns: excludes) {
+            return true
+        }
+
+        if !includes.isEmpty, !matchesAnyPattern(fileName: fileName, path: path, patterns: includes) {
+            return true
+        }
+
+        guard let resourceValues = try? fileURL.resourceValues(forKeys: [.isRegularFileKey, .fileSizeKey]),
+              resourceValues.isRegularFile == true,
+              let size = resourceValues.fileSize,
+              size > 0, size <= 10 * 1024 * 1024
+        else { return true }
+
+        return false
+    }
+
+    private func processFile(
+        fileURL: URL,
+        query: FindInFilesQuery,
+        searchEngine: SearchEngine,
+        maxMatches: Int,
+    ) -> [FileMatch] {
+        guard let loaded = try? TextFileIO.loadTextFile(at: fileURL) else { return [] }
+        let buffer = loaded.buffer
+        let rawMatches = searchEngine.findAll(query: query.query, in: buffer, options: query.options)
+        if rawMatches.isEmpty {
+            return []
+        }
+
+        var fileMatches: [FileMatch] = []
+        for match in rawMatches {
+            let pos = buffer.linePosition(of: match.range.lowerBound)
+            let lineRange = buffer.byteRange(ofLine: pos.line)
+            let lineStart = buffer.utf16Offset(of: lineRange.lowerBound).value
+            let lineEnd = buffer.utf16Offset(of: lineRange.upperBound).value
+            let nsText = buffer.string as NSString
+
+            let snippet: String = if lineEnd > lineStart, lineEnd <= nsText.length {
+                nsText.substring(with: NSRange(location: lineStart, length: lineEnd - lineStart))
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
+            } else {
+                ""
+            }
+
+            let fileMatch = FileMatch(
+                line: pos.line + 1,
+                column: pos.utf16Column + 1,
+                range: match.range,
+                lineSnippet: snippet,
+            )
+            fileMatches.append(fileMatch)
+            if fileMatches.count >= maxMatches {
+                break
+            }
+        }
+
+        return fileMatches
     }
 
     private func parsePatterns(_ raw: String) -> [String] {

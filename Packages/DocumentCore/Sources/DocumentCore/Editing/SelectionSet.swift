@@ -52,9 +52,9 @@ public struct SelectionSet: Hashable, Sendable {
                 continue
             }
 
-            if range.lowerBound < last
-                .upperBound || (range.lowerBound == last.upperBound && (range.isEmpty || last.isEmpty))
-            {
+            let overlapsOrAdjacent = range.lowerBound < last.upperBound
+                || (range.lowerBound == last.upperBound && (range.isEmpty || last.isEmpty))
+            if overlapsOrAdjacent {
                 let newStart = min(last.lowerBound, range.lowerBound)
                 let newEnd = max(last.upperBound, range.upperBound)
                 merged[merged.count - 1] = newStart ..< newEnd

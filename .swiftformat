@@ -4,4 +4,4 @@
 --self remove
 --importgrouping testable-bottom
 --stripunusedargs closure-only
---exclude **/.build
+--exclude build,**/.build
