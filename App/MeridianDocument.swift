@@ -117,7 +117,7 @@ final class MeridianDocument: NSDocument {
 
     private let fileTreeViewModel = FileTreeViewModel()
     private var sidebarHost: NSHostingView<FileTreeView>?
-    var isSidebarVisible = true
+    var isSidebarVisible = false
 
     private var focusedViewModel: EditorViewModel? {
         panes.indices.contains(focusedPaneIndex) ? panes[focusedPaneIndex].viewModel : nil
