@@ -36,6 +36,23 @@ final class MeridianWindow: NSWindow {
         }
     }
 
+    @objc func toggleSidebar(_ sender: Any?) {
+        if let doc = windowController?.document as? MeridianDocument {
+            doc.toggleSidebar(sender)
+        }
+    }
+
+    override func validateMenuItem(_ menuItem: NSMenuItem) -> Bool {
+        if menuItem.action == #selector(toggleSidebar(_:)) {
+            if let doc = windowController?.document as? MeridianDocument {
+                menuItem.state = doc.isSidebarVisible ? .on : .off
+                return true
+            }
+            return true
+        }
+        return super.validateMenuItem(menuItem)
+    }
+
     override func sendEvent(_ event: NSEvent) {
         if event.type == .leftMouseDown, event.clickCount == 2 {
             let point = event.locationInWindow
