@@ -24,7 +24,7 @@ public final class FileTreeViewModel: ObservableObject {
     }
 
     public func loadDirectory(_ url: URL) {
-        let items = fetchContents(of: url)
+        let items = fetchContents(of: url, depth: 0)
         Swift.print("[FileTree Debug] Loaded \(items.count) root items for: \(url.path)")
         rootItems = items
     }
@@ -37,7 +37,7 @@ public final class FileTreeViewModel: ObservableObject {
         }
     }
 
-    private func fetchContents(of directoryURL: URL) -> [FileTreeItem] {
+    private func fetchContents(of directoryURL: URL, depth: Int) -> [FileTreeItem] {
         let fileManager = FileManager.default
         let keys: [URLResourceKey] = [.isDirectoryKey, .isHiddenKey]
         guard let urls = try? fileManager.contentsOfDirectory(
@@ -59,7 +59,7 @@ public final class FileTreeViewModel: ObservableObject {
 
         return sorted.map { url in
             let isDir = (try? url.resourceValues(forKeys: [.isDirectoryKey]))?.isDirectory ?? false
-            let children: [FileTreeItem]? = isDir ? fetchContents(of: url) : nil
+            let children: [FileTreeItem]? = (isDir && depth < 1) ? fetchContents(of: url, depth: depth + 1) : nil
             return FileTreeItem(url: url, isDirectory: isDir, children: children)
         }
     }
