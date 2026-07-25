@@ -4,8 +4,23 @@ func isScalarBoundary(_ bytes: [UInt8], _ index: Int) -> Bool {
     index == 0 || index == bytes.count || bytes[index] & 0xC0 != 0x80
 }
 
+/// True when `index` is a valid split point in `bytes`: start, end, or a
+/// scalar-leading byte (never a UTF-8 continuation byte).
+func isScalarBoundary(_ bytes: UnsafeBufferPointer<UInt8>, _ index: Int) -> Bool {
+    index == 0 || index == bytes.count || bytes[index] & 0xC0 != 0x80
+}
+
 /// The nearest scalar boundary at or before `index`.
 func scalarBoundary(in bytes: [UInt8], notAfter index: Int) -> Int {
+    var pos = index
+    while pos > 0, !isScalarBoundary(bytes, pos) {
+        pos -= 1
+    }
+    return pos
+}
+
+/// The nearest scalar boundary at or before `index`.
+func scalarBoundary(in bytes: UnsafeBufferPointer<UInt8>, notAfter index: Int) -> Int {
     var pos = index
     while pos > 0, !isScalarBoundary(bytes, pos) {
         pos -= 1
@@ -27,11 +42,10 @@ struct Leaf {
         summary = Summary(scanning: bytes)
     }
 
-    /// Splits a byte string into leaves of at most `maxBytes`, never
-    /// splitting inside a scalar.
-    /// Greedy max-fill: every leaf but the last is near maxBytes; the final remainder may be small.
-    static func leaves(from bytes: [UInt8]) -> [Leaf] {
-        guard !bytes.isEmpty else { return [] }
+    /// Splits a raw byte pointer buffer into leaves of at most `maxBytes`,
+    /// never splitting inside a scalar.
+    static func leaves(from bytes: UnsafeBufferPointer<UInt8>) -> [Leaf] {
+        guard let base = bytes.baseAddress, !bytes.isEmpty else { return [] }
         var result: [Leaf] = []
         var start = 0
         while start < bytes.count {
@@ -40,9 +54,17 @@ struct Leaf {
             if end <= start {
                 end = idealEnd // degenerate: oversized scalar run, take as-is
             }
-            result.append(Leaf(bytes: Array(bytes[start ..< end])))
+            let chunkBuffer = UnsafeBufferPointer(start: base + start, count: end - start)
+            result.append(Leaf(bytes: Array(chunkBuffer)))
             start = end
         }
         return result
+    }
+
+    /// Splits a byte string into leaves of at most `maxBytes`, never
+    /// splitting inside a scalar.
+    /// Greedy max-fill: every leaf but the last is near maxBytes; the final remainder may be small.
+    static func leaves(from bytes: [UInt8]) -> [Leaf] {
+        bytes.withUnsafeBufferPointer { leaves(from: $0) }
     }
 }

@@ -84,8 +84,8 @@ private final class WideDividerSplitView: NSSplitView {
 /// NSUndoManager actions replaying the rope's UndoStack (spec decision 3).
 final class MeridianDocument: NSDocument {
     // swiftlint:disable:previous type_body_length
-    /// Huge-file threshold: at or above this size, refuse to open.
-    nonisolated static let maxFileSize = 64 * 1024 * 1024
+    /// Upper bound on file size Meridian will attempt to open (2 GB).
+    nonisolated static let maxFileSize = 2 * 1024 * 1024 * 1024
     /// Pathological-line threshold, in UTF-8 bytes.
     nonisolated static let maxLineLength = 1_000_000
 

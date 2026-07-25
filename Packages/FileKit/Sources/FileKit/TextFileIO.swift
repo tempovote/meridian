@@ -38,22 +38,43 @@ public enum TextFileIO {
     /// guard metadata. Never interprets content — every byte sequence
     /// decodes (DocumentCore §6.4 total pipeline).
     public static func loadTextFile(at url: URL) throws -> LoadedTextFile {
-        let data: Data
-        do {
-            data = try Data(contentsOf: url)
-        } catch {
-            throw FileKitError.unreadable(url: url, underlying: error)
+        let attributes = try? FileManager.default.attributesOfItem(atPath: url.path)
+        let byteSize = Int((attributes?[.size] as? Int64) ?? 0)
+
+        if byteSize >= 64 * 1024 * 1024 {
+            let buffer: TextBuffer
+            do {
+                buffer = try TextBuffer(contentsOfFile: url)
+            } catch {
+                throw FileKitError.unreadable(url: url, underlying: error)
+            }
+            return LoadedTextFile(
+                buffer: buffer,
+                encoding: .utf8,
+                hadBOM: false,
+                repairsMade: false,
+                dominantLineEnding: buffer.lineEndingStats().dominant,
+                byteSize: byteSize,
+                longestLineUTF8Length: longestLineUTF8Length(of: buffer),
+            )
+        } else {
+            let data: Data
+            do {
+                data = try Data(contentsOf: url)
+            } catch {
+                throw FileKitError.unreadable(url: url, underlying: error)
+            }
+            let decoded = TextDecoder.decode(ArraySlice([UInt8](data)))
+            return LoadedTextFile(
+                buffer: decoded.buffer,
+                encoding: decoded.encoding,
+                hadBOM: decoded.hadBOM,
+                repairsMade: decoded.repairsMade,
+                dominantLineEnding: decoded.buffer.lineEndingStats().dominant,
+                byteSize: data.count,
+                longestLineUTF8Length: longestLineUTF8Length(of: decoded.buffer),
+            )
         }
-        let decoded = TextDecoder.decode(ArraySlice([UInt8](data)))
-        return LoadedTextFile(
-            buffer: decoded.buffer,
-            encoding: decoded.encoding,
-            hadBOM: decoded.hadBOM,
-            repairsMade: decoded.repairsMade,
-            dominantLineEnding: decoded.buffer.lineEndingStats().dominant,
-            byteSize: data.count,
-            longestLineUTF8Length: longestLineUTF8Length(of: decoded.buffer),
-        )
     }
 
     /// Encodes `buffer` for on-disk storage in `encoding`.

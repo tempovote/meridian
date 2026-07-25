@@ -21,8 +21,15 @@ public final class MmapLeafBuffer: @unchecked Sendable {
         return [UInt8](mappedData[clampedStart ..< clampedEnd])
     }
 
-    /// Converts the mapped data into a `TextBuffer`.
+    /// Converts the mapped data into a `TextBuffer` without copying the raw file into an intermediate heap array.
     public func toTextBuffer() -> TextBuffer {
-        TextBuffer(bytes: [UInt8](mappedData))
+        let node = mappedData.withUnsafeBytes { rawBuffer -> Node in
+            guard let baseAddress = rawBuffer.baseAddress?.assumingMemoryBound(to: UInt8.self) else {
+                return Node.leaf(Leaf(bytes: []))
+            }
+            let bufferPtr = UnsafeBufferPointer(start: baseAddress, count: rawBuffer.count)
+            return Node.build(from: bufferPtr)
+        }
+        return TextBuffer(root: node)
     }
 }

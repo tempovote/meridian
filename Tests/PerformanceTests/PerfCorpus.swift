@@ -32,6 +32,17 @@ enum PerfCorpus {
         }
     }
 
+    /// 1 GB standard text file (~20,000,000 lines).
+    static var text1GB: URL {
+        getThrows {
+            try ensureFile(
+                named: "corpus-1gb.txt",
+                targetBytes: 1_000_000_000,
+                lineTemplate: "0123456789012345678901234567890123456789012345678\n",
+            )
+        }
+    }
+
     /// 100 MB text file for search benchmark (~2,000 matches across 100 MB).
     static var text100MBSearch: URL {
         getThrows {

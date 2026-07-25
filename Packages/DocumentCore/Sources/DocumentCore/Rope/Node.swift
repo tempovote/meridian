@@ -43,7 +43,8 @@ enum Node {
     /// is exactly `maxFanout`), so an even split always lands both halves
     /// in bounds. The root — the single node left when a level collapses
     /// to one group — is exempt from `minFanout` entirely.
-    static func build(from bytes: [UInt8]) -> Node {
+    /// Builds a balanced tree bottom-up from a raw byte pointer buffer.
+    static func build(from bytes: UnsafeBufferPointer<UInt8>) -> Node {
         let leaves = Leaf.leaves(from: bytes)
         guard !leaves.isEmpty else { return .leaf(Leaf(bytes: [])) }
         var level: [Node] = leaves.map(Node.leaf)
@@ -66,6 +67,11 @@ enum Node {
             level = groups.map(makeInner)
         }
         return level[0]
+    }
+
+    /// Builds a balanced tree bottom-up: leaves → groups of ≤ maxFanout.
+    static func build(from bytes: [UInt8]) -> Node {
+        bytes.withUnsafeBufferPointer { build(from: $0) }
     }
 
     func forEachLeaf(_ body: (Leaf) -> Void) {
