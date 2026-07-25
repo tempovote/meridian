@@ -6,6 +6,36 @@ import AppKit
 /// is open, and supports double-clicking the empty space in the tab bar inline
 /// to create a new document.
 final class MeridianWindow: NSWindow {
+    override init(
+        contentRect: NSRect,
+        styleMask style: NSWindow.StyleMask,
+        backing backingStoreType: NSWindow.BackingStoreType,
+        defer flag: Bool,
+    ) {
+        super.init(contentRect: contentRect, styleMask: style, backing: backingStoreType, defer: flag)
+        tabbingMode = .preferred
+    }
+
+    override func makeKeyAndOrderFront(_ sender: Any?) {
+        super.makeKeyAndOrderFront(sender)
+        ensureTabBarVisible()
+    }
+
+    override func orderFront(_ sender: Any?) {
+        super.orderFront(sender)
+        ensureTabBarVisible()
+    }
+
+    private func ensureTabBarVisible() {
+        tabbingMode = .preferred
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            if tabGroup?.isTabBarVisible != true {
+                toggleTabBar(nil)
+            }
+        }
+    }
+
     override func sendEvent(_ event: NSEvent) {
         if event.type == .leftMouseDown, event.clickCount == 2 {
             let point = event.locationInWindow
@@ -22,9 +52,8 @@ final class MeridianWindow: NSWindow {
             return false
         }
 
-        // Titlebar and Tabbar region lives above the contentView frame
-        let contentHeight = contentView.frame.height
-        guard point.y >= contentHeight else {
+        let contentTop = contentView.frame.origin.y + contentView.frame.height
+        guard point.y >= contentTop - 2 else {
             return false
         }
 
@@ -39,7 +68,9 @@ final class MeridianWindow: NSWindow {
         var current: NSView? = hitView
         while let view = current {
             let className = String(describing: type(of: view))
-            if className.contains("TabItem") || className.contains("CloseButton") || className.contains("Button") {
+            let isTabOrButton = className.contains("TabItem") || className.contains("CloseButton")
+                || className.contains("Button") || className.contains("ItemView")
+            if isTabOrButton {
                 return false
             }
             current = view.superview

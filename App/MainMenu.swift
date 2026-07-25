@@ -173,6 +173,15 @@ enum MainMenu {
         addCommand(to: menu, title: "Status Bar", action: Selector(("toggleStatusBar:")), keyEquivalent: "")
         menu.addItem(.separator())
         addCommand(
+            to: menu, title: "Show Tab Bar", action: Selector(("toggleTabBar:")),
+            keyEquivalent: "T", modifierMask: [.command, .shift],
+        )
+        addCommand(
+            to: menu, title: "Show All Tabs", action: Selector(("toggleTabOverview:")),
+            keyEquivalent: "O", modifierMask: [.command, .shift],
+        )
+        menu.addItem(.separator())
+        addCommand(
             to: menu, title: "Split Horizontally", action: Selector(("splitHorizontally:")),
             keyEquivalent: "\\", modifierMask: [.command],
         )

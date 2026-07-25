@@ -233,8 +233,10 @@ final class MeridianDocument: NSDocument {
         for controller in windowControllers {
             if let window = controller.window {
                 window.tabbingMode = .preferred
-                if window.tabGroup?.isTabBarVisible != true {
-                    window.toggleTabBar(nil)
+                DispatchQueue.main.async {
+                    if window.tabGroup?.isTabBarVisible != true {
+                        window.toggleTabBar(nil)
+                    }
                 }
             }
         }
