@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 
 /// Manages directory listing and file selection state for the workspace file sidebar.
@@ -31,11 +32,31 @@ public final class FileTreeViewModel: ObservableObject {
     public func navigateToParentDirectory() {
         guard let rootURL, canNavigateToParent else { return }
         let parent = rootURL.deletingLastPathComponent()
-        logDebug("navigateToParentDirectory from '\(rootURL.path)' to '\(parent.path)'")
-        let accessing = parent.startAccessingSecurityScopedResource()
-        setRootURL(parent)
-        if accessing {
-            parent.stopAccessingSecurityScopedResource()
+        logDebug("navigateToParentDirectory: requesting sandbox access to '\(parent.path)'")
+
+        // App Sandbox requires explicit user grant for directories outside the
+        // originally opened scope. Show NSOpenPanel pre-directed at the parent
+        // so the user just presses Open once — no typing required.
+        let panel = NSOpenPanel()
+        panel.canChooseFiles = false
+        panel.canChooseDirectories = true
+        panel.allowsMultipleSelection = false
+        panel.directoryURL = parent
+        panel.prompt = "Open"
+        panel.message = "Grant access to \(parent.lastPathComponent) to browse its contents."
+
+        if panel.runModal() == .OK, let grantedURL = panel.url {
+            logDebug("navigateToParentDirectory: user granted '\(grantedURL.path)'")
+            let accessing = grantedURL.startAccessingSecurityScopedResource()
+            setRootURL(grantedURL)
+            if accessing {
+                // Keep resource active long enough for the initial load, then release.
+                DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+                    grantedURL.stopAccessingSecurityScopedResource()
+                }
+            }
+        } else {
+            logDebug("navigateToParentDirectory: user cancelled panel")
         }
     }
 

@@ -33,7 +33,57 @@ final class MeridianWindow: NSWindow {
             if tabGroup?.isTabBarVisible != true {
                 toggleTabBar(nil)
             }
+            // After the tab bar is visible, inject the sidebar button into it.
+            DispatchQueue.main.async { [weak self] in
+                self?.injectSidebarButtonIntoTabBar()
+            }
         }
+    }
+
+    private func injectSidebarButtonIntoTabBar() {
+        // Walk up from contentView to find the "frame view" (NSThemeFrame)
+        guard let frameView = contentView?.superview else { return }
+        // Find the tab bar view by class name heuristic
+        let tabBarView = findTabBarView(in: frameView)
+        guard let tabBarView else { return }
+
+        // Don't inject twice
+        if tabBarView.subviews.contains(where: { $0.identifier?.rawValue == "meridian.sidebarTabBtn" }) {
+            return
+        }
+
+        let btn = NSButton(frame: .zero)
+        btn.identifier = NSUserInterfaceItemIdentifier("meridian.sidebarTabBtn")
+        btn.bezelStyle = .recessed
+        btn.isBordered = false
+        btn.image = NSImage(systemSymbolName: "sidebar.left", accessibilityDescription: "Toggle Sidebar")
+        btn.contentTintColor = .secondaryLabelColor
+        btn.target = self
+        btn.action = #selector(toggleSidebar(_:))
+        btn.toolTip = "Toggle Sidebar (⌘B)"
+        btn.sizeToFit()
+
+        // Position at the leading edge of the tab bar
+        let btnW: CGFloat = 32
+        let btnH = tabBarView.frame.height
+        btn.frame = NSRect(x: 0, y: 0, width: btnW, height: btnH)
+        btn.autoresizingMask = [.minYMargin]
+
+        tabBarView.addSubview(btn)
+    }
+
+    private func findTabBarView(in view: NSView) -> NSView? {
+        let name = String(describing: type(of: view))
+        // macOS internal class is "NSTabBarView" or similar
+        if name.contains("TabBar") {
+            return view
+        }
+        for sub in view.subviews {
+            if let found = findTabBarView(in: sub) {
+                return found
+            }
+        }
+        return nil
     }
 
     @objc func toggleSidebar(_ sender: Any?) {

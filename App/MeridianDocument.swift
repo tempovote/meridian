@@ -248,15 +248,6 @@ final class MeridianDocument: NSDocument {
             window.tabbingMode = .preferred
             window.center()
             window.contentView = mainSplitView
-
-            let accessoryVC = NSTitlebarAccessoryViewController()
-            let titlebarBtn = SidebarLeadingTitlebarButton { [weak self] in
-                self?.toggleSidebar(nil)
-            }
-            accessoryVC.view = NSHostingView(rootView: titlebarBtn)
-            accessoryVC.layoutAttribute = .leading
-            window.addTitlebarAccessoryViewController(accessoryVC)
-
             window.makeFirstResponder(engine.keyView)
             addWindowController(NSWindowController(window: window))
         }
