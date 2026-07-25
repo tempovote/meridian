@@ -26,14 +26,24 @@ public struct FileTreeView: View {
     }
 
     private var headerView: some View {
-        HStack {
+        HStack(spacing: 6) {
             Image(systemName: "folder")
                 .foregroundColor(.secondary)
-            Text(viewModel.rootURL?.lastPathComponent ?? "NO FOLDER OPEN")
+            Text(viewModel.rootURL?.lastPathComponent.uppercased() ?? "WORKSPACE")
                 .font(.system(size: 11, weight: .bold))
                 .foregroundColor(.secondary)
                 .lineLimit(1)
             Spacer()
+
+            Button {
+                viewModel.onToggleSidebar?()
+            } label: {
+                Image(systemName: "sidebar.left")
+                    .foregroundColor(.secondary)
+                    .font(.system(size: 12))
+            }
+            .buttonStyle(.plain)
+            .help("Toggle Sidebar (⌘B)")
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 8)

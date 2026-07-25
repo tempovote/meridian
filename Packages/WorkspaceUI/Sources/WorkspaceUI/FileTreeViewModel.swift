@@ -8,6 +8,7 @@ public final class FileTreeViewModel: ObservableObject {
     @Published public var selectedURL: URL?
 
     public var onSelectFile: ((URL) -> Void)?
+    public var onToggleSidebar: (() -> Void)?
 
     public init(rootURL: URL? = nil) {
         self.rootURL = rootURL

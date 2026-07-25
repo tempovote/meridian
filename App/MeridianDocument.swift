@@ -132,6 +132,17 @@ final class MeridianDocument: NSDocument {
         false
     }
 
+    override var fileURL: URL? {
+        didSet {
+            if let fileURL {
+                let folderURL = fileURL.deletingLastPathComponent()
+                Task { @MainActor in
+                    self.fileTreeViewModel.setRootURL(folderURL)
+                }
+            }
+        }
+    }
+
     override func read(from url: URL, ofType typeName: String) throws {
         let values = try url.resourceValues(forKeys: [.fileSizeKey])
         let size = values.fileSize ?? 0
@@ -250,14 +261,18 @@ final class MeridianDocument: NSDocument {
         sidebarHost.widthAnchor.constraint(greaterThanOrEqualToConstant: 180).isActive = true
         sidebarHost.widthAnchor.constraint(lessThanOrEqualToConstant: 320).isActive = true
 
-        if let folderURL = fileURL?.deletingLastPathComponent() {
-            Swift.print("[Meridian Debug] Setting sidebar rootURL: \(folderURL.path)")
-            fileTreeViewModel.setRootURL(folderURL)
-        }
+        let initialFolder = fileURL?.deletingLastPathComponent()
+            ?? URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
+        Swift.print("[Meridian Debug] Setting sidebar rootURL: \(initialFolder.path)")
+        fileTreeViewModel.setRootURL(initialFolder)
+
         fileTreeViewModel.onSelectFile = { [weak self] selectedURL in
             Swift.print("[Meridian Debug] Sidebar file selected: \(selectedURL.path)")
             guard selectedURL != self?.fileURL else { return }
             NSDocumentController.shared.openDocument(withContentsOf: selectedURL, display: true) { _, _, _ in }
+        }
+        fileTreeViewModel.onToggleSidebar = { [weak self] in
+            self?.toggleSidebar(nil)
         }
         return mainSplitView
     }
