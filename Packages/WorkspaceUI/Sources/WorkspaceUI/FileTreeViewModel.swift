@@ -27,13 +27,17 @@ public final class FileTreeViewModel: ObservableObject {
     }
 
     public func loadDirectory(_ url: URL) {
+        Swift.print("[FileTree Debug] loadDirectory starting for: '\(url.path)'")
         let items = fetchContents(of: url, depth: 0)
-        Swift.print("[FileTree Debug] Loaded \(items.count) root items for: \(url.path)")
+        Swift.print("[FileTree Debug] loadDirectory completed for '\(url.path)': found \(items.count) items")
+        for (idx, item) in items.enumerated() {
+            Swift.print("[FileTree Debug]   Item #\(idx + 1): '\(item.name)' (isDir: \(item.isDirectory))")
+        }
         rootItems = items
     }
 
     public func selectItem(_ item: FileTreeItem) {
-        Swift.print("[FileTree Debug] selectItem: \(item.name), isDirectory: \(item.isDirectory)")
+        Swift.print("[FileTree Debug] selectItem: '\(item.name)', isDirectory: \(item.isDirectory)")
         selectedURL = item.url
         if !item.isDirectory {
             onSelectFile?(item.url)
@@ -43,34 +47,43 @@ public final class FileTreeViewModel: ObservableObject {
     private func fetchContents(of directoryURL: URL, depth: Int) -> [FileTreeItem] {
         let fileManager = FileManager.default
         var isDir: ObjCBool = false
-        guard fileManager.fileExists(atPath: directoryURL.path, isDirectory: &isDir), isDir.boolValue else {
-            Swift.print("[FileTree Debug] fetchContents skipped non-directory: \(directoryURL.path)")
+        let exists = fileManager.fileExists(atPath: directoryURL.path, isDirectory: &isDir)
+        guard exists else {
+            Swift.print("[FileTree Debug] fetchContents FAILED: path does NOT exist on disk: '\(directoryURL.path)'")
+            return []
+        }
+        guard isDir.boolValue else {
+            Swift.print("[FileTree Debug] fetchContents FAILED: path is NOT a directory: '\(directoryURL.path)'")
             return []
         }
 
         let keys: [URLResourceKey] = [.isDirectoryKey, .isHiddenKey]
-        guard let urls = try? fileManager.contentsOfDirectory(
-            at: directoryURL,
-            includingPropertiesForKeys: keys,
-            options: [.skipsHiddenFiles],
-        ) else {
-            Swift.print("[FileTree Debug] contentsOfDirectory returned nil for: \(directoryURL.path)")
-            return []
-        }
-
-        let sorted = urls.sorted { first, second in
-            let firstIsDir = (try? first.resourceValues(forKeys: [.isDirectoryKey]))?.isDirectory ?? false
-            let secondIsDir = (try? second.resourceValues(forKeys: [.isDirectoryKey]))?.isDirectory ?? false
-            if firstIsDir != secondIsDir {
-                return firstIsDir && !secondIsDir
+        do {
+            let urls = try fileManager.contentsOfDirectory(
+                at: directoryURL,
+                includingPropertiesForKeys: keys,
+                options: [.skipsHiddenFiles],
+            )
+            let folderName = directoryURL.lastPathComponent
+            Swift.print("[FileTree Debug] contentsOfDirectory SUCCESS for '\(folderName)': \(urls.count) URLs")
+            let sorted = urls.sorted { first, second in
+                let firstIsDir = (try? first.resourceValues(forKeys: [.isDirectoryKey]))?.isDirectory ?? false
+                let secondIsDir = (try? second.resourceValues(forKeys: [.isDirectoryKey]))?.isDirectory ?? false
+                if firstIsDir != secondIsDir {
+                    return firstIsDir && !secondIsDir
+                }
+                return first.lastPathComponent.localizedStandardCompare(second.lastPathComponent) == .orderedAscending
             }
-            return first.lastPathComponent.localizedStandardCompare(second.lastPathComponent) == .orderedAscending
-        }
 
-        return sorted.map { url in
-            let isDir = (try? url.resourceValues(forKeys: [.isDirectoryKey]))?.isDirectory ?? false
-            let children: [FileTreeItem]? = (isDir && depth < 1) ? fetchContents(of: url, depth: depth + 1) : nil
-            return FileTreeItem(url: url, isDirectory: isDir, children: children)
+            return sorted.map { url in
+                let isDir = (try? url.resourceValues(forKeys: [.isDirectoryKey]))?.isDirectory ?? false
+                let children: [FileTreeItem]? = (isDir && depth < 1) ? fetchContents(of: url, depth: depth + 1) : nil
+                return FileTreeItem(url: url, isDirectory: isDir, children: children)
+            }
+        } catch {
+            let errStr = "[FileTree Debug] contentsOfDirectory ERROR for '\(directoryURL.path)': \(error)"
+            Swift.print(errStr)
+            return []
         }
     }
 }

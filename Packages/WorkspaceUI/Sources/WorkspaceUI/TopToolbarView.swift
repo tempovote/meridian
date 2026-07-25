@@ -1,6 +1,7 @@
 import SwiftUI
 
-/// Top toolbar view displayed above the editor, presenting a toggle button to expand or collapse the sidebar.
+/// Top toolbar view displayed above the editor. When the sidebar is collapsed,
+/// it presents a toggle button at the top-left to expand the sidebar.
 public struct TopToolbarView: View {
     @ObservedObject public var viewModel: TopToolbarViewModel
 
@@ -9,25 +10,27 @@ public struct TopToolbarView: View {
     }
 
     public var body: some View {
-        VStack(spacing: 0) {
-            HStack(spacing: 8) {
-                Button {
-                    viewModel.onToggleSidebar?()
-                } label: {
-                    Image(systemName: "sidebar.left")
-                        .font(.system(size: 13, weight: .medium))
-                        .foregroundColor(viewModel.isSidebarVisible ? .secondary : .accentColor)
+        if !viewModel.isSidebarVisible {
+            VStack(spacing: 0) {
+                HStack {
+                    Button {
+                        viewModel.onToggleSidebar?()
+                    } label: {
+                        Image(systemName: "sidebar.left")
+                            .font(.system(size: 13, weight: .medium))
+                            .foregroundColor(.accentColor)
+                    }
+                    .buttonStyle(.plain)
+                    .help("Expand Sidebar (⌘B)")
+                    .padding(.leading, 10)
+
+                    Spacer()
                 }
-                .buttonStyle(.plain)
-                .help("Toggle Sidebar (⌘B)")
-                .padding(.leading, 10)
+                .frame(height: 28)
+                .background(Color(NSColor.windowBackgroundColor))
 
-                Spacer()
+                Divider()
             }
-            .frame(height: 26)
-            .background(Color(NSColor.windowBackgroundColor))
-
-            Divider()
         }
     }
 }
