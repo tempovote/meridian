@@ -38,18 +38,35 @@ public struct EditorSettings: Codable, Sendable, Equatable {
     }
 }
 
+public struct KeybindingSettings: Codable, Sendable, Equatable {
+    /// Custom keybindings mapping action identifiers to key shortcuts.
+    public var customBindings: [String: String]
+
+    public static let `default` = KeybindingSettings(customBindings: [:])
+
+    public init(customBindings: [String: String] = [:]) {
+        self.customBindings = customBindings
+    }
+}
+
 /// The root settings document. `schemaVersion` exists from day one even
 /// though there is no migration logic yet, so a real migration function
 /// has somewhere to hook in later without a schema break.
 public struct Settings: Codable, Sendable, Equatable {
     public var schemaVersion: Int
     public var editor: EditorSettings
+    public var keybindings: KeybindingSettings
 
-    public static let `default` = Settings(schemaVersion: 1, editor: .default)
+    public static let `default` = Settings(schemaVersion: 1, editor: .default, keybindings: .default)
 
-    public init(schemaVersion: Int = 1, editor: EditorSettings = .default) {
+    public init(
+        schemaVersion: Int = 1,
+        editor: EditorSettings = .default,
+        keybindings: KeybindingSettings = .default,
+    ) {
         self.schemaVersion = schemaVersion
         self.editor = editor
+        self.keybindings = keybindings
     }
 
     public init(from decoder: Decoder) throws {
@@ -58,9 +75,11 @@ public struct Settings: Codable, Sendable, Equatable {
             ?? Self.default.schemaVersion
         editor = try container.decodeIfPresent(EditorSettings.self, forKey: .editor)
             ?? Self.default.editor
+        keybindings = try container.decodeIfPresent(KeybindingSettings.self, forKey: .keybindings)
+            ?? Self.default.keybindings
     }
 
     private enum CodingKeys: String, CodingKey {
-        case schemaVersion, editor
+        case schemaVersion, editor, keybindings
     }
 }

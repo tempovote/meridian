@@ -17,11 +17,18 @@ enum MainMenu {
         main.addItem(helpMenuItem())
         return main
     }
+}
 
-    private static func appMenuItem() -> NSMenuItem {
+// MARK: - App & File Menus
+
+private extension MainMenu {
+    static func appMenuItem() -> NSMenuItem {
         let menu = NSMenu(title: "Meridian")
         menu.addItem(withTitle: "About Meridian",
                      action: #selector(NSApplication.orderFrontStandardAboutPanel(_:)),
+                     keyEquivalent: "")
+        menu.addItem(withTitle: "Check for Updates…",
+                     action: Selector(("checkForUpdates:")),
                      keyEquivalent: "")
         menu.addItem(.separator())
         menu.addItem(withTitle: "Preferences…",
@@ -34,7 +41,7 @@ enum MainMenu {
         return wrapped(menu)
     }
 
-    private static func fileMenuItem() -> NSMenuItem {
+    static func fileMenuItem() -> NSMenuItem {
         let menu = NSMenu(title: "File")
         addCommand(to: menu, title: "New", action: #selector(NSDocumentController.newDocument(_:)), keyEquivalent: "n")
         addCommand(
@@ -49,7 +56,11 @@ enum MainMenu {
         addCommand(to: menu, title: "Save As…", action: Selector(("saveDocumentAs:")), keyEquivalent: "S")
         return wrapped(menu)
     }
+}
 
+// MARK: - Edit & Search Menus
+
+private extension MainMenu {
     private static func editMenuItem() -> NSMenuItem {
         let menu = NSMenu(title: "Edit")
         addBasicEditCommands(to: menu)
@@ -171,6 +182,10 @@ enum MainMenu {
             keyEquivalent: "w", modifierMask: [.command, .option],
         )
         addCommand(to: menu, title: "Status Bar", action: Selector(("toggleStatusBar:")), keyEquivalent: "")
+        addCommand(
+            to: menu, title: "Toggle Sidebar", action: Selector(("toggleSidebar:")),
+            keyEquivalent: "b", modifierMask: [.command],
+        )
         menu.addItem(.separator())
         addCommand(
             to: menu, title: "Show Tab Bar", action: Selector(("toggleTabBar:")),

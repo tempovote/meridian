@@ -1,3 +1,5 @@
+import Foundation
+
 /// A monotonically increasing stamp identifying a point in a `TextBuffer`'s
 /// edit history. Two buffers with equal versions are not guaranteed to hold
 /// equal content (versions are per-instance lineages, not content hashes);
@@ -66,6 +68,27 @@ public struct TextBuffer: Sendable {
     public init(_ string: some StringProtocol) {
         root = Node.build(from: Array(string.utf8))
         version = BufferVersion(value: 0)
+    }
+
+    /// Creates a buffer containing raw UTF-8 bytes.
+    public init(bytes: [UInt8]) {
+        root = Node.build(from: bytes)
+        version = BufferVersion(value: 0)
+    }
+
+    /// Creates a buffer containing the contents of a file at `url`.
+    /// Automatically uses memory mapping (mmap) for huge files (≥ 64MB).
+    public init(contentsOfFile url: URL) throws {
+        let attributes = try FileManager.default.attributesOfItem(atPath: url.path)
+        let fileSize = (attributes[.size] as? Int64) ?? 0
+
+        if fileSize >= 64 * 1024 * 1024 {
+            let mappedBuffer = try MmapLeafBuffer(url: url)
+            self = mappedBuffer.toTextBuffer()
+        } else {
+            let data = try Data(contentsOf: url)
+            self.init(bytes: [UInt8](data))
+        }
     }
 
     /// Wraps an existing rope node as a fresh buffer at version 0.

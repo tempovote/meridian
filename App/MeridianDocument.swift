@@ -267,6 +267,14 @@ final class MeridianDocument: NSDocument {
         statusBarHost?.isHidden = !viewModel.isStatusBarVisible
     }
 
+    @objc func toggleSidebar(_ sender: Any?) {
+        // Reserved for Sidebar state toggle
+    }
+
+    @objc func checkForUpdates(_ sender: Any?) {
+        UpdaterService.shared.checkForUpdates()
+    }
+
     @objc func splitHorizontally(_ sender: Any?) {
         setSplit(orientation: .horizontal)
     }
