@@ -45,4 +45,29 @@ struct FindInFilesViewModelTests {
         #expect(selectedMatch == dummyMatch)
         #expect(vm.selectedMatchID == dummyMatch.id)
     }
+
+    @Test func performReplaceAllExecutesBatchReplacement() async throws {
+        let tempDir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+
+        let file = tempDir.appendingPathComponent("test.txt")
+        try "oldValue in text\nanother oldValue".write(to: file, atomically: true, encoding: .utf8)
+
+        let vm = FindInFilesViewModel(searchFolder: tempDir)
+        vm.query = "oldValue"
+        vm.replacement = "newValue"
+        vm.performSearch()
+
+        try await Task.sleep(nanoseconds: 100_000_000)
+        #expect(vm.results.count == 1)
+        #expect(vm.totalMatchesCount == 2)
+
+        vm.performReplaceAll()
+        try await Task.sleep(nanoseconds: 150_000_000)
+
+        #expect(vm.lastReplaceCount == 2)
+        let updatedContent = try String(contentsOf: file, encoding: .utf8)
+        #expect(updatedContent == "newValue in text\nanother newValue")
+    }
 }

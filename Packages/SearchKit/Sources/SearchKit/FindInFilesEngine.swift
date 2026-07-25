@@ -114,6 +114,46 @@ public final class FindInFilesEngine: Sendable {
         return results
     }
 
+    /// Replaces all occurrences found in `results` with `query.replacement`.
+    /// Returns the total count of matches replaced across all files.
+    @discardableResult
+    public func replaceAll(query: FindInFilesQuery, results: [FileSearchResult]) async -> Int {
+        guard !query.query.isEmpty, !results.isEmpty else { return 0 }
+        let searchEngine = SearchEngine()
+        var totalReplaced = 0
+
+        for result in results {
+            if Task.isCancelled {
+                break
+            }
+            guard let loaded = try? TextFileIO.loadTextFile(at: result.fileURL) else { continue }
+            var buffer = loaded.buffer
+            let matches = searchEngine.findAll(query: query.query, in: buffer, options: query.options)
+            guard !matches.isEmpty else { continue }
+
+            let transaction = searchEngine.buildReplaceTransaction(
+                matches: matches,
+                replacement: query.replacement,
+                in: buffer,
+            )
+            buffer.apply(transaction)
+
+            do {
+                try TextFileIO.saveTextFile(
+                    buffer,
+                    as: loaded.encoding,
+                    includeBOM: loaded.hadBOM,
+                    to: result.fileURL,
+                )
+                totalReplaced += matches.count
+            } catch {
+                continue
+            }
+        }
+
+        return totalReplaced
+    }
+
     private func shouldSkipFile(_ fileURL: URL, includes: [String], excludes: [String]) -> Bool {
         let path = fileURL.path
         let fileName = fileURL.lastPathComponent

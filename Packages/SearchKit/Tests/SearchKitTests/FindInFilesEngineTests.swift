@@ -60,4 +60,34 @@ struct FindInFilesEngineTests {
         #expect(results.count == 1)
         #expect(results[0].fileURL.lastPathComponent == "code.swift")
     }
+
+    @Test func replaceAllReplacesMatchesAcrossFiles() async throws {
+        let tempDir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+
+        let file1 = tempDir.appendingPathComponent("file1.txt")
+        let file2 = tempDir.appendingPathComponent("file2.txt")
+
+        try "Hello World\nAnother World\n".write(to: file1, atomically: true, encoding: .utf8)
+        try "No match here\nWorld again\n".write(to: file2, atomically: true, encoding: .utf8)
+
+        let engine = FindInFilesEngine()
+        let searchQuery = FindInFilesQuery(
+            query: "World",
+            replacement: "Meridian",
+            searchFolder: tempDir,
+        )
+
+        let initialResults = await engine.search(query: searchQuery)
+        #expect(initialResults.count == 2)
+
+        let count = await engine.replaceAll(query: searchQuery, results: initialResults)
+        #expect(count == 3)
+
+        let content1 = try String(contentsOf: file1, encoding: .utf8)
+        let content2 = try String(contentsOf: file2, encoding: .utf8)
+        #expect(content1 == "Hello Meridian\nAnother Meridian\n")
+        #expect(content2 == "No match here\nMeridian again\n")
+    }
 }

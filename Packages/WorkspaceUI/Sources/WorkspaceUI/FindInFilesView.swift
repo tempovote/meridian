@@ -33,16 +33,58 @@ public struct FindInFilesView: View {
                 .padding(.horizontal, 4)
 
                 HStack(spacing: 6) {
-                    Image(systemName: "magnifyingglass")
-                        .foregroundColor(.secondary)
-                    TextField("Search workspace...", text: $viewModel.query)
-                        .textFieldStyle(.plain)
-                        .focused($isQueryFocused)
-                        .onSubmit { viewModel.performSearch() }
+                    Button {
+                        withAnimation(.easeInOut(duration: 0.15)) {
+                            viewModel.isReplaceVisible.toggle()
+                        }
+                    } label: {
+                        Image(systemName: viewModel.isReplaceVisible ? "chevron.down" : "chevron.right")
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+                            .frame(width: 12, height: 12)
+                    }
+                    .buttonStyle(.plain)
+                    .help(viewModel.isReplaceVisible ? "Hide Replace" : "Show Replace")
+
+                    HStack(spacing: 6) {
+                        Image(systemName: "magnifyingglass")
+                            .foregroundColor(.secondary)
+                        TextField("Search workspace...", text: $viewModel.query)
+                            .textFieldStyle(.plain)
+                            .focused($isQueryFocused)
+                            .onSubmit { viewModel.performSearch() }
+                    }
+                    .padding(6)
+                    .background(Color(nsColor: .controlBackgroundColor))
+                    .cornerRadius(6)
                 }
-                .padding(6)
-                .background(Color(nsColor: .controlBackgroundColor))
-                .cornerRadius(6)
+
+                if viewModel.isReplaceVisible {
+                    HStack(spacing: 6) {
+                        HStack(spacing: 6) {
+                            Image(systemName: "pencil")
+                                .foregroundColor(.secondary)
+                            TextField("Replace...", text: $viewModel.replacement)
+                                .textFieldStyle(.plain)
+                                .onSubmit { viewModel.performReplaceAll() }
+                        }
+                        .padding(6)
+                        .background(Color(nsColor: .controlBackgroundColor))
+                        .cornerRadius(6)
+
+                        Button("Replace All") {
+                            viewModel.performReplaceAll()
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .controlSize(.small)
+                        .disabled(
+                            viewModel.query.isEmpty
+                                || viewModel.results.isEmpty
+                                || viewModel.isSearching
+                                || viewModel.isReplacing,
+                        )
+                    }
+                }
 
                 // Search Option Toggles
                 HStack(spacing: 4) {

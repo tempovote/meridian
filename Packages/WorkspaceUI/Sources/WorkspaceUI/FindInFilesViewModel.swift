@@ -35,8 +35,11 @@ public final class FindInFilesViewModel {
         didSet { performSearch() }
     }
 
+    public var isReplaceVisible: Bool = false
     public private(set) var results: [FileSearchResult] = []
     public private(set) var isSearching: Bool = false
+    public private(set) var isReplacing: Bool = false
+    public private(set) var lastReplaceCount: Int?
     public var selectedMatchID: String?
 
     public var onSelectMatch: ((URL, FileMatch) -> Void)?
@@ -62,6 +65,9 @@ public final class FindInFilesViewModel {
     }
 
     public var statusText: String {
+        if isReplacing {
+            return "Replacing..."
+        }
         if isSearching {
             return "Searching..."
         }
@@ -69,6 +75,9 @@ public final class FindInFilesViewModel {
             return "Type a search query"
         }
         if results.isEmpty {
+            if let count = lastReplaceCount {
+                return "Replaced \(count) \(count == 1 ? "match" : "matches")"
+            }
             return "No results found"
         }
         let matchWord = totalMatchesCount == 1 ? "match" : "matches"
@@ -120,6 +129,42 @@ public final class FindInFilesViewModel {
             if !Task.isCancelled {
                 self.results = found
                 self.isSearching = false
+            }
+        }
+    }
+
+    public func performReplaceAll() {
+        searchTask?.cancel()
+        guard !query.isEmpty, !results.isEmpty, let searchFolder else { return }
+
+        isReplacing = true
+        var options: SearchOptions = []
+        if isCaseSensitive {
+            options.insert(.caseSensitive)
+        }
+        if isWholeWord {
+            options.insert(.wholeWord)
+        }
+        if isRegex {
+            options.insert(.regularExpression)
+        }
+
+        let searchQuery = FindInFilesQuery(
+            query: query,
+            replacement: replacement,
+            searchFolder: searchFolder,
+            options: options,
+            includePattern: includePattern,
+            excludePattern: excludePattern,
+        )
+        let currentResults = results
+
+        searchTask = Task {
+            let count = await engine.replaceAll(query: searchQuery, results: currentResults)
+            if !Task.isCancelled {
+                self.lastReplaceCount = count
+                self.isReplacing = false
+                self.performSearch()
             }
         }
     }
