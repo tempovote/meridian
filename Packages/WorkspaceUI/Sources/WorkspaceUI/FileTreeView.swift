@@ -31,17 +31,7 @@ public struct FileTreeView: View {
     }
 
     private var headerView: some View {
-        HStack(spacing: 8) {
-            Button {
-                viewModel.onToggleSidebar?()
-            } label: {
-                Image(systemName: "sidebar.left")
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundColor(.secondary)
-            }
-            .buttonStyle(.plain)
-            .help("Toggle Sidebar (⌘B)")
-
+        HStack(spacing: 6) {
             Image(systemName: "folder")
                 .foregroundColor(.secondary)
                 .font(.system(size: 11))

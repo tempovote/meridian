@@ -9,36 +9,23 @@ public struct StatusBarView: View {
     public var encodingName: String
     public var lineEndingName: String
     public var fileSizeString: String?
-    public var onToggleSidebar: (() -> Void)?
 
     public init(
         viewModel: EditorViewModel,
         encodingName: String = "UTF-8",
         lineEndingName: String = "LF",
         fileSizeString: String? = nil,
-        onToggleSidebar: (() -> Void)? = nil,
     ) {
         self.viewModel = viewModel
         self.encodingName = encodingName
         self.lineEndingName = lineEndingName
         self.fileSizeString = fileSizeString
-        self.onToggleSidebar = onToggleSidebar
     }
 
     public var body: some View {
         VStack(spacing: 0) {
             Divider()
             HStack(spacing: 16) {
-                if let onToggleSidebar {
-                    Button(action: onToggleSidebar) {
-                        Image(systemName: "sidebar.left")
-                            .font(.system(size: 11))
-                            .foregroundColor(.secondary)
-                    }
-                    .buttonStyle(.plain)
-                    .help("Toggle Sidebar (⌘B)")
-                }
-
                 // Line / Column & Selection
                 HStack(spacing: 8) {
                     let pos = viewModel.currentCaretLineColumn

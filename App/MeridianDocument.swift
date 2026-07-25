@@ -222,9 +222,6 @@ final class MeridianDocument: NSDocument {
                 viewModel: viewModel,
                 encodingName: encodingName,
                 lineEndingName: "LF",
-                onToggleSidebar: { [weak self] in
-                    self?.toggleSidebar(nil)
-                },
             )
             let host = NSHostingView(rootView: statusBar)
             statusBarHost = host
