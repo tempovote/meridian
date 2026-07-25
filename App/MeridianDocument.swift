@@ -247,6 +247,9 @@ final class MeridianDocument: NSDocument {
         mainSplitView.addArrangedSubview(sidebarHost)
         mainSplitView.addArrangedSubview(containerStack)
 
+        sidebarHost.widthAnchor.constraint(greaterThanOrEqualToConstant: 180).isActive = true
+        sidebarHost.widthAnchor.constraint(lessThanOrEqualToConstant: 320).isActive = true
+
         if let folderURL = fileURL?.deletingLastPathComponent() {
             fileTreeViewModel.setRootURL(folderURL)
         }
@@ -810,6 +813,11 @@ final class MeridianDocument: NSDocument {
             return true
         case #selector(toggleStatusBar(_:)):
             menuItem.state = (focusedViewModel?.isStatusBarVisible == true) ? .on : .off
+            return true
+        case #selector(toggleSidebar(_:)):
+            menuItem.state = isSidebarVisible ? .on : .off
+            return true
+        case #selector(checkForUpdates(_:)):
             return true
         case #selector(splitHorizontally(_:)):
             menuItem.state = (currentSplitOrientation == .horizontal) ? .on : .off
