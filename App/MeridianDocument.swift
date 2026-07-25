@@ -251,9 +251,11 @@ final class MeridianDocument: NSDocument {
         sidebarHost.widthAnchor.constraint(lessThanOrEqualToConstant: 320).isActive = true
 
         if let folderURL = fileURL?.deletingLastPathComponent() {
+            Swift.print("[Meridian Debug] Setting sidebar rootURL: \(folderURL.path)")
             fileTreeViewModel.setRootURL(folderURL)
         }
         fileTreeViewModel.onSelectFile = { [weak self] selectedURL in
+            Swift.print("[Meridian Debug] Sidebar file selected: \(selectedURL.path)")
             guard selectedURL != self?.fileURL else { return }
             NSDocumentController.shared.openDocument(withContentsOf: selectedURL, display: true) { _, _, _ in }
         }
@@ -792,6 +794,12 @@ final class MeridianDocument: NSDocument {
     }
 
     override func validateMenuItem(_ menuItem: NSMenuItem) -> Bool {
+        if menuItem.action == #selector(toggleSidebar(_:)) {
+            Swift
+                .print(
+                    "[Meridian Debug] validateMenuItem toggleSidebar checked! isSidebarVisible = \(isSidebarVisible)",
+                )
+        }
         if let valid = validateEditorMenuItem(menuItem) {
             return valid
         }

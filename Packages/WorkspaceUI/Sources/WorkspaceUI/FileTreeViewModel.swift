@@ -17,16 +17,19 @@ public final class FileTreeViewModel: ObservableObject {
     }
 
     public func setRootURL(_ url: URL) {
+        Swift.print("[FileTree Debug] setRootURL: \(url.path)")
         rootURL = url
         loadDirectory(url)
     }
 
     public func loadDirectory(_ url: URL) {
         let items = fetchContents(of: url)
+        Swift.print("[FileTree Debug] Loaded \(items.count) root items for: \(url.path)")
         rootItems = items
     }
 
     public func selectItem(_ item: FileTreeItem) {
+        Swift.print("[FileTree Debug] selectItem: \(item.name), isDirectory: \(item.isDirectory)")
         selectedURL = item.url
         if !item.isDirectory {
             onSelectFile?(item.url)
