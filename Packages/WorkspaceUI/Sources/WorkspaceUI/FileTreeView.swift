@@ -42,6 +42,16 @@ public struct FileTreeView: View {
                 .lineLimit(1)
 
             Spacer()
+
+            Button {
+                viewModel.onToggleSidebar?()
+            } label: {
+                Image(systemName: "sidebar.left")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundColor(.secondary)
+            }
+            .buttonStyle(.plain)
+            .help("Toggle Sidebar (⌘B)")
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 8)
