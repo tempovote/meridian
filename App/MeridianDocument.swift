@@ -214,7 +214,7 @@ final class MeridianDocument: NSDocument {
             host.setContentHuggingPriority(.required, for: .vertical)
 
             NSWindow.allowsAutomaticWindowTabbing = true
-            let window = NSWindow(
+            let window = MeridianWindow(
                 contentRect: NSRect(x: 0, y: 0, width: 900, height: 600),
                 styleMask: [.titled, .closable, .miniaturizable, .resizable],
                 backing: .buffered,
@@ -225,6 +225,18 @@ final class MeridianDocument: NSDocument {
             window.contentView = containerStack
             window.makeFirstResponder(engine.keyView)
             addWindowController(NSWindowController(window: window))
+        }
+    }
+
+    override func showWindows() {
+        super.showWindows()
+        for controller in windowControllers {
+            if let window = controller.window {
+                window.tabbingMode = .preferred
+                if window.tabGroup?.isTabBarVisible != true {
+                    window.toggleTabBar(nil)
+                }
+            }
         }
     }
 
