@@ -18,9 +18,12 @@ public final class FileTreeViewModel: ObservableObject {
     }
 
     public func setRootURL(_ url: URL) {
-        Swift.print("[FileTree Debug] setRootURL: \(url.path)")
-        rootURL = url
-        loadDirectory(url)
+        var isDir: ObjCBool = false
+        let isFile = FileManager.default.fileExists(atPath: url.path, isDirectory: &isDir) && !isDir.boolValue
+        let targetURL = isFile ? url.deletingLastPathComponent() : url
+        Swift.print("[FileTree Debug] setRootURL input: \(url.path), resolved folder: \(targetURL.path)")
+        rootURL = targetURL
+        loadDirectory(targetURL)
     }
 
     public func loadDirectory(_ url: URL) {
@@ -39,12 +42,19 @@ public final class FileTreeViewModel: ObservableObject {
 
     private func fetchContents(of directoryURL: URL, depth: Int) -> [FileTreeItem] {
         let fileManager = FileManager.default
+        var isDir: ObjCBool = false
+        guard fileManager.fileExists(atPath: directoryURL.path, isDirectory: &isDir), isDir.boolValue else {
+            Swift.print("[FileTree Debug] fetchContents skipped non-directory: \(directoryURL.path)")
+            return []
+        }
+
         let keys: [URLResourceKey] = [.isDirectoryKey, .isHiddenKey]
         guard let urls = try? fileManager.contentsOfDirectory(
             at: directoryURL,
             includingPropertiesForKeys: keys,
             options: [.skipsHiddenFiles],
         ) else {
+            Swift.print("[FileTree Debug] contentsOfDirectory returned nil for: \(directoryURL.path)")
             return []
         }
 

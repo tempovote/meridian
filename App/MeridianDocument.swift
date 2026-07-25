@@ -116,6 +116,7 @@ final class MeridianDocument: NSDocument {
     private var pendingBuffer = TextBuffer()
 
     private let fileTreeViewModel = FileTreeViewModel()
+    private let topToolbarViewModel = TopToolbarViewModel()
     private var sidebarHost: NSHostingView<FileTreeView>?
     var isSidebarVisible = true
 
@@ -225,12 +226,19 @@ final class MeridianDocument: NSDocument {
             let host = NSHostingView(rootView: statusBar)
             statusBarHost = host
 
-            let containerStack = NSStackView(views: [engine.view, host])
+            topToolbarViewModel.isSidebarVisible = isSidebarVisible
+            topToolbarViewModel.onToggleSidebar = { [weak self] in
+                self?.toggleSidebar(nil)
+            }
+            let topToolbarHost = NSHostingView(rootView: TopToolbarView(viewModel: topToolbarViewModel))
+
+            let containerStack = NSStackView(views: [topToolbarHost, engine.view, host])
             containerStack.orientation = .vertical
             containerStack.spacing = 0
             containerStack.alignment = .width
             editorSlotView = engine.view
             host.setContentHuggingPriority(.required, for: .vertical)
+            topToolbarHost.setContentHuggingPriority(.required, for: .vertical)
 
             let mainSplitView = makeSidebarSplitView(containerStack: containerStack)
 
@@ -321,7 +329,13 @@ final class MeridianDocument: NSDocument {
 
     @objc func toggleSidebar(_ sender: Any?) {
         isSidebarVisible.toggle()
-        sidebarHost?.isHidden = !isSidebarVisible
+        topToolbarViewModel.isSidebarVisible = isSidebarVisible
+        if let sidebarHost {
+            sidebarHost.isHidden = !isSidebarVisible
+            if let splitView = sidebarHost.superview as? NSSplitView {
+                splitView.adjustSubviews()
+            }
+        }
     }
 
     @objc func checkForUpdates(_ sender: Any?) {
