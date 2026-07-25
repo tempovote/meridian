@@ -16,13 +16,18 @@ public struct TopToolbarView: View {
                     Button {
                         viewModel.onToggleSidebar?()
                     } label: {
-                        Image(systemName: "sidebar.left")
-                            .font(.system(size: 13, weight: .medium))
-                            .foregroundColor(.accentColor)
+                        HStack(spacing: 5) {
+                            Image(systemName: "sidebar.left")
+                                .font(.system(size: 13, weight: .medium))
+                                .foregroundColor(.accentColor)
+                            Text("Sidebar")
+                                .font(.system(size: 11, weight: .medium))
+                                .foregroundColor(.secondary)
+                        }
                     }
                     .buttonStyle(.plain)
                     .help("Expand Sidebar (⌘B)")
-                    .padding(.leading, 10)
+                    .padding(.leading, 12)
 
                     Spacer()
                 }

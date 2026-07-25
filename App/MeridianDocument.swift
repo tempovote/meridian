@@ -137,8 +137,12 @@ final class MeridianDocument: NSDocument {
         didSet {
             if let fileURL {
                 let folderURL = fileURL.deletingLastPathComponent()
+                let accessing = folderURL.startAccessingSecurityScopedResource()
                 Task { @MainActor in
                     self.fileTreeViewModel.setRootURL(folderURL)
+                    if accessing {
+                        folderURL.stopAccessingSecurityScopedResource()
+                    }
                 }
             }
         }

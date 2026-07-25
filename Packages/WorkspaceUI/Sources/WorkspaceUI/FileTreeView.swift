@@ -50,14 +50,32 @@ public struct FileTreeView: View {
     }
 
     private var emptyView: some View {
-        VStack(spacing: 8) {
+        VStack(spacing: 10) {
             Spacer()
             Image(systemName: "folder.badge.plus")
-                .font(.system(size: 28))
+                .font(.system(size: 32))
                 .foregroundColor(.secondary)
             Text("No Folder Opened")
-                .font(.system(size: 12, weight: .medium))
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundColor(.primary)
+            Text("Open a folder to view all workspace files and subdirectories.")
+                .font(.system(size: 11))
                 .foregroundColor(.secondary)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, 16)
+
+            Button("Open Folder…") {
+                let openPanel = NSOpenPanel()
+                openPanel.canChooseFiles = false
+                openPanel.canChooseDirectories = true
+                openPanel.allowsMultipleSelection = false
+                if openPanel.runModal() == .OK, let selectedFolder = openPanel.url {
+                    viewModel.setRootURL(selectedFolder)
+                }
+            }
+            .buttonStyle(.borderedProminent)
+            .controlSize(.small)
+
             Spacer()
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
