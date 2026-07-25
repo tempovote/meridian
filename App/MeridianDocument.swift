@@ -278,6 +278,15 @@ final class MeridianDocument: NSDocument {
         fileTreeViewModel.onToggleSidebar = { [weak self] in
             self?.toggleSidebar(nil)
         }
+
+        // Apply initial sidebar visibility after layout is done.
+        if !isSidebarVisible {
+            DispatchQueue.main.async {
+                sidebarHost.isHidden = true
+                mainSplitView.adjustSubviews()
+            }
+        }
+
         return mainSplitView
     }
 
