@@ -23,11 +23,20 @@ public final class FileTreeViewModel: ObservableObject {
         return parent.path != rootURL.path && FileManager.default.fileExists(atPath: parent.path)
     }
 
+    public var parentDirectoryName: String {
+        guard let rootURL, canNavigateToParent else { return "" }
+        return rootURL.deletingLastPathComponent().lastPathComponent
+    }
+
     public func navigateToParentDirectory() {
         guard let rootURL, canNavigateToParent else { return }
         let parent = rootURL.deletingLastPathComponent()
         logDebug("navigateToParentDirectory from '\(rootURL.path)' to '\(parent.path)'")
+        let accessing = parent.startAccessingSecurityScopedResource()
         setRootURL(parent)
+        if accessing {
+            parent.stopAccessingSecurityScopedResource()
+        }
     }
 
     public func setRootURL(_ url: URL) {

@@ -13,6 +13,11 @@ public struct FileTreeView: View {
             headerView
             Divider()
 
+            if viewModel.canNavigateToParent {
+                parentFolderRow
+                Divider()
+            }
+
             if viewModel.rootItems.isEmpty {
                 emptyView
             } else {
@@ -26,17 +31,16 @@ public struct FileTreeView: View {
     }
 
     private var headerView: some View {
-        HStack(spacing: 6) {
+        HStack(spacing: 8) {
             Button {
-                viewModel.navigateToParentDirectory()
+                viewModel.onToggleSidebar?()
             } label: {
-                Image(systemName: "arrow.up.folder")
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundColor(viewModel.canNavigateToParent ? .primary : .secondary.opacity(0.3))
+                Image(systemName: "sidebar.left")
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundColor(.secondary)
             }
             .buttonStyle(.plain)
-            .disabled(!viewModel.canNavigateToParent)
-            .help("Go up to parent directory")
+            .help("Toggle Sidebar (⌘B)")
 
             Image(systemName: "folder")
                 .foregroundColor(.secondary)
@@ -48,19 +52,32 @@ public struct FileTreeView: View {
                 .lineLimit(1)
 
             Spacer()
-
-            Button {
-                viewModel.onToggleSidebar?()
-            } label: {
-                Image(systemName: "sidebar.left")
-                    .foregroundColor(.secondary)
-                    .font(.system(size: 12))
-            }
-            .buttonStyle(.plain)
-            .help("Toggle Sidebar (⌘B)")
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 8)
+    }
+
+    private var parentFolderRow: some View {
+        Button {
+            viewModel.navigateToParentDirectory()
+        } label: {
+            HStack(spacing: 6) {
+                Image(systemName: "arrow.up.folder.fill")
+                    .font(.system(size: 12))
+                    .foregroundColor(.accentColor)
+                Text(".. (\(viewModel.parentDirectoryName))")
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundColor(.primary)
+                    .lineLimit(1)
+                Spacer()
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .help("Go up to parent directory: \(viewModel.parentDirectoryName)")
+        .background(Color(NSColor.controlBackgroundColor).opacity(0.4))
     }
 
     private var emptyView: some View {
