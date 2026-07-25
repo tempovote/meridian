@@ -116,7 +116,6 @@ final class MeridianDocument: NSDocument {
     private var pendingBuffer = TextBuffer()
 
     private let fileTreeViewModel = FileTreeViewModel()
-    private let topToolbarViewModel = TopToolbarViewModel()
     private var sidebarHost: NSHostingView<FileTreeView>?
     var isSidebarVisible = true
 
@@ -230,19 +229,12 @@ final class MeridianDocument: NSDocument {
             let host = NSHostingView(rootView: statusBar)
             statusBarHost = host
 
-            topToolbarViewModel.isSidebarVisible = isSidebarVisible
-            topToolbarViewModel.onToggleSidebar = { [weak self] in
-                self?.toggleSidebar(nil)
-            }
-            let topToolbarHost = NSHostingView(rootView: TopToolbarView(viewModel: topToolbarViewModel))
-
-            let containerStack = NSStackView(views: [topToolbarHost, engine.view, host])
+            let containerStack = NSStackView(views: [engine.view, host])
             containerStack.orientation = .vertical
             containerStack.spacing = 0
             containerStack.alignment = .width
             editorSlotView = engine.view
             host.setContentHuggingPriority(.required, for: .vertical)
-            topToolbarHost.setContentHuggingPriority(.required, for: .vertical)
 
             let mainSplitView = makeSidebarSplitView(containerStack: containerStack)
 
@@ -256,6 +248,15 @@ final class MeridianDocument: NSDocument {
             window.tabbingMode = .preferred
             window.center()
             window.contentView = mainSplitView
+
+            let accessoryVC = NSTitlebarAccessoryViewController()
+            let titlebarBtn = SidebarLeadingTitlebarButton { [weak self] in
+                self?.toggleSidebar(nil)
+            }
+            accessoryVC.view = NSHostingView(rootView: titlebarBtn)
+            accessoryVC.layoutAttribute = .leading
+            window.addTitlebarAccessoryViewController(accessoryVC)
+
             window.makeFirstResponder(engine.keyView)
             addWindowController(NSWindowController(window: window))
         }
@@ -333,7 +334,6 @@ final class MeridianDocument: NSDocument {
 
     @objc func toggleSidebar(_ sender: Any?) {
         isSidebarVisible.toggle()
-        topToolbarViewModel.isSidebarVisible = isSidebarVisible
         if let sidebarHost {
             sidebarHost.isHidden = !isSidebarVisible
             if let splitView = sidebarHost.superview as? NSSplitView {
@@ -915,5 +915,21 @@ final class MeridianDocument: NSDocument {
                 document.registerUndoReplay()
             }
         }
+    }
+}
+
+private struct SidebarLeadingTitlebarButton: View {
+    var onToggle: () -> Void
+
+    var body: some View {
+        Button(action: onToggle) {
+            Image(systemName: "sidebar.left")
+                .font(.system(size: 13, weight: .medium))
+                .foregroundColor(.secondary)
+        }
+        .buttonStyle(.plain)
+        .help("Toggle Sidebar (⌘B)")
+        .padding(.horizontal, 8)
+        .padding(.vertical, 4)
     }
 }

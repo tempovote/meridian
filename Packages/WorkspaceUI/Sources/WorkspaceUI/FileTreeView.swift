@@ -27,12 +27,26 @@ public struct FileTreeView: View {
 
     private var headerView: some View {
         HStack(spacing: 6) {
+            Button {
+                viewModel.navigateToParentDirectory()
+            } label: {
+                Image(systemName: "arrow.up.folder")
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundColor(viewModel.canNavigateToParent ? .primary : .secondary.opacity(0.3))
+            }
+            .buttonStyle(.plain)
+            .disabled(!viewModel.canNavigateToParent)
+            .help("Go up to parent directory")
+
             Image(systemName: "folder")
                 .foregroundColor(.secondary)
+                .font(.system(size: 11))
+
             Text(viewModel.rootURL?.lastPathComponent.uppercased() ?? "WORKSPACE")
                 .font(.system(size: 11, weight: .bold))
                 .foregroundColor(.secondary)
                 .lineLimit(1)
+
             Spacer()
 
             Button {

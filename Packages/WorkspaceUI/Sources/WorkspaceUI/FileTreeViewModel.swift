@@ -17,6 +17,19 @@ public final class FileTreeViewModel: ObservableObject {
         }
     }
 
+    public var canNavigateToParent: Bool {
+        guard let rootURL else { return false }
+        let parent = rootURL.deletingLastPathComponent()
+        return parent.path != rootURL.path && FileManager.default.fileExists(atPath: parent.path)
+    }
+
+    public func navigateToParentDirectory() {
+        guard let rootURL, canNavigateToParent else { return }
+        let parent = rootURL.deletingLastPathComponent()
+        logDebug("navigateToParentDirectory from '\(rootURL.path)' to '\(parent.path)'")
+        setRootURL(parent)
+    }
+
     public func setRootURL(_ url: URL) {
         var isDir: ObjCBool = false
         let isFile = FileManager.default.fileExists(atPath: url.path, isDirectory: &isDir) && !isDir.boolValue
