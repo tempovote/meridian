@@ -7,6 +7,24 @@ import Testing
 @Suite("FindInFilesViewModelTests")
 @MainActor
 struct FindInFilesViewModelTests {
+    private func waitForSearch(vm: FindInFilesViewModel) async throws {
+        for _ in 0 ..< 30 {
+            if !vm.isSearching, !vm.results.isEmpty {
+                break
+            }
+            try await Task.sleep(nanoseconds: 50_000_000)
+        }
+    }
+
+    private func waitForReplace(vm: FindInFilesViewModel) async throws {
+        for _ in 0 ..< 30 {
+            if !vm.isReplacing, vm.lastReplaceCount != nil {
+                break
+            }
+            try await Task.sleep(nanoseconds: 50_000_000)
+        }
+    }
+
     @Test func statusTextReflectsSearchState() async throws {
         let tempDir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
@@ -21,7 +39,7 @@ struct FindInFilesViewModelTests {
         vm.query = "word"
         vm.performSearch()
 
-        try await Task.sleep(nanoseconds: 100_000_000)
+        try await waitForSearch(vm: vm)
         #expect(vm.results.count == 1)
         #expect(vm.totalMatchesCount == 2)
         #expect(vm.statusText == "2 matches in 1 file")
@@ -59,12 +77,12 @@ struct FindInFilesViewModelTests {
         vm.replacement = "newValue"
         vm.performSearch()
 
-        try await Task.sleep(nanoseconds: 100_000_000)
+        try await waitForSearch(vm: vm)
         #expect(vm.results.count == 1)
         #expect(vm.totalMatchesCount == 2)
 
         vm.performReplaceAll()
-        try await Task.sleep(nanoseconds: 150_000_000)
+        try await waitForReplace(vm: vm)
 
         #expect(vm.lastReplaceCount == 2)
         let updatedContent = try String(contentsOf: file, encoding: .utf8)
