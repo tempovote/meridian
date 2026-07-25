@@ -115,6 +115,10 @@ final class MeridianDocument: NSDocument {
     /// Buffer read before window controllers exist.
     private var pendingBuffer = TextBuffer()
 
+    private let fileTreeViewModel = FileTreeViewModel()
+    private var sidebarHost: NSHostingView<FileTreeView>?
+    private var isSidebarVisible = false
+
     private var focusedViewModel: EditorViewModel? {
         panes.indices.contains(focusedPaneIndex) ? panes[focusedPaneIndex].viewModel : nil
     }
@@ -141,6 +145,7 @@ final class MeridianDocument: NSDocument {
         MainActor.assumeIsolated {
             loadedMetadata = (file.encoding, file.hadBOM)
             pendingBuffer = file.buffer
+            fileTreeViewModel.setRootURL(url.deletingLastPathComponent())
             // Re-opened into an existing window (revert): reload the
             // model. Rebuild rather than diff — P1 has no revert UI; this
             // path only runs for NSDocument's built-in revert. Revert
@@ -213,6 +218,8 @@ final class MeridianDocument: NSDocument {
             editorSlotView = engine.view
             host.setContentHuggingPriority(.required, for: .vertical)
 
+            let mainSplitView = makeSidebarSplitView(containerStack: containerStack)
+
             NSWindow.allowsAutomaticWindowTabbing = true
             let window = MeridianWindow(
                 contentRect: NSRect(x: 0, y: 0, width: 900, height: 600),
@@ -222,10 +229,32 @@ final class MeridianDocument: NSDocument {
             )
             window.tabbingMode = .preferred
             window.center()
-            window.contentView = containerStack
+            window.contentView = mainSplitView
             window.makeFirstResponder(engine.keyView)
             addWindowController(NSWindowController(window: window))
         }
+    }
+
+    private func makeSidebarSplitView(containerStack: NSStackView) -> NSSplitView {
+        let sidebarView = FileTreeView(viewModel: fileTreeViewModel)
+        let sidebarHost = NSHostingView(rootView: sidebarView)
+        self.sidebarHost = sidebarHost
+        sidebarHost.isHidden = !isSidebarVisible
+
+        let mainSplitView = NSSplitView()
+        mainSplitView.isVertical = true
+        mainSplitView.dividerStyle = .thin
+        mainSplitView.addArrangedSubview(sidebarHost)
+        mainSplitView.addArrangedSubview(containerStack)
+
+        if let folderURL = fileURL?.deletingLastPathComponent() {
+            fileTreeViewModel.setRootURL(folderURL)
+        }
+        fileTreeViewModel.onSelectFile = { [weak self] selectedURL in
+            guard selectedURL != self?.fileURL else { return }
+            NSDocumentController.shared.openDocument(withContentsOf: selectedURL, display: true) { _, _, _ in }
+        }
+        return mainSplitView
     }
 
     override func showWindows() {
@@ -268,7 +297,8 @@ final class MeridianDocument: NSDocument {
     }
 
     @objc func toggleSidebar(_ sender: Any?) {
-        // Reserved for Sidebar state toggle
+        isSidebarVisible.toggle()
+        sidebarHost?.isHidden = !isSidebarVisible
     }
 
     @objc func checkForUpdates(_ sender: Any?) {
