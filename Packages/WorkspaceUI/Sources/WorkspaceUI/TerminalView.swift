@@ -1,4 +1,57 @@
+import AppKit
 import SwiftUI
+
+struct CustomTerminalTextField: NSViewRepresentable {
+    @Binding var text: String
+    var onSubmit: () -> Void
+    var onTab: () -> Void
+
+    class Coordinator: NSObject, NSTextFieldDelegate {
+        var parent: CustomTerminalTextField
+
+        init(_ parent: CustomTerminalTextField) {
+            self.parent = parent
+        }
+
+        func controlTextDidChange(_ obj: Notification) {
+            if let textField = obj.object as? NSTextField {
+                parent.text = textField.stringValue
+            }
+        }
+
+        func control(_ control: NSControl, textView: NSTextView, doCommandBy commandSelector: Selector) -> Bool {
+            if commandSelector == #selector(NSResponder.insertTab(_:)) {
+                parent.onTab()
+                return true
+            } else if commandSelector == #selector(NSResponder.insertNewline(_:)) {
+                parent.onSubmit()
+                return true
+            }
+            return false
+        }
+    }
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(self)
+    }
+
+    func makeNSView(context: Context) -> NSTextField {
+        let textField = NSTextField()
+        textField.delegate = context.coordinator
+        textField.isBordered = false
+        textField.drawsBackground = false
+        textField.focusRingType = .none
+        textField.font = NSFont.monospacedSystemFont(ofSize: 12, weight: .regular)
+        textField.placeholderString = "Run command..."
+        return textField
+    }
+
+    func updateNSView(_ nsView: NSTextField, context: Context) {
+        if nsView.stringValue != text {
+            nsView.stringValue = text
+        }
+    }
+}
 
 /// Integrated interactive terminal view for running shell commands.
 public struct TerminalView: View {
@@ -16,7 +69,6 @@ public struct TerminalView: View {
             Divider()
             inputBar
         }
-        .frame(minHeight: 200)
         .background(Color(NSColor.textBackgroundColor))
     }
 
@@ -76,16 +128,66 @@ public struct TerminalView: View {
                 .font(.system(size: 13, weight: .bold, design: .monospaced))
                 .foregroundColor(.accentColor)
 
-            TextField("Run command...", text: $inputCommand)
-                .textFieldStyle(.plain)
-                .font(.system(size: 12, design: .monospaced))
-                .onSubmit {
-                    executeCurrentCommand()
-                }
+            CustomTerminalTextField(
+                text: $inputCommand,
+                onSubmit: executeCurrentCommand,
+                onTab: handleTabCompletion,
+            )
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
         .background(Color(NSColor.controlBackgroundColor))
+    }
+
+    private func handleTabCompletion() {
+        let currentText = inputCommand
+        let components = currentText.components(separatedBy: " ")
+        guard let lastToken = components.last else { return }
+
+        let pathURL = URL(fileURLWithPath: workingDirectory).appendingPathComponent(lastToken)
+        let parentDir = lastToken.contains("/") ? pathURL
+            .deletingLastPathComponent() : URL(fileURLWithPath: workingDirectory)
+        let prefix = lastToken.contains("/") ? pathURL.lastPathComponent : lastToken
+
+        do {
+            let contents = try FileManager.default.contentsOfDirectory(atPath: parentDir.path)
+            let matches = contents.filter { $0.hasPrefix(prefix) && !$0.hasPrefix(".") }
+
+            if matches.count == 1, let match = matches.first {
+                var newComponents = components
+                let basePath = lastToken.contains("/") ? (lastToken as NSString).deletingLastPathComponent + "/" : ""
+                let targetPath = parentDir.appendingPathComponent(match).path
+                var isDir: ObjCBool = false
+                FileManager.default.fileExists(atPath: targetPath, isDirectory: &isDir)
+                let completedToken = basePath + match + (isDir.boolValue ? "/" : " ")
+                newComponents[newComponents.count - 1] = completedToken
+                inputCommand = newComponents.joined(separator: " ")
+            } else if matches.count > 1 {
+                outputLogs.append(matches.joined(separator: "   "))
+                if let common = commonPrefix(of: matches), common.count > prefix.count {
+                    var newComponents = components
+                    let isPath = lastToken.contains("/")
+                    let basePath = isPath ? (lastToken as NSString).deletingLastPathComponent + "/" : ""
+                    newComponents[newComponents.count - 1] = basePath + common
+                    inputCommand = newComponents.joined(separator: " ")
+                }
+            }
+        } catch {
+            // Ignore search errors
+        }
+    }
+
+    private func commonPrefix(of strings: [String]) -> String? {
+        guard let first = strings.first else { return nil }
+        var res = ""
+        for (idx, char) in first.enumerated() {
+            if strings.allSatisfy({ idx < $0.count && $0[$0.index($0.startIndex, offsetBy: idx)] == char }) {
+                res.append(char)
+            } else {
+                break
+            }
+        }
+        return res
     }
 
     private func executeCurrentCommand() {
@@ -93,6 +195,18 @@ public struct TerminalView: View {
         guard !cmd.isEmpty else { return }
         outputLogs.append("$ \(cmd)")
         inputCommand = ""
+
+        if cmd.hasPrefix("cd ") {
+            let dirArg = String(cmd.dropFirst(3)).trimmingCharacters(in: .whitespacesAndNewlines)
+            let targetURL = URL(fileURLWithPath: dirArg, relativeTo: URL(fileURLWithPath: workingDirectory))
+                .standardized
+            if FileManager.default.fileExists(atPath: targetURL.path) {
+                workingDirectory = targetURL.path
+            } else {
+                outputLogs.append("cd: no such file or directory: \(dirArg)")
+            }
+            return
+        }
 
         let dir = workingDirectory
         DispatchQueue.global(qos: .userInitiated).async {

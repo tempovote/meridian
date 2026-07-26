@@ -1019,14 +1019,16 @@ final class MeridianDocument: NSDocument {
             let terminal = TerminalView()
             let host = NSHostingView(rootView: terminal)
             host.translatesAutoresizingMaskIntoConstraints = false
-            host.heightAnchor.constraint(greaterThanOrEqualToConstant: 140).isActive = true
+            host.heightAnchor.constraint(greaterThanOrEqualToConstant: 120).isActive = true
+            host.heightAnchor.constraint(lessThanOrEqualToConstant: 400).isActive = true
             terminalHost = host
 
             rootSplitView.addArrangedSubview(host)
+            rootSplitView.setHoldingPriority(NSLayoutConstraint.Priority(250), forSubviewAt: 0)
+            rootSplitView.setHoldingPriority(NSLayoutConstraint.Priority(750), forSubviewAt: 1)
             let totalHeight = rootSplitView.bounds.height
-            if totalHeight > 300 {
-                rootSplitView.setPosition(totalHeight - 220, ofDividerAt: 0)
-            }
+            let targetDividerPos = max(150, totalHeight - 200)
+            rootSplitView.setPosition(targetDividerPos, ofDividerAt: 0)
             rootSplitView.adjustSubviews()
         }
     }
