@@ -13,6 +13,11 @@ public struct FileTreeView: View {
             headerView
             Divider()
 
+            if !viewModel.favorites.isEmpty {
+                favoritesSection
+                Divider()
+            }
+
             if viewModel.canNavigateToParent {
                 parentFolderRow
                 Divider()
@@ -23,12 +28,17 @@ public struct FileTreeView: View {
             } else {
                 List(viewModel.rootItems, children: \.children) { item in
                     treeRow(item: item)
+                        .contextMenu {
+                            fileContextMenu(url: item.url)
+                        }
                 }
                 .listStyle(.sidebar)
             }
         }
         .frame(minWidth: 180, idealWidth: 220, maxWidth: 320)
     }
+
+    // MARK: - Header
 
     private var headerView: some View {
         HStack(spacing: 6) {
@@ -57,6 +67,62 @@ public struct FileTreeView: View {
         .padding(.vertical, 8)
     }
 
+    // MARK: - Favorites Section
+
+    private var favoritesSection: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Text("FAVORITES")
+                .font(.system(size: 10, weight: .semibold))
+                .foregroundColor(.secondary)
+                .padding(.horizontal, 12)
+                .padding(.top, 8)
+                .padding(.bottom, 4)
+
+            ForEach(viewModel.favorites, id: \.self) { url in
+                favoriteRow(url: url)
+            }
+            .padding(.bottom, 4)
+        }
+    }
+
+    private func favoriteRow(url: URL) -> some View {
+        HStack(spacing: 6) {
+            Image(systemName: iconName(for: url))
+                .foregroundColor(.secondary)
+                .font(.system(size: 12))
+
+            Text(url.lastPathComponent)
+                .font(.system(size: 12))
+                .lineLimit(1)
+
+            Spacer()
+
+            Button {
+                viewModel.removeFavorite(url)
+            } label: {
+                Image(systemName: "xmark")
+                    .font(.system(size: 9, weight: .medium))
+                    .foregroundColor(.secondary)
+            }
+            .buttonStyle(.plain)
+            .help("Remove from Favorites")
+            .opacity(0.6)
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 5)
+        .contentShape(Rectangle())
+        .onTapGesture {
+            viewModel.onOpenFavorite?(url)
+        }
+        .contextMenu {
+            Button("Remove from Favorites") {
+                viewModel.removeFavorite(url)
+            }
+        }
+    }
+
+    // MARK: - Parent Folder Row
+
     private var parentFolderRow: some View {
         Button {
             viewModel.navigateToParentDirectory()
@@ -79,6 +145,8 @@ public struct FileTreeView: View {
         .help("Go up to parent directory: \(viewModel.parentDirectoryName)")
         .background(Color(NSColor.controlBackgroundColor).opacity(0.4))
     }
+
+    // MARK: - Empty State
 
     private var emptyView: some View {
         VStack(spacing: 10) {
@@ -112,6 +180,8 @@ public struct FileTreeView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
+    // MARK: - File Tree Row
+
     private func treeRow(item: FileTreeItem) -> some View {
         HStack(spacing: 6) {
             Image(systemName: itemIconName(for: item))
@@ -123,6 +193,12 @@ public struct FileTreeView: View {
                 .lineLimit(1)
 
             Spacer()
+
+            if !item.isDirectory, viewModel.isFavorite(item.url) {
+                Image(systemName: "star.fill")
+                    .font(.system(size: 9))
+                    .foregroundColor(.yellow)
+            }
         }
         .contentShape(Rectangle())
         .onTapGesture {
@@ -130,11 +206,33 @@ public struct FileTreeView: View {
         }
     }
 
+    // MARK: - Context Menu
+
+    @ViewBuilder
+    private func fileContextMenu(url: URL) -> some View {
+        let isFav = viewModel.isFavorite(url)
+        if isFav {
+            Button("Remove from Favorites") {
+                viewModel.removeFavorite(url)
+            }
+        } else {
+            Button("Add to Favorites") {
+                viewModel.addFavorite(url)
+            }
+        }
+    }
+
+    // MARK: - Helpers
+
     private func itemIconName(for item: FileTreeItem) -> String {
         if item.isDirectory {
             return "folder.fill"
         }
-        let ext = item.url.pathExtension.lowercased()
+        return iconName(for: item.url)
+    }
+
+    private func iconName(for url: URL) -> String {
+        let ext = url.pathExtension.lowercased()
         switch ext {
         case "swift":
             return "swift"

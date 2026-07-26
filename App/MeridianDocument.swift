@@ -1,5 +1,6 @@
 // swiftlint:disable file_length
 import AppKit
+import Combine
 import DocumentCore
 import EditorUI
 import FileKit
@@ -120,6 +121,10 @@ final class MeridianDocument: NSDocument {
     private var sidebarHost: NSHostingView<FileTreeView>?
     var isSidebarVisible = false
 
+    /// Subscription token for the FavoritesStore publisher so the window
+    /// title refreshes immediately when the user adds/removes a favourite.
+    private var favoritesCancellable: (any Sendable)?
+
     private var focusedViewModel: EditorViewModel? {
         panes.indices.contains(focusedPaneIndex) ? panes[focusedPaneIndex].viewModel : nil
     }
@@ -218,6 +223,8 @@ final class MeridianDocument: NSDocument {
 
     override func makeWindowControllers() {
         MainActor.assumeIsolated {
+            // Inject the shared favourites store before the sidebar is built.
+            fileTreeViewModel.favoritesStore = AppDelegate.favoritesStore
             let documentModel = DocumentModel(buffer: pendingBuffer)
             self.documentModel = documentModel
             let engine = makeEngine(languageID: fileURL.flatMap { languageID(forFileExtension: $0.pathExtension) })
@@ -290,16 +297,25 @@ final class MeridianDocument: NSDocument {
 
         let initialFolder = fileURL?.deletingLastPathComponent()
             ?? URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
-        Swift.print("[Meridian Debug] Setting sidebar rootURL: \(initialFolder.path)")
         fileTreeViewModel.setRootURL(initialFolder)
 
         fileTreeViewModel.onSelectFile = { [weak self] selectedURL in
-            Swift.print("[Meridian Debug] Sidebar file selected: \(selectedURL.path)")
+            guard selectedURL != self?.fileURL else { return }
+            NSDocumentController.shared.openDocument(withContentsOf: selectedURL, display: true) { _, _, _ in }
+        }
+        fileTreeViewModel.onOpenFavorite = { [weak self] selectedURL in
             guard selectedURL != self?.fileURL else { return }
             NSDocumentController.shared.openDocument(withContentsOf: selectedURL, display: true) { _, _, _ in }
         }
         fileTreeViewModel.onToggleSidebar = { [weak self] in
             self?.toggleSidebar(nil)
+        }
+
+        // Subscribe to FavoritesStore changes to keep the window title star in sync.
+        favoritesCancellable = AppDelegate.favoritesStore.objectWillChange.sink { [weak self] in
+            DispatchQueue.main.async {
+                self?.refreshWindowTitle()
+            }
         }
 
         // Apply initial sidebar visibility after layout is done.
@@ -364,6 +380,24 @@ final class MeridianDocument: NSDocument {
 
     @objc func checkForUpdates(_ sender: Any?) {
         UpdaterService.shared.checkForUpdates()
+    }
+
+    /// Toggles the current document's favourite state and updates the
+    /// window title to show or hide the ⭐ suffix.
+    @objc func toggleFavorite(_ sender: Any?) {
+        guard let url = fileURL else { return }
+        AppDelegate.favoritesStore.toggle(url)
+        refreshWindowTitle()
+    }
+
+    /// Refreshes the window title to append ⭐ when the current document
+    /// URL is in the shared favourites list.
+    private func refreshWindowTitle() {
+        guard let window = windowControllers.first?.window, let url = fileURL else { return }
+        let base = url.deletingPathExtension().lastPathComponent
+        let ext = url.pathExtension.isEmpty ? "" : ".\(url.pathExtension)"
+        let suffix = AppDelegate.favoritesStore.isFavorite(url) ? " ⭐" : ""
+        window.title = base + ext + suffix
     }
 
     @objc func splitHorizontally(_ sender: Any?) {
@@ -1003,11 +1037,10 @@ final class MeridianDocument: NSDocument {
     }
 
     override func validateMenuItem(_ menuItem: NSMenuItem) -> Bool {
-        if menuItem.action == #selector(toggleSidebar(_:)) {
-            Swift
-                .print(
-                    "[Meridian Debug] validateMenuItem toggleSidebar checked! isSidebarVisible = \(isSidebarVisible)",
-                )
+        if menuItem.action == #selector(toggleFavorite(_:)) {
+            let isFav = fileURL.map { AppDelegate.favoritesStore.isFavorite($0) } ?? false
+            menuItem.title = isFav ? "Remove from Favorites" : "Add to Favorites"
+            return fileURL != nil
         }
         if let valid = validateEditorMenuItem(menuItem) {
             return valid

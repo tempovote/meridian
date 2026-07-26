@@ -25,6 +25,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     @MainActor
     static let settingsStore = SettingsStore()
 
+    /// The single shared favourites store, constructed once at the
+    /// composition root so all documents share the same ordered favourite
+    /// list and sidebar updates propagate immediately across windows.
+    @MainActor
+    static let favoritesStore = FavoritesStore()
+
     /// The one shared Preferences window, created lazily on first use.
     @MainActor
     private lazy var preferencesWindowController = PreferencesWindowController(

@@ -82,6 +82,11 @@ private extension MainMenu {
         addCommand(to: menu, title: "Close", action: #selector(NSWindow.performClose(_:)), keyEquivalent: "w")
         addCommand(to: menu, title: "Save…", action: Selector(("saveDocument:")), keyEquivalent: "s")
         addCommand(to: menu, title: "Save As…", action: Selector(("saveDocumentAs:")), keyEquivalent: "S")
+        menu.addItem(.separator())
+        addCommand(
+            to: menu, title: "Add to Favorites",
+            action: Selector(("toggleFavorite:")), keyEquivalent: "d",
+        )
         return wrapped(menu)
     }
 }

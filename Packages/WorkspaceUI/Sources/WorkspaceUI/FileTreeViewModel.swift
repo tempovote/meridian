@@ -8,7 +8,11 @@ public final class FileTreeViewModel: ObservableObject {
     @Published public var rootItems: [FileTreeItem] = []
     @Published public var selectedURL: URL?
 
+    /// Shared favourites store — injected by the document at init time.
+    public var favoritesStore: FavoritesStore?
+
     public var onSelectFile: ((URL) -> Void)?
+    public var onOpenFavorite: ((URL) -> Void)?
     public var onToggleSidebar: (() -> Void)?
 
     public init(rootURL: URL? = nil) {
@@ -16,6 +20,32 @@ public final class FileTreeViewModel: ObservableObject {
         if let rootURL {
             loadDirectory(rootURL)
         }
+    }
+
+    // MARK: - Favorites API
+
+    /// Returns the current ordered list of favourites (proxy to the store).
+    public var favorites: [URL] {
+        favoritesStore?.favorites ?? []
+    }
+
+    public func isFavorite(_ url: URL) -> Bool {
+        favoritesStore?.isFavorite(url) ?? false
+    }
+
+    public func addFavorite(_ url: URL) {
+        favoritesStore?.add(url)
+        objectWillChange.send()
+    }
+
+    public func removeFavorite(_ url: URL) {
+        favoritesStore?.remove(url)
+        objectWillChange.send()
+    }
+
+    public func toggleFavorite(_ url: URL) {
+        favoritesStore?.toggle(url)
+        objectWillChange.send()
     }
 
     public var canNavigateToParent: Bool {
