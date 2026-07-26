@@ -14,8 +14,102 @@ public actor GitService {
 
     public init() {}
 
-    /// Calculates line-by-line git diff marks for the file at `fileURL` relative to git HEAD.
-    /// Returns a map of 0-based line indices to `GitGutterMark`.
+    private func fetchHeadText(fileURL: URL, directory: String) async -> String? {
+        let fileName = fileURL.lastPathComponent
+        let rootProcess = Process()
+        rootProcess.executableURL = URL(fileURLWithPath: "/usr/bin/git")
+        rootProcess.arguments = ["rev-parse", "--show-prefix"]
+        rootProcess.currentDirectoryURL = URL(fileURLWithPath: directory)
+
+        let rootPipe = Pipe()
+        rootProcess.standardOutput = rootPipe
+        rootProcess.standardError = Pipe()
+
+        var relativePath = fileName
+        do {
+            try rootProcess.run()
+            rootProcess.waitUntilExit()
+            if rootProcess.terminationStatus == 0 {
+                let data = rootPipe.fileHandleForReading.readDataToEndOfFile()
+                let rawPrefix = String(data: data, encoding: .utf8)?
+                    .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+                if !rawPrefix.isEmpty {
+                    relativePath = rawPrefix + fileName
+                }
+            }
+        } catch {}
+
+        let showProcess = Process()
+        showProcess.executableURL = URL(fileURLWithPath: "/usr/bin/git")
+        showProcess.arguments = ["show", "HEAD:\(relativePath)"]
+        showProcess.currentDirectoryURL = URL(fileURLWithPath: directory)
+
+        let showPipe = Pipe()
+        showProcess.standardOutput = showPipe
+        showProcess.standardError = Pipe()
+
+        do {
+            try showProcess.run()
+            showProcess.waitUntilExit()
+            if showProcess.terminationStatus == 0 {
+                let data = showPipe.fileHandleForReading.readDataToEndOfFile()
+                return String(data: data, encoding: .utf8)
+            }
+        } catch {}
+        return nil
+    }
+
+    /// Calculates line-by-line git diff marks for `bufferText` relative to git HEAD at `fileURL`.
+    /// Works for both saved and unsaved in-memory edits.
+    public func diffStatus(bufferText: String, fileURL: URL) async -> [Int: GitGutterMark] {
+        let directory = fileURL.deletingLastPathComponent().path
+        guard let headText = await fetchHeadText(fileURL: fileURL, directory: directory) else {
+            let diskMarks = await diffStatus(for: fileURL)
+            if !diskMarks.isEmpty {
+                return diskMarks
+            }
+            var marks: [Int: GitGutterMark] = [:]
+            let lines = bufferText.components(separatedBy: .newlines)
+            for lineIndex in 0 ..< lines.count {
+                marks[lineIndex] = .added
+            }
+            return marks
+        }
+
+        // 3. Diff headText vs in-memory bufferText using temp files
+        let tempDir = FileManager.default.temporaryDirectory
+        let headFileURL = tempDir.appendingPathComponent("meridian_head_\(UUID().uuidString)")
+        let bufferFileURL = tempDir.appendingPathComponent("meridian_buf_\(UUID().uuidString)")
+
+        defer {
+            try? FileManager.default.removeItem(at: headFileURL)
+            try? FileManager.default.removeItem(at: bufferFileURL)
+        }
+
+        do {
+            try headText.write(to: headFileURL, atomically: true, encoding: .utf8)
+            try bufferText.write(to: bufferFileURL, atomically: true, encoding: .utf8)
+
+            let diffProcess = Process()
+            diffProcess.executableURL = URL(fileURLWithPath: "/usr/bin/git")
+            diffProcess.arguments = ["diff", "-U0", "--no-color", "--no-index", headFileURL.path, bufferFileURL.path]
+
+            let diffPipe = Pipe()
+            diffProcess.standardOutput = diffPipe
+            diffProcess.standardError = Pipe()
+
+            try diffProcess.run()
+            diffProcess.waitUntilExit()
+
+            let diffData = diffPipe.fileHandleForReading.readDataToEndOfFile()
+            guard let diffOutput = String(data: diffData, encoding: .utf8) else { return [:] }
+            return Self.parseHunks(diffOutput: diffOutput)
+        } catch {
+            return [:]
+        }
+    }
+
+    /// Calculates line-by-line git diff marks for the file at `fileURL` relative to git HEAD on disk.
     public func diffStatus(for fileURL: URL) async -> [Int: GitGutterMark] {
         let path = fileURL.path
         let directory = fileURL.deletingLastPathComponent().path

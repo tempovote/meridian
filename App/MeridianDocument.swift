@@ -949,13 +949,14 @@ final class MeridianDocument: NSDocument {
     private var gitGutterMarks: [Int: GitGutterMark] = [:]
 
     private func refreshGitGutter() {
-        guard let url = fileURL else {
+        guard let url = fileURL, let viewModel = focusedViewModel else {
             gitGutterMarks = [:]
             updateGitGutterMarkProviders()
             return
         }
+        let bufferText = viewModel.buffer.string
         Task { @MainActor in
-            let marks = await GitService.shared.diffStatus(for: url)
+            let marks = await GitService.shared.diffStatus(bufferText: bufferText, fileURL: url)
             self.gitGutterMarks = marks
             self.updateGitGutterMarkProviders()
         }
