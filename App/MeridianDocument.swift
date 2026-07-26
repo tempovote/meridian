@@ -726,6 +726,51 @@ final class MeridianDocument: NSDocument {
         viewModel.perform(TextTransforms.deduplicateLines(in: viewModel.buffer, selection: viewModel.selection))
     }
 
+    private var markdownPreviewHost: NSHostingView<MarkdownPreviewView>?
+
+    @objc func formatDocument(_ sender: Any?) {
+        formatCurrentDocument(pretty: true)
+    }
+
+    @objc func minifyDocument(_ sender: Any?) {
+        formatCurrentDocument(pretty: false)
+    }
+
+    private func formatCurrentDocument(pretty: Bool) {
+        guard let viewModel = focusedViewModel else { return }
+        let currentText = viewModel.buffer.string
+        let langID = panes.first?.engine.languageID ?? fileURL?.pathExtension
+        guard let formatted = DocumentFormatter.format(text: currentText, languageID: langID, pretty: pretty) else {
+            return
+        }
+        let fullRange = ByteOffset(0) ..< ByteOffset(viewModel.buffer.utf8Count)
+        let edit = Edit(range: fullRange, replacement: formatted)
+        let transaction = EditTransaction(
+            baseVersion: viewModel.buffer.version,
+            edits: [edit],
+            selectionBefore: viewModel.selection,
+            selectionAfter: SelectionSet(caretAt: ByteOffset(0)),
+        )
+        viewModel.perform(transaction)
+    }
+
+    @objc func toggleMarkdownPreview(_ sender: Any?) {
+        guard let viewModel = focusedViewModel else { return }
+        if let previewHost = markdownPreviewHost {
+            previewHost.removeFromSuperview()
+            markdownPreviewHost = nil
+        } else {
+            let isDark = NSApp.effectiveAppearance.name == .darkAqua
+            let preview = MarkdownPreviewView(markdownText: viewModel.buffer.string, isDarkMode: isDark)
+            let host = NSHostingView(rootView: preview)
+            markdownPreviewHost = host
+            if let splitView = sidebarHost?.superview as? NSSplitView {
+                splitView.addArrangedSubview(host)
+                splitView.adjustSubviews()
+            }
+        }
+    }
+
     private func showFindBar(startExpanded: Bool) {
         guard let viewModel = focusedViewModel, findBarHost == nil else { return }
         // Reuse the existing search state (query/matches/current index) if

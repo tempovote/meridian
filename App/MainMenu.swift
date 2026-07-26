@@ -148,6 +148,15 @@ private extension MainMenu {
             to: menu, title: "Convert Line Endings to CRLF",
             action: Selector(("convertLineEndingsToCRLF:")), keyEquivalent: "",
         )
+        menu.addItem(.separator())
+        addCommand(
+            to: menu, title: "Format Document",
+            action: Selector(("formatDocument:")), keyEquivalent: "I", modifierMask: [.command, .shift],
+        )
+        addCommand(
+            to: menu, title: "Minify Document",
+            action: Selector(("minifyDocument:")), keyEquivalent: "",
+        )
     }
 
     private static func findMenuItem() -> NSMenuItem {
@@ -185,6 +194,10 @@ private extension MainMenu {
         addCommand(
             to: menu, title: "Toggle Sidebar", action: Selector(("toggleSidebar:")),
             keyEquivalent: "b", modifierMask: [.command],
+        )
+        addCommand(
+            to: menu, title: "Markdown Preview", action: Selector(("toggleMarkdownPreview:")),
+            keyEquivalent: "M", modifierMask: [.command, .shift],
         )
         menu.addItem(.separator())
         addCommand(
