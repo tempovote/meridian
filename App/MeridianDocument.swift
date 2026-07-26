@@ -799,48 +799,28 @@ final class MeridianDocument: NSDocument {
     }
 
     private func showFindBar(startExpanded: Bool) {
-        guard let viewModel = focusedViewModel,
-              let window = windowControllers.first?.window,
-              let containerStack = window.contentView as? NSStackView else { return }
-
-        // Reuse the existing search state (query/matches/current index) if
-        // it's still for the same pane — closing the Find bar only hides
-        // its UI, it doesn't discard the search, so ⌘G/⇧⌘G keep working
-        // while it's closed and reopening resumes where the user left off.
-        // A stale instance (e.g. focus moved to a different split pane
-        // with a different viewModel) gets dropped and rebuilt fresh below.
+        guard let viewModel = focusedViewModel, findBarHost == nil else { return }
         if let findBarViewModel, !findBarViewModel.isBound(to: viewModel) {
             self.findBarViewModel = nil
         }
-
-        let vm = findBarViewModel ?? FindBarViewModel(
-            editorViewModel: viewModel,
-            findEngine: SearchEngine(),
-        )
-        findBarViewModel = vm
+        let findBarVM: FindBarViewModel = if let existing = findBarViewModel, existing.isBound(to: viewModel) {
+            existing
+        } else {
+            FindBarViewModel(editorViewModel: viewModel, startExpanded: startExpanded)
+        }
         if startExpanded {
-            vm.isReplaceMode = true
+            findBarVM.isReplaceExpanded = true
         }
-
-        let findBarView = FindBarView(viewModel: vm)
-        let host = NSHostingView(rootView: findBarView)
+        findBarViewModel = findBarVM
+        let findView = FindBarView(viewModel: findBarVM) { [weak self] in
+            self?.hideFindBar()
+        }
+        let host = NSHostingView(rootView: findView)
         findBarHost = host
-        containerStack.insertArrangedSubview(host, at: 0)
 
-        // Focus the search input field so typing works immediately.
-        DispatchQueue.main.async { [weak host] in
-            guard let host else { return }
-            self.focusFirstTextField(in: host)
-        }
-    }
-
-    private func focusFirstTextField(in view: NSView) {
-        for subview in view.subviews {
-            if let textField = subview as? NSTextField, textField.isEditable {
-                view.window?.makeFirstResponder(textField)
-                return
-            }
-            focusFirstTextField(in: subview)
+        if let window = windowControllers.first?.window, let containerStack = window.contentView as? NSStackView {
+            containerStack.insertView(host, at: 0, in: .top)
+            window.makeFirstResponder(host)
         }
     }
 
