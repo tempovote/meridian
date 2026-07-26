@@ -114,12 +114,12 @@ public struct PreferencesView: View {
 
                         if editingActionID == actionID {
                             HStack(spacing: 6) {
-                                // Keycap badge display with invisible input capture on top
+                                // Keycap badge display with key recorder on top
                                 ZStack {
                                     // Visual layer: live keycap badges
                                     Group {
                                         if editingShortcutText.isEmpty {
-                                            Text("Type shortcut…")
+                                            Text("Press keys…")
                                                 .font(.system(size: 11, weight: .regular, design: .monospaced))
                                                 .foregroundColor(.secondary)
                                         } else {
@@ -128,17 +128,21 @@ public struct PreferencesView: View {
                                     }
                                     .allowsHitTesting(false)
 
-                                    // Input layer: invisible but focusable NSTextField
-                                    SingleLineTextField(
-                                        text: $editingShortcutText,
-                                        placeholder: "",
-                                        autoFocus: true,
+                                    // Input layer: AppKit KeyRecorderNSView capturing key events
+                                    KeyRecorderView(
+                                        shortcutText: $editingShortcutText,
+                                        onCancel: {
+                                            print("[Keybinding Debug] User cancelled editing for action '\(actionID)'")
+                                            editingActionID = nil
+                                        },
                                         onSubmit: {
+                                            print(
+                                                "[Keybinding Debug] User submitted shortcut '\(editingShortcutText)' for action '\(actionID)'",
+                                            )
                                             viewModel.setShortcut(editingShortcutText, for: actionID)
                                             editingActionID = nil
                                         },
                                     )
-                                    .opacity(0.001)
                                 }
                                 .frame(minWidth: 80, maxWidth: 160)
                                 .frame(height: 28)
@@ -153,6 +157,9 @@ public struct PreferencesView: View {
                                 )
 
                                 Button {
+                                    print(
+                                        "[Keybinding Debug] Save button clicked for action '\(actionID)' -> '\(editingShortcutText)'",
+                                    )
                                     viewModel.setShortcut(editingShortcutText, for: actionID)
                                     editingActionID = nil
                                 } label: {
@@ -164,6 +171,7 @@ public struct PreferencesView: View {
                                 .help("Save Shortcut")
 
                                 Button {
+                                    print("[Keybinding Debug] Cancel button clicked for action '\(actionID)'")
                                     editingActionID = nil
                                 } label: {
                                     Image(systemName: "xmark.circle.fill")
@@ -175,6 +183,9 @@ public struct PreferencesView: View {
                             }
                         } else {
                             Button {
+                                print(
+                                    "[Keybinding Debug] Clicked to edit shortcut for action '\(actionID)', current value: '\(viewModel.shortcut(for: actionID))'",
+                                )
                                 editingActionID = actionID
                                 editingShortcutText = viewModel.shortcut(for: actionID)
                             } label: {
@@ -190,6 +201,7 @@ public struct PreferencesView: View {
 
             Section {
                 Button("Reset Keybindings to Defaults") {
+                    print("[Keybinding Debug] Reset to Defaults button clicked")
                     viewModel.resetKeybindingsToDefaults()
                 }
                 .foregroundColor(.red)
@@ -295,82 +307,167 @@ public struct KeycapBadgeView: View {
     }
 }
 
-// MARK: - SingleLineTextField
+// MARK: - KeyRecorderView
 
-/// A truly single-line NSTextField wrapper that prevents text from wrapping outside its frame.
-/// SwiftUI's built-in TextField on macOS does not respect lineLimit(1) at the NSTextField level,
-/// causing the text to render below the frame bounds. This view fixes that.
-struct SingleLineTextField: NSViewRepresentable {
-    @Binding var text: String
-    var placeholder: String
-    var autoFocus: Bool
+/// An NSViewRepresentable that intercepts physical key combinations (e.g. Cmd+Shift+D, Cmd+F)
+/// directly via AppKit NSEvent handling, preventing system menu shortcuts from swallowing them.
+struct KeyRecorderView: NSViewRepresentable {
+    @Binding var shortcutText: String
+    var onCancel: () -> Void
     var onSubmit: () -> Void
 
-    init(
-        text: Binding<String>,
-        placeholder: String = "",
-        autoFocus: Bool = false,
-        onSubmit: @escaping () -> Void,
-    ) {
-        _text = text
-        self.placeholder = placeholder
-        self.autoFocus = autoFocus
-        self.onSubmit = onSubmit
-    }
-
-    func makeNSView(context: Context) -> NSTextField {
-        let field = NSTextField()
-        field.delegate = context.coordinator
-        field.placeholderString = placeholder
-        field.isBordered = false
-        field.drawsBackground = false
-        field.focusRingType = .none
-        field.font = .monospacedSystemFont(ofSize: 11, weight: .medium)
-        field.alignment = .center
-        // Force true single-line behaviour at the AppKit level
-        field.cell?.wraps = false
-        field.cell?.isScrollable = true
-        field.lineBreakMode = .byTruncatingTail
-        if autoFocus {
-            DispatchQueue.main.async {
-                field.window?.makeFirstResponder(field)
+    func makeNSView(context: Context) -> KeyRecorderNSView {
+        print("[Keybinding Debug] Creating KeyRecorderNSView...")
+        let view = KeyRecorderNSView()
+        view.onShortcutRecorded = { newShortcut in
+            print("[Keybinding Debug] KeyRecorderView received recorded shortcut: '\(newShortcut)'")
+            shortcutText = newShortcut
+        }
+        view.onCancel = {
+            print("[Keybinding Debug] KeyRecorderView cancel callback fired")
+            onCancel()
+        }
+        view.onSubmit = {
+            print("[Keybinding Debug] KeyRecorderView submit callback fired")
+            onSubmit()
+        }
+        DispatchQueue.main.async {
+            print("[Keybinding Debug] Attempting makeFirstResponder on KeyRecorderNSView...")
+            if let window = view.window {
+                let success = window.makeFirstResponder(view)
+                print("[Keybinding Debug] makeFirstResponder success: \(success)")
+            } else {
+                print("[Keybinding Debug] KeyRecorderNSView window is nil during makeNSView async")
             }
         }
-        return field
+        return view
     }
 
-    func updateNSView(_ nsView: NSTextField, context: Context) {
-        if nsView.stringValue != text {
-            nsView.stringValue = text
-        }
-    }
-
-    func makeCoordinator() -> Coordinator {
-        Coordinator(self)
-    }
-
-    final class Coordinator: NSObject, NSTextFieldDelegate {
-        var parent: SingleLineTextField
-
-        init(_ parent: SingleLineTextField) {
-            self.parent = parent
-        }
-
-        func controlTextDidChange(_ obj: Notification) {
-            guard let field = obj.object as? NSTextField else { return }
-            parent.text = field.stringValue
-        }
-
-        func control(
-            _ control: NSControl,
-            textView _: NSTextView,
-            doCommandBy commandSelector: Selector,
-        ) -> Bool {
-            if commandSelector == #selector(NSResponder.insertNewline(_:)) {
-                parent.onSubmit()
-                return true
+    func updateNSView(_ nsView: KeyRecorderNSView, context: Context) {
+        DispatchQueue.main.async {
+            if let window = nsView.window, window.firstResponder !== nsView {
+                print("[Keybinding Debug] Re-focusing KeyRecorderNSView as first responder")
+                window.makeFirstResponder(nsView)
             }
-            return false
         }
+    }
+}
+
+final class KeyRecorderNSView: NSView {
+    var onShortcutRecorded: ((String) -> Void)?
+    var onCancel: (() -> Void)?
+    var onSubmit: (() -> Void)?
+
+    override var acceptsFirstResponder: Bool {
+        true
+    }
+
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        if let window {
+            print("[Keybinding Debug] KeyRecorderNSView viewDidMoveToWindow, making first responder...")
+            window.makeFirstResponder(self)
+        }
+    }
+
+    override func performKeyEquivalent(with event: NSEvent) -> Bool {
+        print("[Keybinding Debug] KeyRecorderNSView performKeyEquivalent: event=\(event)")
+        return handleKeyEvent(event)
+    }
+
+    override func keyDown(with event: NSEvent) {
+        print("[Keybinding Debug] KeyRecorderNSView keyDown: event=\(event)")
+        _ = handleKeyEvent(event)
+    }
+
+    private func handleKeyEvent(_ event: NSEvent) -> Bool {
+        let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
+        let keyCode = event.keyCode
+
+        print("[Keybinding Debug] handleKeyEvent: keyCode=\(keyCode), flags=\(flags.rawValue)")
+
+        // Escape key -> cancel
+        if keyCode == 53 {
+            print("[Keybinding Debug] ESC key detected -> cancel editing")
+            onCancel?()
+            return true
+        }
+
+        // Return / Enter key -> submit
+        if keyCode == 36 || keyCode == 76 {
+            print("[Keybinding Debug] Return/Enter key detected -> submit editing")
+            onSubmit?()
+            return true
+        }
+
+        // Modifiers
+        var parts: [String] = []
+        if flags.contains(.command) {
+            parts.append("cmd")
+        }
+        if flags.contains(.shift) {
+            parts.append("shift")
+        }
+        if flags.contains(.option) {
+            parts.append("option")
+        }
+        if flags.contains(.control) {
+            parts.append("ctrl")
+        }
+
+        // Modifier-only key codes: 54, 55 (Cmd), 56, 60 (Shift), 58, 61 (Option), 59, 62 (Control), 63 (Fn)
+        let modifierKeyCodes: Set<UInt16> = [54, 55, 56, 57, 58, 59, 60, 61, 62, 63]
+        if modifierKeyCodes.contains(keyCode) {
+            print("[Keybinding Debug] Pure modifier key press (keyCode=\(keyCode)), waiting for character key...")
+            return true
+        }
+
+        // Key character mapping
+        let keyString = switch keyCode {
+        case 48: "tab"
+        case 49: "space"
+        case 51: "delete"
+        case 123: "left"
+        case 124: "right"
+        case 125: "down"
+        case 126: "up"
+        case 18: "1"
+        case 19: "2"
+        case 20: "3"
+        case 21: "4"
+        case 23: "5"
+        case 22: "6"
+        case 26: "7"
+        case 28: "8"
+        case 25: "9"
+        case 29: "0"
+        case 27: "-"
+        case 24: "="
+        case 33: "["
+        case 30: "]"
+        case 42: "\\"
+        case 41: ";"
+        case 39: "'"
+        case 43: ","
+        case 47: "."
+        case 44: "/"
+        case 50: "`"
+        default:
+            if let chars = event.charactersIgnoringModifiers?.lowercased(), !chars.isEmpty {
+                String(chars.first!)
+            } else {
+                ""
+            }
+        }
+
+        if !keyString.isEmpty {
+            parts.append(keyString)
+            let result = parts.joined(separator: "+")
+            print("[Keybinding Debug] Recorded shortcut string: '\(result)'")
+            onShortcutRecorded?(result)
+            return true
+        }
+
+        return false
     }
 }
