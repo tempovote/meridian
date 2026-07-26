@@ -47,8 +47,18 @@ targets:
     postBuildScripts:
       - name: Deep Sign Embedded Frameworks
         script: |
-          echo "Deep signing $TARGET_BUILD_DIR/$PRODUCT_NAME.app"
-          /usr/bin/codesign --force --deep -s "${CODE_SIGN_IDENTITY:--}" "$TARGET_BUILD_DIR/$PRODUCT_NAME.app" || true
+          APP="$TARGET_BUILD_DIR/$PRODUCT_NAME.app"
+          SPARKLE="$APP/Contents/Frameworks/Sparkle.framework"
+          ID="${CODE_SIGN_IDENTITY:--}"
+          if [ -d "$SPARKLE" ]; then
+            echo "Signing Sparkle nested components inside-out with identity $ID"
+            [ -d "$SPARKLE/Versions/B/XPCServices/Downloader.xpc" ] && /usr/bin/codesign --force -s "$ID" "$SPARKLE/Versions/B/XPCServices/Downloader.xpc" || true
+            [ -d "$SPARKLE/Versions/B/XPCServices/Installer.xpc" ] && /usr/bin/codesign --force -s "$ID" "$SPARKLE/Versions/B/XPCServices/Installer.xpc" || true
+            [ -d "$SPARKLE/Versions/B/Updater.app" ] && /usr/bin/codesign --force -s "$ID" "$SPARKLE/Versions/B/Updater.app" || true
+            [ -f "$SPARKLE/Versions/B/Autoupdate" ] && /usr/bin/codesign --force -s "$ID" "$SPARKLE/Versions/B/Autoupdate" || true
+            /usr/bin/codesign --force -s "$ID" "$SPARKLE" || true
+          fi
+          /usr/bin/codesign --force -s "$ID" "$APP" || true
     info:
       path: App/Resources/Info.plist
       properties:
