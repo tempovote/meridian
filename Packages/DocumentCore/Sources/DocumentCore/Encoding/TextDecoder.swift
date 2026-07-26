@@ -36,7 +36,10 @@ public enum TextDecoder {
             let payload = bytes.dropFirst(bomLength)
             return decodePayload(payload, forcedEncoding: encoding, hadBOM: true)
         }
-        if UTF8Validator.validate(bytes) == .valid {
+        if let unmarkedEncoding = sniffUnmarkedUTF16(in: bytes) {
+            return decodePayload(bytes, forcedEncoding: unmarkedEncoding, hadBOM: false)
+        }
+        if UTF8Validator.validate(bytes) == .valid, !bytes.contains(0x00) {
             let text = strictUTF8String(bytes)
             return DecodedText(buffer: TextBuffer(text), encoding: .utf8, hadBOM: false, repairsMade: false)
         }
@@ -52,6 +55,45 @@ public enum TextDecoder {
         return DecodedText(
             buffer: TextBuffer(text), encoding: .legacy(.isoLatin1), hadBOM: false, repairsMade: false,
         )
+    }
+
+    /// Detects UTF-16 Little-Endian or Big-Endian byte streams that lack a BOM
+    /// by inspecting alternating NUL byte patterns.
+    static func sniffUnmarkedUTF16(in bytes: ArraySlice<UInt8>) -> TextEncoding? {
+        guard bytes.count >= 4 else { return nil }
+        var evenNuls = 0
+        var oddNuls = 0
+        let sampleSize = min(bytes.count, 4096)
+        let sample = bytes.prefix(sampleSize)
+
+        for (index, byte) in sample.enumerated() where byte == 0x00 {
+            if index % 2 == 0 {
+                evenNuls += 1
+            } else {
+                oddNuls += 1
+            }
+        }
+
+        let totalPairs = sampleSize / 2
+        guard totalPairs > 0 else { return nil }
+
+        // UTF-16 LE ASCII text has NULs on odd byte indices (index 1, 3, 5...)
+        if oddNuls > totalPairs / 3, evenNuls < oddNuls / 4 {
+            let result = Transcoder.decodeUTF16(bytes, littleEndian: true)
+            if !result.repairsMade {
+                return .utf16LittleEndian
+            }
+        }
+
+        // UTF-16 BE ASCII text has NULs on even byte indices (index 0, 2, 4...)
+        if evenNuls > totalPairs / 3, oddNuls < evenNuls / 4 {
+            let result = Transcoder.decodeUTF16(bytes, littleEndian: false)
+            if !result.repairsMade {
+                return .utf16BigEndian
+            }
+        }
+
+        return nil
     }
 
     private static func decodePayload(

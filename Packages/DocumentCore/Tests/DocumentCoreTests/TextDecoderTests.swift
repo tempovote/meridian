@@ -55,6 +55,19 @@ import Testing
     }
 }
 
+@Test func unmarkedUTF16LEAndBEDetectedWithoutBOM() throws {
+    let sample = "UTF-16 Sample Document — Hello World"
+    let leBytes = try #require(TextEncoding.utf16LittleEndian.encode(sample, includeBOM: false))
+    let decodedLE = TextDecoder.decode(leBytes[...])
+    #expect(decodedLE.buffer.string == sample)
+    #expect(decodedLE.encoding == .utf16LittleEndian)
+
+    let beBytes = try #require(TextEncoding.utf16BigEndian.encode(sample, includeBOM: false))
+    let decodedBE = TextDecoder.decode(beBytes[...])
+    #expect(decodedBE.buffer.string == sample)
+    #expect(decodedBE.encoding == .utf16BigEndian)
+}
+
 @Test func utf8WithoutBOMRoundTrips() throws {
     for sample in fuzzCorpus {
         let bytes = try #require(TextEncoding.utf8.encode(sample, includeBOM: false))
