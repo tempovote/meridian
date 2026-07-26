@@ -48,6 +48,13 @@ public final class PreferencesViewModel {
         }
     }
 
+    public var customBindings: [String: String] {
+        didSet {
+            guard customBindings != oldValue, !isSyncingFromStore else { return }
+            store.update { $0.keybindings.customBindings = customBindings }
+        }
+    }
+
     public private(set) var bannerMessage: String?
 
     public init(store: SettingsStore) {
@@ -57,10 +64,30 @@ public final class PreferencesViewModel {
         fontSize = editor.fontSize
         tabWidth = editor.tabWidth
         softWrapDefault = editor.softWrapDefault
+        customBindings = store.current.keybindings.customBindings
         bannerMessage = store.lastLoadError?.errorDescription
         store.onChange { [weak self] settings in
             self?.syncFromStore(settings)
         }
+    }
+
+    public func shortcut(for actionID: String) -> String {
+        customBindings[actionID] ?? KeybindingSettings.defaultShortcuts[actionID] ?? ""
+    }
+
+    public func setShortcut(_ shortcut: String, for actionID: String) {
+        var updated = customBindings
+        let defaultVal = KeybindingSettings.defaultShortcuts[actionID] ?? ""
+        if shortcut.isEmpty || shortcut == defaultVal {
+            updated.removeValue(forKey: actionID)
+        } else {
+            updated[actionID] = shortcut
+        }
+        customBindings = updated
+    }
+
+    public func resetKeybindingsToDefaults() {
+        customBindings = [:]
     }
 
     private func syncFromStore(_ settings: Settings) {
@@ -78,6 +105,9 @@ public final class PreferencesViewModel {
         }
         if softWrapDefault != editor.softWrapDefault {
             softWrapDefault = editor.softWrapDefault
+        }
+        if customBindings != settings.keybindings.customBindings {
+            customBindings = settings.keybindings.customBindings
         }
         bannerMessage = store.lastLoadError?.errorDescription
     }

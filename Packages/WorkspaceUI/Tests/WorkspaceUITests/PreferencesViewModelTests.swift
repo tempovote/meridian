@@ -79,4 +79,19 @@ struct PreferencesViewModelTests {
         let viewModel = PreferencesViewModel(store: store)
         #expect(viewModel.bannerMessage == nil)
     }
+
+    @Test func settingCustomKeybindingWritesThroughToStore() {
+        let store = makeStore()
+        let viewModel = PreferencesViewModel(store: store)
+        viewModel.setShortcut("cmd+option+f", for: "findInFiles")
+        #expect(store.current.keybindings.customBindings["findInFiles"] == "cmd+option+f")
+    }
+
+    @Test func resetKeybindingsToDefaultsClearsCustomBindings() {
+        let store = makeStore()
+        let viewModel = PreferencesViewModel(store: store)
+        viewModel.setShortcut("cmd+option+f", for: "findInFiles")
+        viewModel.resetKeybindingsToDefaults()
+        #expect(store.current.keybindings.customBindings.isEmpty)
+    }
 }

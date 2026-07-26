@@ -17,4 +17,16 @@ struct KeybindingRegistryTests {
         let shortcut = registry.shortcut(for: "findInFiles", default: "cmd+shift+f")
         #expect(shortcut == "cmd+option+f")
     }
+
+    @Test func parsesKeyEquivalentAndModifiers() {
+        let (key, modifiers) = KeybindingRegistry.parseShortcut("cmd+shift+f")
+        #expect(key == "f")
+        #expect(modifiers.contains(.command))
+        #expect(modifiers.contains(.shift))
+    }
+
+    @Test func resolvesDefaultShortcutsFromSettingsKit() {
+        let registry = KeybindingRegistry()
+        #expect(registry.shortcut(for: "formatDocument") == "cmd+shift+i")
+    }
 }

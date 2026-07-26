@@ -44,6 +44,17 @@ public struct KeybindingSettings: Codable, Sendable, Equatable {
 
     public static let `default` = KeybindingSettings(customBindings: [:])
 
+    public static let defaultShortcuts: [String: String] = [
+        "find": "cmd+f",
+        "findInFiles": "cmd+shift+f",
+        "formatDocument": "cmd+shift+i",
+        "toggleMarkdownPreview": "cmd+shift+m",
+        "foldAll": "cmd+option+[",
+        "unfoldAll": "cmd+option+]",
+        "toggleSoftWrap": "cmd+option+w",
+        "duplicateLine": "cmd+shift+d",
+    ]
+
     public init(customBindings: [String: String] = [:]) {
         self.customBindings = customBindings
     }
