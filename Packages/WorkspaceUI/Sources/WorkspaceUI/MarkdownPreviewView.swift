@@ -14,8 +14,9 @@ public struct MarkdownPreviewView: NSViewRepresentable {
 
     public func makeNSView(context: Context) -> WKWebView {
         let config = WKWebViewConfiguration()
-        let webView = WKWebView(frame: .zero, configuration: config)
-        webView.setValue(false, forKey: "drawsBackground")
+        let webView = WKWebView(frame: NSRect(x: 0, y: 0, width: 400, height: 600), configuration: config)
+        webView.autoresizingMask = [.width, .height]
+        webView.setValue(true, forKey: "drawsBackground")
         updateHTMLContent(in: webView)
         return webView
     }
@@ -97,15 +98,23 @@ public struct MarkdownPreviewView: NSViewRepresentable {
 
     private func renderInline(_ text: String) -> String {
         var escaped = escapeHTML(text)
-        // Convert **bold**
-        while let range = escaped.range(of: "\\*\\*(.*?)\\*\\*", options: .regularExpression) {
-            let inner = escaped[range].dropFirst(2).dropLast(2)
-            escaped.replaceSubrange(range, with: "<strong>\(inner)</strong>")
+        if let regex = try? NSRegularExpression(pattern: "\\*\\*(.*?)\\*\\*") {
+            let nsString = escaped as NSString
+            escaped = regex.stringByReplacingMatches(
+                in: escaped,
+                options: [],
+                range: NSRange(location: 0, length: nsString.length),
+                withTemplate: "<strong>$1</strong>",
+            )
         }
-        // Convert `code`
-        while let range = escaped.range(of: "`([^`]+)`", options: .regularExpression) {
-            let inner = escaped[range].dropFirst(1).dropLast(1)
-            escaped.replaceSubrange(range, with: "<code>\(inner)</code>")
+        if let regex = try? NSRegularExpression(pattern: "`([^`]+)`") {
+            let nsString = escaped as NSString
+            escaped = regex.stringByReplacingMatches(
+                in: escaped,
+                options: [],
+                range: NSRange(location: 0, length: nsString.length),
+                withTemplate: "<code>$1</code>",
+            )
         }
         return escaped
     }

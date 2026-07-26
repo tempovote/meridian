@@ -124,12 +124,8 @@ public final class MeridianTextView: NSTextView {
             // AppKit's own internal re-entrant call during our multi-caret
             // apply — let it through but keep customSelectedRanges intact.
             super.setSelectedRanges(ranges, affinity: affinity, stillSelecting: stillSelecting)
-        } else if customSelectedRanges != nil {
-            // AppKit is trying to collapse our multi-caret to a single range
-            // (e.g. cursor-blink timer, internal layout pass). Suppress it.
-            return
         } else {
-            // Normal single-caret path.
+            // Normal single-caret path — reset multi-caret state and apply.
             customSelectedRanges = nil
             super.setSelectedRanges(ranges, affinity: affinity, stillSelecting: stillSelecting)
         }
