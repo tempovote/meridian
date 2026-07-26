@@ -77,11 +77,14 @@ public protocol TextLayoutEngine: AnyObject {
     var canUnfoldAtCaret: Bool { get }
     var canFoldAll: Bool { get }
     var canUnfoldAll: Bool { get }
+    /// Sets the Git diff mark provider for the line number ruler.
+    func setGitGutterMarkProvider(_ provider: ((Int) -> GitGutterMark)?)
 }
 
 public extension TextLayoutEngine {
     func setSoftWrap(_ enabled: Bool) {}
     func setGutterVisible(_ enabled: Bool) {}
+    func setGitGutterMarkProvider(_ provider: ((Int) -> GitGutterMark)?) {}
 
     // Folding no-op defaults: any conformer (e.g. a future M7 CoreText
     // engine) compiles without implementing folding until it's ready to.

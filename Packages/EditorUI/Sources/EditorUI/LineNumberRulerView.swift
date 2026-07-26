@@ -1,5 +1,6 @@
 import AppKit
 import DocumentCore
+import FileKit
 
 /// An `NSRulerView` subclass attached to `NSScrollView.verticalRulerView`
 /// that renders 1-based line numbers in sync with TextKit 2 layout fragments.
@@ -24,6 +25,13 @@ public final class LineNumberRulerView: NSRulerView {
     }
 
     public var continuationSymbol: String = "·"
+
+    /// Per-line Git diff mark provider.
+    public var gitGutterMarkProvider: ((Int) -> GitGutterMark)? {
+        didSet {
+            needsDisplay = true
+        }
+    }
 
     /// Width reserved for fold chevrons at the trailing edge of the ruler,
     /// only when `foldMarkProvider` is set.
@@ -173,6 +181,23 @@ public final class LineNumberRulerView: NSRulerView {
             let chevronY = fragmentRectInRuler.minY + (fragmentRectInRuler.height - chevronSize.height) / 2
             NSAttributedString(string: symbol, attributes: chevronAttr)
                 .draw(at: NSPoint(x: ruleThickness - Self.chevronBandWidth + 1, y: chevronY))
+        }
+
+        if isFirstOfLine, let gitMark = gitGutterMarkProvider?(linePos.line), gitMark != .none {
+            let color: NSColor = switch gitMark {
+            case .added: .systemGreen
+            case .modified: .systemOrange
+            case .deleted: .systemRed
+            case .none: .clear
+            }
+            color.setFill()
+            let barRect = NSRect(
+                x: bounds.maxX - 3.5,
+                y: fragmentRectInRuler.minY,
+                width: 3.0,
+                height: fragmentRectInRuler.height,
+            )
+            barRect.fill()
         }
     }
 

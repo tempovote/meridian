@@ -359,6 +359,11 @@ public final class TextKit2Engine: NSObject, TextLayoutEngine {
         ]
     }
 
+    public func setGitGutterMarkProvider(_ provider: ((Int) -> GitGutterMark)?) {
+        rulerView?.gitGutterMarkProvider = provider
+        rulerView?.needsDisplay = true
+    }
+
     /// Debug-only lockstep check (string materialization is O(n) — never
     /// ship this in a release hot path).
     func assertMirrorInvariant() {

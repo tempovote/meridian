@@ -234,24 +234,9 @@ final class MeridianDocument: NSDocument {
             wireUndoCallback()
             wireMirroring()
             wireFocusTracking()
+            refreshGitGutter()
 
-            let currentEnc = loadedMetadata?.encoding ?? .utf8
-            let hadBOM = loadedMetadata?.hadBOM ?? false
-            let encodingName = currentEnc.formattedDisplayName(includeBOM: hadBOM)
-            let statusBar = StatusBarView(
-                viewModel: viewModel,
-                encodingName: encodingName,
-                lineEndingName: "LF",
-                currentEncoding: currentEnc,
-                currentIncludeBOM: hadBOM,
-                onSelectEncoding: { [weak self] newEncoding, includeBOM in
-                    self?.changeEncoding(to: newEncoding, includeBOM: includeBOM)
-                },
-                onReopenWithEncoding: { [weak self] newEncoding in
-                    self?.reopen(with: newEncoding)
-                },
-            )
-            let host = NSHostingView(rootView: statusBar)
+            let host = makeStatusBarHost(viewModel: viewModel)
             statusBarHost = host
 
             let containerStack = NSStackView(views: [engine.view, host])
@@ -274,9 +259,30 @@ final class MeridianDocument: NSDocument {
             window.tabbingMode = .preferred
             window.center()
             window.contentView = mainSplitView
-            window.makeFirstResponder(engine.keyView)
-            addWindowController(NSWindowController(window: window))
+            let windowController = NSWindowController(window: window)
+            windowController.shouldCascadeWindows = true
+            addWindowController(windowController)
         }
+    }
+
+    private func makeStatusBarHost(viewModel: EditorViewModel) -> NSHostingView<StatusBarView> {
+        let currentEnc = loadedMetadata?.encoding ?? .utf8
+        let hadBOM = loadedMetadata?.hadBOM ?? false
+        let encodingName = currentEnc.formattedDisplayName(includeBOM: hadBOM)
+        let statusBar = StatusBarView(
+            viewModel: viewModel,
+            encodingName: encodingName,
+            lineEndingName: "LF",
+            currentEncoding: currentEnc,
+            currentIncludeBOM: hadBOM,
+            onSelectEncoding: { [weak self] newEncoding, includeBOM in
+                self?.changeEncoding(to: newEncoding, includeBOM: includeBOM)
+            },
+            onReopenWithEncoding: { [weak self] newEncoding in
+                self?.reopen(with: newEncoding)
+            },
+        )
+        return NSHostingView(rootView: statusBar)
     }
 
     private func makeSidebarSplitView(containerStack: NSStackView) -> NSSplitView {
@@ -578,6 +584,7 @@ final class MeridianDocument: NSDocument {
                     other.engine.apply(transaction, base: base, restoreSelection: false)
                 }
                 updateMarkdownPreviewIfActive()
+                refreshGitGutter()
             }
         }
     }
@@ -937,6 +944,29 @@ final class MeridianDocument: NSDocument {
         guard let previewHost = markdownPreviewHost, let viewModel = focusedViewModel else { return }
         let isDark = NSApp.effectiveAppearance.name == .darkAqua
         previewHost.rootView = MarkdownPreviewView(markdownText: viewModel.buffer.string, isDarkMode: isDark)
+    }
+
+    private var gitGutterMarks: [Int: GitGutterMark] = [:]
+
+    private func refreshGitGutter() {
+        guard let url = fileURL else {
+            gitGutterMarks = [:]
+            updateGitGutterMarkProviders()
+            return
+        }
+        Task { @MainActor in
+            let marks = await GitService.shared.diffStatus(for: url)
+            self.gitGutterMarks = marks
+            self.updateGitGutterMarkProviders()
+        }
+    }
+
+    private func updateGitGutterMarkProviders() {
+        for pane in panes {
+            pane.engine.setGitGutterMarkProvider { [weak self] line in
+                self?.gitGutterMarks[line] ?? .none
+            }
+        }
     }
 
     private func showFindBar(startExpanded: Bool) {

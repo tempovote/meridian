@@ -9,6 +9,7 @@ let package = Package(
     ],
     dependencies: [
         .package(path: "../DocumentCore"),
+        .package(path: "../FileKit"),
         .package(path: "../SearchKit"),
         .package(path: "../SettingsKit"),
         .package(path: "../SyntaxKit"),
@@ -17,7 +18,7 @@ let package = Package(
     targets: [
         .target(
             name: "EditorUI",
-            dependencies: ["DocumentCore", "SearchKit", "SettingsKit", "SyntaxKit", "ThemeKit"],
+            dependencies: ["DocumentCore", "FileKit", "SearchKit", "SettingsKit", "SyntaxKit", "ThemeKit"],
         ),
         .testTarget(name: "EditorUITests", dependencies: ["EditorUI", "SettingsKit"]),
     ],
