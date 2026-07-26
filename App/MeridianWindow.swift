@@ -42,13 +42,27 @@ final class MeridianWindow: NSWindow {
         }
     }
 
+    @objc func formatDocument(_ sender: Any?) {
+        if let doc = windowController?.document as? MeridianDocument {
+            doc.formatDocument(sender)
+        }
+    }
+
+    @objc func minifyDocument(_ sender: Any?) {
+        if let doc = windowController?.document as? MeridianDocument {
+            doc.minifyDocument(sender)
+        }
+    }
+
+    @objc func toggleMarkdownPreview(_ sender: Any?) {
+        if let doc = windowController?.document as? MeridianDocument {
+            doc.toggleMarkdownPreview(sender)
+        }
+    }
+
     override func validateMenuItem(_ menuItem: NSMenuItem) -> Bool {
-        if menuItem.action == #selector(toggleSidebar(_:)) {
-            if let doc = windowController?.document as? MeridianDocument {
-                menuItem.state = doc.isSidebarVisible ? .on : .off
-                return true
-            }
-            return true
+        if let doc = windowController?.document as? MeridianDocument {
+            return doc.validateMenuItem(menuItem)
         }
         return super.validateMenuItem(menuItem)
     }
