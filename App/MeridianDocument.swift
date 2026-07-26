@@ -89,9 +89,7 @@ private final class RootSplitViewDelegate: NSObject, NSSplitViewDelegate {
         constrainMinCoordinate proposedMinimumPosition: CGFloat,
         ofSubviewAt dividerIndex: Int,
     ) -> CGFloat {
-        let minPos: CGFloat = 100
-        Swift.print("[Terminal Debug] constrainMinCoordinate proposed: \(proposedMinimumPosition), returning: \(minPos)")
-        return minPos
+        100
     }
 
     func splitView(
@@ -99,15 +97,11 @@ private final class RootSplitViewDelegate: NSObject, NSSplitViewDelegate {
         constrainMaxCoordinate proposedMaximumPosition: CGFloat,
         ofSubviewAt dividerIndex: Int,
     ) -> CGFloat {
-        let maxPos = max(150, splitView.bounds.height - 80)
-        Swift.print("[Terminal Debug] constrainMaxCoordinate h=\(splitView.bounds.height), max=\(maxPos)")
-        return maxPos
+        max(150, splitView.bounds.height - 80)
     }
 
     func splitView(_ splitView: NSSplitView, shouldAdjustSizeOfSubview view: NSView) -> Bool {
-        let isMain = (view == splitView.arrangedSubviews.first)
-        Swift.print("[Terminal Debug] shouldAdjustSizeOfSubview isMain=\(isMain) -> true")
-        return true
+        true
     }
 }
 
@@ -1046,39 +1040,32 @@ final class MeridianDocument: NSDocument {
     private var terminalHost: NSView?
 
     @objc func toggleTerminal(_ sender: Any?) {
-        Swift.print("[Terminal Debug] toggleTerminal called. Currently terminalHost exists: \(terminalHost != nil)")
         if let host = terminalHost {
-            Swift.print("[Terminal Debug] Removing terminal host from superview")
             host.removeFromSuperview()
             terminalHost = nil
             rootSplitView?.adjustSubviews()
         } else {
-            guard let rootSplitView else {
-                Swift.print("[Terminal Debug] ERROR: rootSplitView is NIL!")
-                return
-            }
+            guard let rootSplitView else { return }
             let terminal = TerminalView()
             let host = NSHostingView(rootView: terminal)
-            let totalHeight = rootSplitView.bounds.height
-            let initialHeight: CGFloat = 300
-            host.frame = NSRect(x: 0, y: 0, width: rootSplitView.bounds.width, height: initialHeight)
             terminalHost = host
 
-            let bounds = rootSplitView.bounds
-            let subCount = rootSplitView.arrangedSubviews.count
-            Swift.print("[Terminal Debug] Before add: bounds=\(bounds), count=\(subCount)")
             rootSplitView.addArrangedSubview(host)
             rootSplitView.setHoldingPriority(NSLayoutConstraint.Priority(250), forSubviewAt: 0)
-            rootSplitView.setHoldingPriority(NSLayoutConstraint.Priority(750), forSubviewAt: 1)
-            let targetDividerPos = max(100, totalHeight - initialHeight)
-            Swift.print("[Terminal Debug] Setting divider 0 position to \(targetDividerPos)...")
+            rootSplitView.setHoldingPriority(NSLayoutConstraint.Priority(250), forSubviewAt: 1)
+
+            let totalHeight = rootSplitView.bounds.height
+            let targetDividerPos = max(100, totalHeight - 300)
             rootSplitView.setPosition(targetDividerPos, ofDividerAt: 0)
             rootSplitView.adjustSubviews()
 
-            if rootSplitView.arrangedSubviews.count > 1 {
-                let f0 = rootSplitView.arrangedSubviews[0].frame
-                let f1 = rootSplitView.arrangedSubviews[1].frame
-                Swift.print("[Terminal Debug] After setup: subview0=\(f0), subview1=\(f1)")
+            DispatchQueue.main.async { [weak self] in
+                guard let self, let rootSplitView = self.rootSplitView, terminalHost != nil else { return }
+                let currentHeight = rootSplitView.bounds.height
+                if currentHeight > 300 {
+                    rootSplitView.setPosition(currentHeight - 300, ofDividerAt: 0)
+                    rootSplitView.adjustSubviews()
+                }
             }
         }
     }
