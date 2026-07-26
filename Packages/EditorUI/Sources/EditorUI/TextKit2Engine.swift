@@ -273,7 +273,27 @@ public final class TextKit2Engine: NSObject, TextLayoutEngine {
         } else {
             textView.setSelectedRange(nsRanges[0].rangeValue)
         }
+        updateTextLayoutManagerSelections(from: nsRanges)
         textView.needsDisplay = true
+    }
+
+    private func updateTextLayoutManagerSelections(from nsRanges: [NSValue]) {
+        guard let textLayoutManager = textView.textLayoutManager,
+              let docStart = textLayoutManager.documentRange.location as NSTextLocation?
+        else { return }
+
+        let textSelections = nsRanges.compactMap { val -> NSTextSelection? in
+            let nsRange = val.rangeValue
+            guard let startLoc = textLayoutManager.location(docStart, offsetBy: nsRange.location),
+                  let endLoc = textLayoutManager.location(startLoc, offsetBy: nsRange.length),
+                  let textRange = NSTextRange(location: startLoc, end: endLoc)
+            else { return nil }
+            return NSTextSelection(range: textRange, affinity: .downstream, granularity: .character)
+        }
+
+        if !textSelections.isEmpty {
+            textLayoutManager.textSelections = textSelections
+        }
     }
 
     public func scrollTo(_ offset: ByteOffset, in buffer: TextBuffer) {
