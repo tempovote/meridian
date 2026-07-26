@@ -32,4 +32,19 @@ extension TextKit2Engine {
         applyEditorColors()
         highlightCurrentBuffer()
     }
+
+    func debugDumpStorageAttributes(tag: String) {
+        Swift.print("[Meridian Deep Debug] === DUMP ATTRIBUTES (\(tag)) storage.length=\(storage.length) ===")
+        var location = 0
+        while location < storage.length {
+            var range = NSRange(location: 0, length: 0)
+            let attrs = storage.attributes(at: location, effectiveRange: &range)
+            let keyNames = attrs.keys.map(\.rawValue)
+            Swift.print(
+                "[Meridian Deep Debug] Range {\(range.location), \(range.length)}: " +
+                    "keys=\(keyNames), attrs=\(attrs)",
+            )
+            location = range.location + max(1, range.length)
+        }
+    }
 }

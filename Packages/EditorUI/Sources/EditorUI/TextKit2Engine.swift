@@ -226,12 +226,21 @@ public final class TextKit2Engine: NSObject, TextLayoutEngine {
             for edit in transaction.edits.reversed() {
                 let location = base.utf16Offset(of: edit.range.lowerBound).value
                 let length = base.utf16Offset(of: edit.range.upperBound).value - location
+                let repString = edit.replacement.string
                 storage.replaceCharacters(
                     in: NSRange(location: location, length: length),
-                    with: edit.replacement.string,
+                    with: repString,
                 )
+                let repLength = edit.replacement.utf16Count
+                if repLength > 0, location + repLength <= storage.length {
+                    storage.setAttributes(
+                        typingAttributes,
+                        range: NSRange(location: location, length: repLength),
+                    )
+                }
             }
         }
+        debugDumpStorageAttributes(tag: "after apply edit")
         buffer.apply(transaction)
         assertMirrorInvariant()
         let foldedBefore = foldModel.folded
@@ -240,6 +249,7 @@ public final class TextKit2Engine: NSObject, TextLayoutEngine {
             refreshFoldLayout()
         }
         highlightCurrentBuffer()
+        debugDumpStorageAttributes(tag: "after highlightCurrentBuffer")
         if restoreSelection, !transaction.selectionAfter.ranges.isEmpty {
             setSelection(transaction.selectionAfter, in: buffer)
         }

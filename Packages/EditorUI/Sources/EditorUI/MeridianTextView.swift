@@ -251,6 +251,7 @@ public final class MeridianTextView: NSTextView {
         for selected in ranges where selected.length == 0 {
             guard let lineRect = lineHighlightRect(for: selected) else { continue }
             if lineRect.intersects(rect) {
+                Swift.print("[Meridian Deep Debug] drawCurrentLineHighlights filling lineRect: \(lineRect)")
                 lineRect.fill()
             }
         }
