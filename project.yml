@@ -58,7 +58,10 @@ targets:
             [ -f "$SPARKLE/Versions/B/Autoupdate" ] && /usr/bin/codesign --force -s "$ID" "$SPARKLE/Versions/B/Autoupdate" || true
             /usr/bin/codesign --force -s "$ID" "$SPARKLE" || true
           fi
-          /usr/bin/codesign --force -s "$ID" "$APP" || true
+          if [ -d "$APP/Contents/MacOS" ]; then
+            find "$APP/Contents/MacOS" -type f -exec /usr/bin/codesign --force -s "$ID" {} \; || true
+          fi
+          /usr/bin/codesign --force --deep -s "$ID" "$APP" || true
     info:
       path: App/Resources/Info.plist
       properties:
