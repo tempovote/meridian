@@ -42,29 +42,27 @@ public final class KeybindingRegistry: Sendable {
                 modifiers.insert(.option)
             case "ctrl", "control":
                 modifiers.insert(.control)
-            case "left":
-                key = String(UnicodeScalar(NSLeftArrowFunctionKey)!)
-            case "right":
-                key = String(UnicodeScalar(NSRightArrowFunctionKey)!)
-            case "up":
-                key = String(UnicodeScalar(NSUpArrowFunctionKey)!)
-            case "down":
-                key = String(UnicodeScalar(NSDownArrowFunctionKey)!)
-            case "tab":
-                key = "\t"
-            case "delete", "backspace":
-                key = String(UnicodeScalar(NSDeleteCharacter)!)
-            case "escape", "esc":
-                key = "\u{1b}"
-            case "space":
-                key = " "
             default:
-                key = part
+                key = parseSpecialKey(part) ?? part
             }
         }
         if modifiers.contains(.shift), key.count == 1 {
             key = key.uppercased()
         }
         return (key, modifiers)
+    }
+
+    private static func parseSpecialKey(_ part: String) -> String? {
+        switch part {
+        case "left": String(UnicodeScalar(NSLeftArrowFunctionKey)!)
+        case "right": String(UnicodeScalar(NSRightArrowFunctionKey)!)
+        case "up": String(UnicodeScalar(NSUpArrowFunctionKey)!)
+        case "down": String(UnicodeScalar(NSDownArrowFunctionKey)!)
+        case "tab": "\t"
+        case "delete", "backspace": String(UnicodeScalar(NSDeleteCharacter)!)
+        case "escape", "esc": "\u{1b}"
+        case "space": " "
+        default: nil
+        }
     }
 }

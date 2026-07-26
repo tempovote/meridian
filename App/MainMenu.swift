@@ -41,7 +41,7 @@ enum MainMenu {
             CommandRegistry.updateShortcut(
                 for: entry.selector,
                 keyEquivalent: key.isEmpty ? nil : key,
-                modifierMask: modifiers
+                modifierMask: modifiers,
             )
         }
     }
@@ -114,7 +114,7 @@ private extension MainMenu {
     private static func addLineEditingCommands(to menu: NSMenu, settings: KeybindingSettings) {
         addCommand(
             to: menu, title: "Duplicate Line", action: Selector(("duplicateLine:")),
-            keyEquivalent: "D", actionID: "duplicateLine", settings: settings
+            keyEquivalent: "D", actionID: "duplicateLine", settings: settings,
         )
         addCommand(to: menu, title: "Delete Line", action: Selector(("deleteLine:")), keyEquivalent: "K")
         addCommand(
@@ -183,7 +183,7 @@ private extension MainMenu {
         addCommand(
             to: menu, title: "Format Document",
             action: Selector(("formatDocument:")), keyEquivalent: "I", modifierMask: [.command, .shift],
-            actionID: "formatDocument", settings: settings
+            actionID: "formatDocument", settings: settings,
         )
         addCommand(
             to: menu, title: "Minify Document",
@@ -195,7 +195,7 @@ private extension MainMenu {
         let menu = NSMenu(title: "Find")
         addCommand(
             to: menu, title: "Find…", action: Selector(("performFind:")),
-            keyEquivalent: "f", actionID: "find", settings: settings
+            keyEquivalent: "f", actionID: "find", settings: settings,
         )
         addCommand(
             to: menu, title: "Find and Replace…", action: Selector(("performFindAndReplace:")),
@@ -204,7 +204,7 @@ private extension MainMenu {
         addCommand(
             to: menu, title: "Find in Files…", action: Selector(("performFindInFiles:")),
             keyEquivalent: "F", modifierMask: [.command, .shift],
-            actionID: "findInFiles", settings: settings
+            actionID: "findInFiles", settings: settings,
         )
         addCommand(to: menu, title: "Find Next", action: Selector(("findNext:")), keyEquivalent: "g")
         addCommand(to: menu, title: "Find Previous", action: Selector(("findPrevious:")), keyEquivalent: "G")
@@ -225,7 +225,7 @@ private extension MainMenu {
         addCommand(
             to: menu, title: "Soft Wrap", action: Selector(("toggleSoftWrap:")),
             keyEquivalent: "w", modifierMask: [.command, .option],
-            actionID: "toggleSoftWrap", settings: settings
+            actionID: "toggleSoftWrap", settings: settings,
         )
         addCommand(to: menu, title: "Status Bar", action: Selector(("toggleStatusBar:")), keyEquivalent: "")
         addCommand(
@@ -235,7 +235,7 @@ private extension MainMenu {
         addCommand(
             to: menu, title: "Markdown Preview", action: Selector(("toggleMarkdownPreview:")),
             keyEquivalent: "M", modifierMask: [.command, .shift],
-            actionID: "toggleMarkdownPreview", settings: settings
+            actionID: "toggleMarkdownPreview", settings: settings,
         )
         menu.addItem(.separator())
         addCommand(
@@ -279,12 +279,12 @@ private extension MainMenu {
         addCommand(
             to: foldMenu, title: "Fold All", action: Selector(("foldAll:")),
             keyEquivalent: leftArrow, modifierMask: [.command, .option, .shift],
-            actionID: "foldAll", settings: settings
+            actionID: "foldAll", settings: settings,
         )
         addCommand(
             to: foldMenu, title: "Unfold All", action: Selector(("unfoldAll:")),
             keyEquivalent: rightArrow, modifierMask: [.command, .option, .shift],
-            actionID: "unfoldAll", settings: settings
+            actionID: "unfoldAll", settings: settings,
         )
         foldMenu.addItem(.separator())
         for level in 1 ... 5 {
@@ -333,7 +333,7 @@ private extension MainMenu {
     private static func addCommand(
         to menu: NSMenu, title: String, action: Selector, keyEquivalent: String,
         modifierMask: NSEvent.ModifierFlags? = nil,
-        actionID: String? = nil, settings: KeybindingSettings? = nil
+        actionID: String? = nil, settings: KeybindingSettings? = nil,
     ) -> NSMenuItem {
         var finalKey = keyEquivalent
         var finalModifiers = modifierMask ?? .command

@@ -271,173 +271,26 @@ public struct KeycapBadgeView: View {
         }
     }
 
+    private static let symbolMap: [String: String] = [
+        "cmd": "⌘", "command": "⌘",
+        "shift": "⇧",
+        "option": "⌥", "alt": "⌥",
+        "ctrl": "⌃", "control": "⌃",
+        "return": "↩", "enter": "↩",
+        "delete": "⌫", "backspace": "⌫",
+        "escape": "⎋", "esc": "⎋",
+        "tab": "⇥",
+        "space": "Space",
+        "left": "←", "right": "→", "up": "↑", "down": "↓",
+    ]
+
     private func keycapSymbols(for raw: String) -> [String] {
         guard !raw.trimmingCharacters(in: .whitespaces).isEmpty else { return [] }
         let parts = raw.lowercased().components(separatedBy: "+").filter { !$0.isEmpty }
-        return parts.map { part -> String in
-            switch part {
-            case "cmd", "command": return "⌘"
-            case "shift": return "⇧"
-            case "option", "alt": return "⌥"
-            case "ctrl", "control": return "⌃"
-            case "return", "enter": return "↩"
-            case "delete", "backspace": return "⌫"
-            case "escape", "esc": return "⎋"
-            case "tab": return "⇥"
-            case "space": return "Space"
-            case "left": return "←"
-            case "right": return "→"
-            case "up": return "↑"
-            case "down": return "↓"
-            default: return part.uppercased()
-            }
-        }
-    }
-}
-
-// MARK: - KeyRecorderView
-
-/// An NSViewRepresentable that intercepts physical key combinations (e.g. Cmd+Shift+D, Cmd+F)
-/// directly via AppKit NSEvent handling, preventing system menu shortcuts from swallowing them.
-struct KeyRecorderView: NSViewRepresentable {
-    @Binding var shortcutText: String
-    var onCancel: () -> Void
-    var onSubmit: () -> Void
-
-    func makeNSView(context: Context) -> KeyRecorderNSView {
-        let view = KeyRecorderNSView()
-        view.onShortcutRecorded = { newShortcut in
-            shortcutText = newShortcut
-        }
-        view.onCancel = {
-            onCancel()
-        }
-        view.onSubmit = {
-            onSubmit()
-        }
-        DispatchQueue.main.async {
-            if let window = view.window {
-                _ = window.makeFirstResponder(view)
-            }
-        }
-        return view
+        return parts.map { keycapSymbol(for: $0) }
     }
 
-    func updateNSView(_ nsView: KeyRecorderNSView, context: Context) {
-        DispatchQueue.main.async {
-            if let window = nsView.window, window.firstResponder !== nsView {
-                window.makeFirstResponder(nsView)
-            }
-        }
-    }
-}
-
-final class KeyRecorderNSView: NSView {
-    var onShortcutRecorded: ((String) -> Void)?
-    var onCancel: (() -> Void)?
-    var onSubmit: (() -> Void)?
-
-    override var acceptsFirstResponder: Bool {
-        true
-    }
-
-    override func viewDidMoveToWindow() {
-        super.viewDidMoveToWindow()
-        if let window {
-            window.makeFirstResponder(self)
-        }
-    }
-
-    override func performKeyEquivalent(with event: NSEvent) -> Bool {
-        return handleKeyEvent(event)
-    }
-
-    override func keyDown(with event: NSEvent) {
-        _ = handleKeyEvent(event)
-    }
-
-    private func handleKeyEvent(_ event: NSEvent) -> Bool {
-        let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
-        let keyCode = event.keyCode
-
-        // Escape key -> cancel
-        if keyCode == 53 {
-            onCancel?()
-            return true
-        }
-
-        // Return / Enter key -> submit
-        if keyCode == 36 || keyCode == 76 {
-            onSubmit?()
-            return true
-        }
-
-        // Modifiers
-        var parts: [String] = []
-        if flags.contains(.command) {
-            parts.append("cmd")
-        }
-        if flags.contains(.shift) {
-            parts.append("shift")
-        }
-        if flags.contains(.option) {
-            parts.append("option")
-        }
-        if flags.contains(.control) {
-            parts.append("ctrl")
-        }
-
-        // Modifier-only key codes: 54, 55 (Cmd), 56, 60 (Shift), 58, 61 (Option), 59, 62 (Control), 63 (Fn)
-        let modifierKeyCodes: Set<UInt16> = [54, 55, 56, 57, 58, 59, 60, 61, 62, 63]
-        if modifierKeyCodes.contains(keyCode) {
-            return true
-        }
-
-        // Key character mapping
-        let keyString = switch keyCode {
-        case 48: "tab"
-        case 49: "space"
-        case 51: "delete"
-        case 123: "left"
-        case 124: "right"
-        case 125: "down"
-        case 126: "up"
-        case 18: "1"
-        case 19: "2"
-        case 20: "3"
-        case 21: "4"
-        case 23: "5"
-        case 22: "6"
-        case 26: "7"
-        case 28: "8"
-        case 25: "9"
-        case 29: "0"
-        case 27: "-"
-        case 24: "="
-        case 33: "["
-        case 30: "]"
-        case 42: "\\"
-        case 41: ";"
-        case 39: "'"
-        case 43: ","
-        case 47: "."
-        case 44: "/"
-        case 50: "`"
-        default:
-            if let chars = event.charactersIgnoringModifiers?.lowercased(), !chars.isEmpty {
-                String(chars.first!)
-            } else {
-                ""
-            }
-        }
-
-        if !keyString.isEmpty {
-            parts.append(keyString)
-            let result = parts.joined(separator: "+")
-            onShortcutRecorded?(result)
-            return true
-        }
-
-        return false
+    private func keycapSymbol(for part: String) -> String {
+        Self.symbolMap[part] ?? part.uppercased()
     }
 }

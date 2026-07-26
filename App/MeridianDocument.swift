@@ -447,7 +447,7 @@ final class MeridianDocument: NSDocument {
     /// view given `panes.count` and `currentSplitOrientation`.
     private func rebuildSplitLayout() {
         guard windowControllers.first?.window != nil,
-              let containerStack = self.containerStack
+              let containerStack
         else { return }
         // Remove the tracked editor slot specifically — NOT
         // `arrangedSubviews.first`, which the find bar / command palette
@@ -621,7 +621,7 @@ final class MeridianDocument: NSDocument {
         )
         let host = NSHostingView(rootView: paletteView)
         commandPaletteHost = host
-        if let window = windowControllers.first?.window, let containerStack = self.containerStack {
+        if let window = windowControllers.first?.window, let containerStack {
             containerStack.insertView(host, at: 0, in: .top)
             window.makeFirstResponder(host)
             commandPaletteClickMonitor = NSEvent
@@ -858,7 +858,7 @@ final class MeridianDocument: NSDocument {
         let host = NSHostingView(rootView: findView)
         findBarHost = host
 
-        if let window = windowControllers.first?.window, let containerStack = self.containerStack {
+        if let window = windowControllers.first?.window, let containerStack {
             containerStack.insertView(host, at: 0, in: .top)
             window.makeFirstResponder(host)
         }
