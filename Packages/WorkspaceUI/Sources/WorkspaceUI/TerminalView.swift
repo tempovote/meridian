@@ -114,6 +114,7 @@ public struct TerminalView: View {
                 .padding(8)
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
+            .frame(minHeight: 100, idealHeight: 240, maxHeight: .infinity)
             .onChange(of: outputLogs.count) {
                 if let lastIdx = outputLogs.indices.last {
                     proxy.scrollTo(lastIdx, anchor: .bottom)

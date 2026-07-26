@@ -79,6 +79,35 @@ private final class WideDividerSplitView: NSSplitView {
     }
 }
 
+private final class RootSplitViewDelegate: NSObject, NSSplitViewDelegate {
+    func splitView(_ splitView: NSSplitView, canCollapseSubview subview: NSView) -> Bool {
+        false
+    }
+
+    func splitView(
+        _ splitView: NSSplitView,
+        constrainMinCoordinate proposedMinimumPosition: CGFloat,
+        ofSubviewAt dividerIndex: Int,
+    ) -> CGFloat {
+        150
+    }
+
+    func splitView(
+        _ splitView: NSSplitView,
+        constrainMaxCoordinate proposedMaximumPosition: CGFloat,
+        ofSubviewAt dividerIndex: Int,
+    ) -> CGFloat {
+        max(200, splitView.bounds.height - 100)
+    }
+
+    func splitView(_ splitView: NSSplitView, shouldAdjustSizeOfSubview view: NSView) -> Bool {
+        if let first = splitView.arrangedSubviews.first, view == first {
+            return true
+        }
+        return false
+    }
+}
+
 /// The NSDocument bridge: FileKit I/O on the outside, a `DocumentModel`
 /// (shared buffer/undo) plus one or two `EditorViewModel` panes (each its
 /// own engine + display settings) as the authoritative model, thin
@@ -120,6 +149,7 @@ final class MeridianDocument: NSDocument {
     private let fileTreeViewModel = FileTreeViewModel()
     private var sidebarHost: NSHostingView<FileTreeView>?
     private var rootSplitView: NSSplitView?
+    private var rootSplitDelegate: RootSplitViewDelegate?
     var isSidebarVisible = false
 
     /// Subscription token for the FavoritesStore publisher so the window
@@ -254,6 +284,9 @@ final class MeridianDocument: NSDocument {
             verticalRootSplitView.isVertical = false
             verticalRootSplitView.dividerStyle = .thin
             verticalRootSplitView.addArrangedSubview(mainSplitView)
+            let splitDelegate = RootSplitViewDelegate()
+            verticalRootSplitView.delegate = splitDelegate
+            rootSplitDelegate = splitDelegate
             rootSplitView = verticalRootSplitView
 
             NSWindow.allowsAutomaticWindowTabbing = true
