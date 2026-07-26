@@ -94,11 +94,12 @@ public struct TerminalView: View {
         outputLogs.append("$ \(cmd)")
         inputCommand = ""
 
+        let dir = workingDirectory
         DispatchQueue.global(qos: .userInitiated).async {
             let process = Process()
             process.executableURL = URL(fileURLWithPath: "/bin/zsh")
             process.arguments = ["-c", cmd]
-            process.currentDirectoryURL = URL(fileURLWithPath: workingDirectory)
+            process.currentDirectoryURL = URL(fileURLWithPath: dir)
 
             let pipe = Pipe()
             process.standardOutput = pipe

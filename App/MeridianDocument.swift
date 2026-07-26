@@ -980,12 +980,12 @@ final class MeridianDocument: NSDocument {
         } else {
             let lines = viewModel.buffer.string.components(separatedBy: .newlines)
             let minimap = MinimapView(lines: lines) { [weak self] targetLine in
-                guard let self, let viewModel = self.focusedViewModel else { return }
+                guard let self, let viewModel = focusedViewModel else { return }
                 let maxLine = max(0, viewModel.buffer.lineCount - 1)
                 let clampedLine = max(0, min(targetLine, maxLine))
                 let pos = LinePosition(line: clampedLine, utf16Column: 0)
                 let byteOffset = viewModel.buffer.byteOffset(of: pos)
-                self.focusedEngine?.scrollTo(byteOffset, in: viewModel.buffer)
+                focusedEngine?.scrollTo(byteOffset, in: viewModel.buffer)
             }
             let host = NSHostingView(rootView: minimap)
             host.translatesAutoresizingMaskIntoConstraints = false
