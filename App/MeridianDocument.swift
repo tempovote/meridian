@@ -737,10 +737,23 @@ final class MeridianDocument: NSDocument {
     }
 
     private func formatCurrentDocument(pretty: Bool) {
-        guard let viewModel = focusedViewModel else { return }
+        guard let viewModel = focusedViewModel else {
+            Swift.print("[Meridian Debug] formatCurrentDocument failed: focusedViewModel is nil")
+            return
+        }
         let currentText = viewModel.buffer.string
         let langID = panes.first?.engine.languageID ?? fileURL?.pathExtension
+        let fileName = fileURL?.lastPathComponent ?? "Untitled"
+        let language = langID ?? "nil"
+        Swift.print(
+            "[Meridian Debug] formatCurrentDocument: file='\(fileName)', langID='\(language)', pretty=\(pretty)",
+        )
+
         guard let formatted = DocumentFormatter.format(text: currentText, languageID: langID, pretty: pretty) else {
+            Swift.print(
+                "[Meridian Debug] formatCurrentDocument: Formatting returned nil (syntax error or unsupported format)",
+            )
+            NSSound.beep()
             return
         }
         let fullRange = ByteOffset(0) ..< ByteOffset(viewModel.buffer.utf8Count)
@@ -752,64 +765,95 @@ final class MeridianDocument: NSDocument {
             selectionAfter: SelectionSet(caretAt: ByteOffset(0)),
         )
         viewModel.perform(transaction)
+        Swift.print("[Meridian Debug] formatCurrentDocument: Format transaction performed successfully!")
     }
 
     @objc func toggleMarkdownPreview(_ sender: Any?) {
-        guard let viewModel = focusedViewModel else { return }
+        guard let viewModel = focusedViewModel else {
+            Swift.print("[Meridian Debug] toggleMarkdownPreview failed: focusedViewModel is nil")
+            return
+        }
+        Swift.print(
+            "[Meridian Debug] toggleMarkdownPreview called. currentlyOpen=\(markdownPreviewHost != nil)",
+        )
         if let previewHost = markdownPreviewHost {
             previewHost.removeFromSuperview()
             markdownPreviewHost = nil
+            Swift.print("[Meridian Debug] Closed MarkdownPreviewView")
         } else {
             let isDark = NSApp.effectiveAppearance.name == .darkAqua
             let preview = MarkdownPreviewView(markdownText: viewModel.buffer.string, isDarkMode: isDark)
             let host = NSHostingView(rootView: preview)
             markdownPreviewHost = host
-            if let splitView = sidebarHost?.superview as? NSSplitView {
+            let splitView = (sidebarHost?.superview as? NSSplitView)
+                ?? (editorSlotView?.superview as? NSSplitView)
+                ?? (editorSlotView?.superview?.superview as? NSSplitView)
+            if let splitView {
                 splitView.addArrangedSubview(host)
                 splitView.adjustSubviews()
+                Swift.print("[Meridian Debug] Added MarkdownPreviewView to splitView successfully!")
+            } else {
+                Swift.print("[Meridian Debug] toggleMarkdownPreview error: Could not find parent NSSplitView")
             }
         }
     }
 
     private func showFindBar(startExpanded: Bool) {
-        guard let viewModel = focusedViewModel, findBarHost == nil else { return }
+        guard let viewModel = focusedViewModel,
+              let window = windowControllers.first?.window,
+              let containerStack = window.contentView as? NSStackView else { return }
+
         // Reuse the existing search state (query/matches/current index) if
         // it's still for the same pane — closing the Find bar only hides
         // its UI, it doesn't discard the search, so ⌘G/⇧⌘G keep working
         // while it's closed and reopening resumes where the user left off.
         // A stale instance (e.g. focus moved to a different split pane
-        // since the bar was last open) is replaced with a fresh one.
-        let findBarVM: FindBarViewModel = if let existing = findBarViewModel, existing.isBound(to: viewModel) {
-            existing
-        } else {
-            FindBarViewModel(editorViewModel: viewModel, startExpanded: startExpanded)
+        // with a different viewModel) gets dropped and rebuilt fresh below.
+        if let findBarViewModel, !findBarViewModel.isBound(to: viewModel) {
+            self.findBarViewModel = nil
         }
-        if startExpanded {
-            findBarVM.isReplaceExpanded = true
-        }
-        findBarViewModel = findBarVM
-        let findView = FindBarView(viewModel: findBarVM) { [weak self] in
-            self?.hideFindBar()
-        }
-        let host = NSHostingView(rootView: findView)
-        findBarHost = host
 
-        if let window = windowControllers.first?.window, let containerStack = window.contentView as? NSStackView {
-            containerStack.insertView(host, at: 0, in: .top)
-            window.makeFirstResponder(host)
+        let vm = findBarViewModel ?? FindBarViewModel(
+            editorViewModel: viewModel,
+            findEngine: SearchEngine(),
+        )
+        findBarViewModel = vm
+        if startExpanded {
+            vm.isReplaceMode = true
+        }
+
+        let findBarView = FindBarView(viewModel: vm)
+        let host = NSHostingView(rootView: findBarView)
+        findBarHost = host
+        containerStack.insertArrangedSubview(host, at: 0)
+
+        // Focus the search input field so typing works immediately.
+        DispatchQueue.main.async { [weak host] in
+            guard let host else { return }
+            self.focusFirstTextField(in: host)
+        }
+    }
+
+    private func focusFirstTextField(in view: NSView) {
+        for subview in view.subviews {
+            if let textField = subview as? NSTextField, textField.isEditable {
+                view.window?.makeFirstResponder(textField)
+                return
+            }
+            focusFirstTextField(in: subview)
         }
     }
 
     private var findInFilesWindowController: NSWindowController?
 
     @objc func performFindInFiles(_ sender: Any?) {
-        showFindInFiles()
+        showFindInFilesWindow()
     }
 
-    private func showFindInFiles() {
-        if let existing = findInFilesWindowController {
-            existing.showWindow(nil)
-            existing.window?.makeKeyAndOrderFront(nil)
+    private func showFindInFilesWindow() {
+        if let controller = findInFilesWindowController {
+            controller.showWindow(nil)
+            controller.window?.makeKeyAndOrderFront(nil)
             return
         }
 
@@ -881,10 +925,25 @@ final class MeridianDocument: NSDocument {
         if let valid = validateEditorMenuItem(menuItem) {
             return valid
         }
+        if let valid = validateFormatAndPreviewMenuItem(menuItem) {
+            return valid
+        }
         if let valid = validateFoldMenuItem(menuItem) {
             return valid
         }
         return super.validateMenuItem(menuItem)
+    }
+
+    private func validateFormatAndPreviewMenuItem(_ menuItem: NSMenuItem) -> Bool? {
+        switch menuItem.action {
+        case #selector(formatDocument(_:)), #selector(minifyDocument(_:)):
+            return focusedViewModel != nil
+        case #selector(toggleMarkdownPreview(_:)):
+            menuItem.state = (markdownPreviewHost != nil) ? .on : .off
+            return focusedViewModel != nil
+        default:
+            return nil
+        }
     }
 
     private func validateEditorMenuItem(_ menuItem: NSMenuItem) -> Bool? {
