@@ -1,5 +1,6 @@
 import AppKit
 import DocumentCore
+import FileKit
 
 /// The component-level seam between the document model and its renderer
 /// (ADR 0009). P1 ships ``TextKit2Engine``; M7 adds a CoreText-based

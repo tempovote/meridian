@@ -1,5 +1,6 @@
 import AppKit
 import DocumentCore
+import FileKit
 import SettingsKit
 import SyntaxKit
 import ThemeKit
