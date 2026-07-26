@@ -114,10 +114,6 @@ public final class MeridianTextView: NSTextView {
         affinity: NSSelectionAffinity,
         stillSelecting: Bool,
     ) {
-        let nsRanges = ranges.map(\.rangeValue)
-        let msg = "[Meridian Selection Debug] MeridianTextView.setSelectedRanges called: " +
-            "ranges=\(nsRanges), stillSelecting=\(stillSelecting)"
-        Swift.print(msg)
         if ranges.count > 1 {
             // Explicit multi-caret call from our own code.
             isSettingMultiCaret = true

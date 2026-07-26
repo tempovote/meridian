@@ -754,10 +754,6 @@ final class MeridianDocument: NSDocument {
         let result = DocumentFormatter.formatResult(text: currentText, languageID: langID, pretty: pretty)
         switch result {
         case let .success(formatted):
-            Swift.print(
-                "[Meridian Selection Debug] formatCurrentDocument START: " +
-                    "current selection=\(viewModel.selection.ranges)",
-            )
             let singleCaret = SelectionSet(caretAt: ByteOffset(0))
             viewModel.setSelection(singleCaret)
             let fullRange = ByteOffset(0) ..< ByteOffset(viewModel.buffer.utf8Count)
@@ -771,11 +767,9 @@ final class MeridianDocument: NSDocument {
             viewModel.perform(transaction)
             viewModel.setSelection(singleCaret)
             DispatchQueue.main.async { [weak viewModel] in
-                Swift.print("[Meridian Selection Debug] formatCurrentDocument async: setting singleCaret")
                 viewModel?.setSelection(singleCaret)
             }
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { [weak viewModel] in
-                Swift.print("[Meridian Selection Debug] formatCurrentDocument asyncAfter 0.05s: setting singleCaret")
                 viewModel?.setSelection(singleCaret)
             }
             Swift.print("[Meridian Debug] formatCurrentDocument: Format transaction performed successfully!")

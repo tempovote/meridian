@@ -14,15 +14,10 @@ extension TextKit2Engine: NSTextViewDelegate {
         willChangeSelectionFromCharacterRanges oldSelectedCharRanges: [NSValue],
         toCharacterRanges newSelectedCharRanges: [NSValue],
     ) -> [NSValue] {
-        let oldR = oldSelectedCharRanges.map(\.rangeValue)
-        let newR = newSelectedCharRanges.map(\.rangeValue)
-        Swift.print("[Meridian Selection Debug] willChangeSelectionFromCharacterRanges: old=\(oldR) -> new=\(newR)")
-        return newSelectedCharRanges
+        newSelectedCharRanges
     }
 
     public func textViewDidChangeSelection(_ notification: Notification) {
-        let ranges = textView.selectedRanges.map(\.rangeValue)
-        Swift.print("[Meridian Selection Debug] textViewDidChangeSelection: currentRanges=\(ranges)")
         textView.needsDisplay = true
         rulerView?.needsDisplay = true
         unfoldIfSelectionEnteredHiddenText()
