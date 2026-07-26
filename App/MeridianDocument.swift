@@ -940,6 +940,42 @@ final class MeridianDocument: NSDocument {
         }
     }
 
+    private var diffWindowControllers: [NSWindowController] = []
+
+    @objc func compareWithFile(_ sender: Any?) {
+        guard let viewModel = focusedViewModel else { return }
+        let panel = NSOpenPanel()
+        panel.canChooseFiles = true
+        panel.canChooseDirectories = false
+        panel.allowsMultipleSelection = false
+        panel.message = "Select a file to compare against the current document"
+
+        panel.begin { [weak self] response in
+            guard response == .OK, let targetURL = panel.url, let self else { return }
+            do {
+                let targetText = try String(contentsOf: targetURL, encoding: .utf8)
+                let currentText = viewModel.buffer.string
+                let leftName = fileURL?.lastPathComponent ?? "Untitled"
+                let rightName = targetURL.lastPathComponent
+
+                let result = DiffEngine.diff(
+                    leftText: currentText,
+                    rightText: targetText,
+                    leftName: leftName,
+                    rightName: rightName,
+                )
+                let controller = DiffWindowController(diffResult: result)
+                diffWindowControllers.append(controller)
+                controller.showWindow(sender)
+            } catch {
+                let alert = NSAlert()
+                alert.messageText = "Could Not Read Compare File"
+                alert.informativeText = error.localizedDescription
+                alert.runModal()
+            }
+        }
+    }
+
     private func updateMarkdownPreviewIfActive() {
         guard let previewHost = markdownPreviewHost, let viewModel = focusedViewModel else { return }
         let isDark = NSApp.effectiveAppearance.name == .darkAqua
@@ -1087,7 +1123,7 @@ final class MeridianDocument: NSDocument {
 
     private func validateFormatAndPreviewMenuItem(_ menuItem: NSMenuItem) -> Bool? {
         switch menuItem.action {
-        case #selector(formatDocument(_:)), #selector(minifyDocument(_:)):
+        case #selector(formatDocument(_:)), #selector(minifyDocument(_:)), #selector(compareWithFile(_:)):
             return focusedViewModel != nil
         case #selector(toggleMarkdownPreview(_:)):
             menuItem.state = (markdownPreviewHost != nil) ? .on : .off

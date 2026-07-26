@@ -60,6 +60,12 @@ final class MeridianWindow: NSWindow {
         }
     }
 
+    @objc func compareWithFile(_ sender: Any?) {
+        if let doc = windowController?.document as? MeridianDocument {
+            doc.compareWithFile(sender)
+        }
+    }
+
     override func validateMenuItem(_ menuItem: NSMenuItem) -> Bool {
         if let doc = windowController?.document as? MeridianDocument {
             return doc.validateMenuItem(menuItem)

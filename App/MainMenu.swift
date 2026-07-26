@@ -87,6 +87,11 @@ private extension MainMenu {
             to: menu, title: "Add to Favorites",
             action: Selector(("toggleFavorite:")), keyEquivalent: "d",
         )
+        addCommand(
+            to: menu, title: "Compare With File…",
+            action: Selector(("compareWithFile:")), keyEquivalent: "D",
+            modifierMask: [.command, .option],
+        )
         return wrapped(menu)
     }
 }
