@@ -1,3 +1,4 @@
+import Foundation
 import Testing
 @testable import DocumentCore
 
@@ -66,4 +67,15 @@ import Testing
     #expect(TextEncoding.commonEncodings.contains(.utf16LittleEndian))
     #expect(TextEncoding.commonEncodings.contains(.legacy(.shiftJIS)))
     #expect(TextEncoding.commonEncodings.contains(.legacy(.windowsCP1252)))
+}
+
+@Test func xattrReadAndWriteRoundTrip() throws {
+    let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + ".txt")
+    try "hello".write(to: tempURL, atomically: true, encoding: .utf8)
+    defer { try? FileManager.default.removeItem(at: tempURL) }
+
+    let encoding = TextEncoding.legacy(.windowsCP1252)
+    encoding.writeXattr(to: tempURL)
+    let readBack = TextEncoding.readXattr(from: tempURL)
+    #expect(readBack == encoding)
 }

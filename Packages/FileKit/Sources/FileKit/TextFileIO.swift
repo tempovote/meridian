@@ -66,7 +66,10 @@ public enum TextFileIO {
             } catch {
                 throw FileKitError.unreadable(url: url, underlying: error)
             }
-            let decoded = TextDecoder.decode(ArraySlice([UInt8](data)), overrideEncoding: overrideEncoding)
+            let payload = ArraySlice([UInt8](data))
+            let effectiveOverride = overrideEncoding ??
+                (TextEncoding.sniffBOM(in: payload) == nil ? TextEncoding.readXattr(from: url) : nil)
+            let decoded = TextDecoder.decode(payload, overrideEncoding: effectiveOverride)
             return LoadedTextFile(
                 buffer: decoded.buffer,
                 encoding: decoded.encoding,
@@ -100,6 +103,7 @@ public enum TextFileIO {
         let data = try encode(buffer, as: encoding, includeBOM: includeBOM)
         do {
             try data.write(to: url, options: .atomic)
+            encoding.writeXattr(to: url)
         } catch {
             throw FileKitError.unwritable(url: url, underlying: error)
         }

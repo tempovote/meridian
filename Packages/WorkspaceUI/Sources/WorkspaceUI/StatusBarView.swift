@@ -85,7 +85,10 @@ public struct StatusBarView: View {
                         ForEach(TextEncoding.commonEncodings, id: \.self) { enc in
                             Button(
                                 action: {
-                                    onSelectEncoding?(enc, currentIncludeBOM)
+                                    let isUnicodeFixedWidth = (enc == .utf16LittleEndian || enc == .utf16BigEndian
+                                        || enc == .utf32LittleEndian || enc == .utf32BigEndian)
+                                    let nextBOM = isUnicodeFixedWidth ? true : currentIncludeBOM
+                                    onSelectEncoding?(enc, nextBOM)
                                 },
                                 label: {
                                     if enc == currentEncoding {

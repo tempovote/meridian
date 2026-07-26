@@ -216,6 +216,15 @@ final class MeridianDocument: NSDocument {
         }
     }
 
+    override func write(
+        to url: URL, ofType typeName: String, for saveOperation: NSDocument.SaveOperationType,
+        originalContentsURL absoluteOriginalItemURL: URL?,
+    ) throws {
+        try super.write(to: url, ofType: typeName, for: saveOperation, originalContentsURL: absoluteOriginalItemURL)
+        let metadata = loadedMetadata ?? (.utf8, false)
+        metadata.encoding.writeXattr(to: url)
+    }
+
     override func makeWindowControllers() {
         MainActor.assumeIsolated {
             let documentModel = DocumentModel(buffer: pendingBuffer)
