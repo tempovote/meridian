@@ -8,45 +8,39 @@ import Sparkle
 /// - Presents Sparkle's native update UI when an update is found.
 /// - Uses XPC services for sandbox-safe installation.
 ///
-/// The app's `Info.plist` must contain:
-/// - `SUFeedURL`      — the appcast URL.
-/// - `SUPublicEDKey`  — the base64 EdDSA public key for signature verification.
-/// - `SUEnableInstallerLauncherService` — required for sandboxed apps.
+/// Under UI test runs (XCTest), updater initialization is skipped so headless
+/// test runners with ad-hoc signatures do not fail on Sparkle XPC Mach lookups.
 @MainActor
 public final class UpdaterService: NSObject {
     /// The single shared instance.
     public static let shared = UpdaterService()
 
-    /// The Sparkle controller that owns the updater lifecycle.
-    ///
-    /// Keeping a strong reference here prevents ARC from deallocating
-    /// the updater between checks.
-    private let updaterController: SPUStandardUpdaterController
+    /// The Sparkle controller that owns the updater lifecycle (nil when running under XCTest).
+    private let updaterController: SPUStandardUpdaterController?
 
     override private init() {
-        // `startingUpdater: true` lets Sparkle schedule its initial
-        // background check automatically on the next run loop tick.
-        updaterController = SPUStandardUpdaterController(
-            startingUpdater: true,
-            updaterDelegate: nil,
-            userDriverDelegate: nil,
-        )
+        let isTesting = ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil
+            || NSClassFromString("XCTestCase") != nil
+
+        if isTesting {
+            updaterController = nil
+        } else {
+            updaterController = SPUStandardUpdaterController(
+                startingUpdater: true,
+                updaterDelegate: nil,
+                userDriverDelegate: nil,
+            )
+        }
         super.init()
     }
 
     /// Presents Sparkle's standard "Check for Updates" sheet.
-    ///
-    /// Called by `AppDelegate → checkForUpdates:` menu action
-    /// and by `MeridianDocument → checkForUpdates:`.
     public func checkForUpdates() {
-        updaterController.checkForUpdates(nil)
+        updaterController?.checkForUpdates(nil)
     }
 
     /// Whether a user-initiated check can be made right now.
-    ///
-    /// Use this in `validateMenuItem` to enable/disable the
-    /// "Check for Updates…" menu item correctly.
     public var canCheckForUpdates: Bool {
-        updaterController.updater.canCheckForUpdates
+        updaterController?.updater.canCheckForUpdates ?? false
     }
 }
