@@ -114,21 +114,41 @@ public struct PreferencesView: View {
 
                         if editingActionID == actionID {
                             HStack(spacing: 6) {
-                                SingleLineTextField(
-                                    text: $editingShortcutText,
-                                    placeholder: "e.g. cmd+shift+k",
-                                    onSubmit: {
-                                        viewModel.setShortcut(editingShortcutText, for: actionID)
-                                        editingActionID = nil
-                                    },
-                                )
-                                .frame(width: 130, height: 24)
+                                // Keycap badge display with invisible input capture on top
+                                ZStack {
+                                    // Visual layer: live keycap badges
+                                    Group {
+                                        if editingShortcutText.isEmpty {
+                                            Text("Type shortcut…")
+                                                .font(.system(size: 11, weight: .regular, design: .monospaced))
+                                                .foregroundColor(.secondary)
+                                        } else {
+                                            KeycapBadgeView(shortcut: editingShortcutText)
+                                        }
+                                    }
+                                    .allowsHitTesting(false)
+
+                                    // Input layer: invisible but focusable NSTextField
+                                    SingleLineTextField(
+                                        text: $editingShortcutText,
+                                        placeholder: "",
+                                        autoFocus: true,
+                                        onSubmit: {
+                                            viewModel.setShortcut(editingShortcutText, for: actionID)
+                                            editingActionID = nil
+                                        },
+                                    )
+                                    .opacity(0.001)
+                                }
+                                .frame(minWidth: 80, maxWidth: 160)
+                                .frame(height: 28)
+                                .padding(.horizontal, 10)
                                 .background(
-                                    RoundedRectangle(cornerRadius: 5)
+                                    RoundedRectangle(cornerRadius: 6)
                                         .fill(Color(NSColor.controlBackgroundColor)),
                                 )
                                 .overlay(
-                                    RoundedRectangle(cornerRadius: 5)
+                                    RoundedRectangle(cornerRadius: 6)
                                         .stroke(Color.accentColor, lineWidth: 1.5),
                                 )
 
@@ -283,7 +303,20 @@ public struct KeycapBadgeView: View {
 struct SingleLineTextField: NSViewRepresentable {
     @Binding var text: String
     var placeholder: String
+    var autoFocus: Bool
     var onSubmit: () -> Void
+
+    init(
+        text: Binding<String>,
+        placeholder: String = "",
+        autoFocus: Bool = false,
+        onSubmit: @escaping () -> Void,
+    ) {
+        _text = text
+        self.placeholder = placeholder
+        self.autoFocus = autoFocus
+        self.onSubmit = onSubmit
+    }
 
     func makeNSView(context: Context) -> NSTextField {
         let field = NSTextField()
@@ -298,6 +331,11 @@ struct SingleLineTextField: NSViewRepresentable {
         field.cell?.wraps = false
         field.cell?.isScrollable = true
         field.lineBreakMode = .byTruncatingTail
+        if autoFocus {
+            DispatchQueue.main.async {
+                field.window?.makeFirstResponder(field)
+            }
+        }
         return field
     }
 
