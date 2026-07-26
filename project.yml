@@ -41,7 +41,7 @@ targets:
       - package: ThemeKit
       - package: Sparkle
         product: Sparkle
-    postCompileScripts:
+    postBuildScripts:
       - name: Deep Sign Embedded Frameworks
         script: |
           echo "Deep signing $TARGET_BUILD_DIR/$PRODUCT_NAME.app"
