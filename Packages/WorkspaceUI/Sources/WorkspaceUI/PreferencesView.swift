@@ -113,23 +113,24 @@ public struct PreferencesView: View {
                         Spacer()
 
                         if editingActionID == actionID {
-                            HStack(spacing: 8) {
-                                KeycapBadgeView(shortcut: editingShortcutText, isEditing: true)
-
+                            HStack(spacing: 6) {
                                 TextField("e.g. cmd+shift+k", text: $editingShortcutText)
                                     .textFieldStyle(.plain)
                                     .font(.system(size: 11, weight: .medium, design: .monospaced))
-                                    .padding(.horizontal, 6)
-                                    .padding(.vertical, 3)
+                                    .lineLimit(1)
+                                    .truncationMode(.tail)
+                                    .multilineTextAlignment(.center)
+                                    .padding(.horizontal, 8)
+                                    .padding(.vertical, 4)
+                                    .frame(width: 120, height: 24)
                                     .background(
-                                        RoundedRectangle(cornerRadius: 4)
+                                        RoundedRectangle(cornerRadius: 5)
                                             .fill(Color(NSColor.controlBackgroundColor)),
                                     )
                                     .overlay(
-                                        RoundedRectangle(cornerRadius: 4)
+                                        RoundedRectangle(cornerRadius: 5)
                                             .stroke(Color.accentColor, lineWidth: 1.5),
                                     )
-                                    .frame(width: 110)
                                     .onSubmit {
                                         viewModel.setShortcut(editingShortcutText, for: actionID)
                                         editingActionID = nil
@@ -141,7 +142,7 @@ public struct PreferencesView: View {
                                 } label: {
                                     Image(systemName: "checkmark.circle.fill")
                                         .foregroundColor(.green)
-                                        .font(.system(size: 16))
+                                        .font(.system(size: 17))
                                 }
                                 .buttonStyle(.plain)
                                 .help("Save Shortcut")
@@ -150,8 +151,8 @@ public struct PreferencesView: View {
                                     editingActionID = nil
                                 } label: {
                                     Image(systemName: "xmark.circle.fill")
-                                        .foregroundColor(.secondary)
-                                        .font(.system(size: 16))
+                                        .foregroundColor(Color(NSColor.tertiaryLabelColor))
+                                        .font(.system(size: 17))
                                 }
                                 .buttonStyle(.plain)
                                 .help("Cancel")
@@ -164,9 +165,10 @@ public struct PreferencesView: View {
                                 KeycapBadgeView(shortcut: viewModel.shortcut(for: actionID))
                             }
                             .buttonStyle(.plain)
+                            .help("Click to edit shortcut")
                         }
                     }
-                    .padding(.vertical, 2)
+                    .frame(height: 28)
                 }
             }
 
@@ -206,31 +208,38 @@ public struct PreferencesView: View {
     }
 }
 
-/// Renders a native macOS Keycap badge (e.g. ⌘ ⇧ F)
+/// Renders native macOS Keycap badges (e.g. ⌘ ⇧ F)
 public struct KeycapBadgeView: View {
     let shortcut: String
-    var isEditing: Bool
 
-    public init(shortcut: String, isEditing: Bool = false) {
+    public init(shortcut: String) {
         self.shortcut = shortcut
-        self.isEditing = isEditing
     }
 
     public var body: some View {
+        let symbols = keycapSymbols(for: shortcut)
         HStack(spacing: 3) {
-            let symbols = keycapSymbols(for: shortcut)
-            if symbols.isEmpty, isEditing {
-                Text("Type keys...")
-                    .font(.system(size: 11, weight: .regular, design: .monospaced))
+            if symbols.isEmpty {
+                Text("None")
+                    .font(.system(size: 11, weight: .medium, design: .monospaced))
                     .foregroundColor(.secondary)
                     .padding(.horizontal, 6)
                     .padding(.vertical, 3)
+                    .background(
+                        RoundedRectangle(cornerRadius: 4)
+                            .fill(Color(NSColor.controlBackgroundColor))
+                            .shadow(color: Color.black.opacity(0.08), radius: 1, x: 0, y: 1),
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 4)
+                            .stroke(Color.primary.opacity(0.15), lineWidth: 1),
+                    )
             } else {
                 ForEach(Array(symbols.enumerated()), id: \.offset) { _, symbol in
                     Text(symbol)
-                        .font(.system(size: 11, weight: .bold, design: .monospaced))
-                        .foregroundColor(isEditing ? .accentColor : .primary)
-                        .padding(.horizontal, 6)
+                        .font(.system(size: 11, weight: .semibold, design: .monospaced))
+                        .foregroundColor(.primary)
+                        .padding(.horizontal, 7)
                         .padding(.vertical, 3)
                         .background(
                             RoundedRectangle(cornerRadius: 4)
@@ -239,7 +248,7 @@ public struct KeycapBadgeView: View {
                         )
                         .overlay(
                             RoundedRectangle(cornerRadius: 4)
-                                .stroke(isEditing ? Color.accentColor : Color.primary.opacity(0.18), lineWidth: 1),
+                                .stroke(Color.primary.opacity(0.18), lineWidth: 1),
                         )
                 }
             }
@@ -255,6 +264,15 @@ public struct KeycapBadgeView: View {
             case "shift": return "⇧"
             case "option", "alt": return "⌥"
             case "ctrl", "control": return "⌃"
+            case "return", "enter": return "↩"
+            case "delete", "backspace": return "⌫"
+            case "escape", "esc": return "⎋"
+            case "tab": return "⇥"
+            case "space": return "Space"
+            case "left": return "←"
+            case "right": return "→"
+            case "up": return "↑"
+            case "down": return "↓"
             default: return part.uppercased()
             }
         }
