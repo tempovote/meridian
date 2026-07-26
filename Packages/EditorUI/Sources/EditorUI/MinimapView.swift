@@ -24,8 +24,7 @@ public struct MinimapView: View {
         self.onSelectLine = onSelectLine
     }
 
-    /// Backward-compatible convenience init for call sites that pass lines directly
-    /// (used in tests and legacy callers that don't need scroll sync).
+    /// Backward-compatible convenience init for callers that pass lines directly.
     public init(
         lines: [String],
         visibleLineRange: ClosedRange<Int>? = nil,
@@ -41,19 +40,22 @@ public struct MinimapView: View {
                 Color(NSColor.controlBackgroundColor)
                     .opacity(0.4)
 
-                // Viewport highlight rectangle
+                // Viewport highlight rectangle with sharp accent border
                 if let range = model.visibleLineRange {
                     let lineH: CGFloat = 3
-                    let clampedStart = CGFloat(range.lowerBound - 1) * lineH
-                    let clampedHeight = CGFloat(range.upperBound - range.lowerBound + 1) * lineH
+                    let startY = 4 + CGFloat(range.lowerBound - 1) * lineH
+                    let rectH = max(6, CGFloat(range.upperBound - range.lowerBound + 1) * lineH - 1)
                     Rectangle()
                         .fill(Color.accentColor.opacity(0.18))
-                        .frame(width: geometry.size.width - 8, height: clampedHeight)
+                        .overlay(
+                            Rectangle()
+                                .stroke(Color.accentColor.opacity(0.4), lineWidth: 1),
+                        )
+                        .frame(width: max(0, geometry.size.width - 8), height: rectH)
                         .offset(
                             x: 4,
-                            y: min(4 + clampedStart, geometry.size.height - clampedHeight),
+                            y: min(startY, max(4, geometry.size.height - rectH - 4)),
                         )
-                        .animation(.easeInOut(duration: 0.08), value: range.lowerBound)
                 }
 
                 VStack(alignment: .leading, spacing: 1) {
@@ -72,7 +74,9 @@ public struct MinimapView: View {
             .gesture(
                 DragGesture(minimumDistance: 0)
                     .onChanged { value in
-                        let ratio = max(0, min(1, value.location.y / max(1, geometry.size.height)))
+                        let contentY = value.location.y - 4
+                        let usableH = max(1, geometry.size.height - 8)
+                        let ratio = max(0, min(1, contentY / usableH))
                         let targetLine = Int(ratio * CGFloat(max(1, model.lines.count)))
                         onSelectLine?(targetLine)
                     },

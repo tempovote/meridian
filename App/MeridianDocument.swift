@@ -1031,12 +1031,11 @@ final class MeridianDocument: NSDocument {
             host.widthAnchor.constraint(equalToConstant: 80).isActive = true
             minimapHost = host
 
-            // Sync viewport highlight on every scroll event
+            // Sync viewport highlight synchronously on every scroll event (same render pass)
             focusedEngine?.onScrollChange = { [weak minimapModel] range in
-                DispatchQueue.main.async {
-                    minimapModel?.visibleLineRange = range
-                }
+                minimapModel?.visibleLineRange = range
             }
+            focusedEngine?.handleScrollBoundsChange()
 
             let splitView = (sidebarHost?.superview as? NSSplitView)
                 ?? (editorSlotView?.superview as? NSSplitView)

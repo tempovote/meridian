@@ -194,16 +194,43 @@ public final class TextKit2Engine: NSObject, TextLayoutEngine {
         scrollView.contentView.postsBoundsChangedNotifications = true
     }
 
-    @objc func handleScrollBoundsChange() {
+    @objc public func handleScrollBoundsChange() {
         let visibleRect = scrollView.contentView.documentVisibleRect
-        guard visibleRect.height > 0,
-              let lineHeight = textView.font.map({ $0.ascender - $0.descender + $0.leading }),
-              lineHeight > 0
-        else { return }
-        let effectiveLineHeight = lineHeight + 2 // paragraph spacing
-        let firstLine = max(1, Int(visibleRect.minY / effectiveLineHeight) + 1)
-        let lastLine = max(firstLine, Int(visibleRect.maxY / effectiveLineHeight) + 1)
-        onScrollChange?(firstLine ... lastLine)
+        guard visibleRect.height > 0 else { return }
+
+        var firstLine = 1
+        var lastLine = 1
+
+        if let mgr = textView.textLayoutManager {
+            let docRange = mgr.documentRange
+            let startPt = CGPoint(x: 4, y: visibleRect.minY + 2)
+            let endPt = CGPoint(x: 4, y: max(visibleRect.minY + 2, visibleRect.maxY - 2))
+
+            let startFrag = mgr.textLayoutFragment(for: startPt)
+            if let startLoc = startFrag?.rangeInElement.location {
+                let offset = mgr.offset(from: docRange.location, to: startLoc)
+                firstLine = buffer.linePosition(of: UTF16Offset(offset)).line + 1
+            } else {
+                let ratio = visibleRect.minY / max(1, textView.bounds.height)
+                firstLine = max(1, Int(ratio * CGFloat(max(1, buffer.lineCount))))
+            }
+
+            let endFrag = mgr.textLayoutFragment(for: endPt)
+            if let endLoc = endFrag?.rangeInElement.location {
+                let offset = mgr.offset(from: docRange.location, to: endLoc)
+                lastLine = buffer.linePosition(of: UTF16Offset(offset)).line + 1
+            } else {
+                let ratio = visibleRect.maxY / max(1, textView.bounds.height)
+                lastLine = max(firstLine, Int(ratio * CGFloat(max(1, buffer.lineCount))))
+            }
+        } else {
+            let lineHeight = textView.font.map { $0.ascender - $0.descender + $0.leading } ?? 14
+            let effectiveLineHeight = max(1, lineHeight + 2)
+            firstLine = max(1, Int(visibleRect.minY / effectiveLineHeight) + 1)
+            lastLine = max(firstLine, Int(visibleRect.maxY / effectiveLineHeight) + 1)
+        }
+
+        onScrollChange?(firstLine ... max(firstLine, lastLine))
     }
 
     /// The TextKit 2 backing store. Trapping here is correct: a nil
