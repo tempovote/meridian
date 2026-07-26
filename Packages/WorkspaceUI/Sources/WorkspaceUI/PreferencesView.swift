@@ -114,27 +114,23 @@ public struct PreferencesView: View {
 
                         if editingActionID == actionID {
                             HStack(spacing: 6) {
-                                TextField("e.g. cmd+shift+k", text: $editingShortcutText)
-                                    .textFieldStyle(.plain)
-                                    .font(.system(size: 11, weight: .medium, design: .monospaced))
-                                    .lineLimit(1)
-                                    .truncationMode(.tail)
-                                    .multilineTextAlignment(.center)
-                                    .padding(.horizontal, 8)
-                                    .padding(.vertical, 4)
-                                    .frame(width: 120, height: 24)
-                                    .background(
-                                        RoundedRectangle(cornerRadius: 5)
-                                            .fill(Color(NSColor.controlBackgroundColor)),
-                                    )
-                                    .overlay(
-                                        RoundedRectangle(cornerRadius: 5)
-                                            .stroke(Color.accentColor, lineWidth: 1.5),
-                                    )
-                                    .onSubmit {
+                                SingleLineTextField(
+                                    text: $editingShortcutText,
+                                    placeholder: "e.g. cmd+shift+k",
+                                    onSubmit: {
                                         viewModel.setShortcut(editingShortcutText, for: actionID)
                                         editingActionID = nil
-                                    }
+                                    },
+                                )
+                                .frame(width: 130, height: 24)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 5)
+                                        .fill(Color(NSColor.controlBackgroundColor)),
+                                )
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 5)
+                                        .stroke(Color.accentColor, lineWidth: 1.5),
+                                )
 
                                 Button {
                                     viewModel.setShortcut(editingShortcutText, for: actionID)
@@ -275,6 +271,68 @@ public struct KeycapBadgeView: View {
             case "down": return "↓"
             default: return part.uppercased()
             }
+        }
+    }
+}
+
+// MARK: - SingleLineTextField
+
+/// A truly single-line NSTextField wrapper that prevents text from wrapping outside its frame.
+/// SwiftUI's built-in TextField on macOS does not respect lineLimit(1) at the NSTextField level,
+/// causing the text to render below the frame bounds. This view fixes that.
+struct SingleLineTextField: NSViewRepresentable {
+    @Binding var text: String
+    var placeholder: String
+    var onSubmit: () -> Void
+
+    func makeNSView(context: Context) -> NSTextField {
+        let field = NSTextField()
+        field.delegate = context.coordinator
+        field.placeholderString = placeholder
+        field.isBordered = false
+        field.drawsBackground = false
+        field.focusRingType = .none
+        field.font = .monospacedSystemFont(ofSize: 11, weight: .medium)
+        field.alignment = .center
+        // Force true single-line behaviour at the AppKit level
+        field.cell?.wraps = false
+        field.cell?.isScrollable = true
+        field.lineBreakMode = .byTruncatingTail
+        return field
+    }
+
+    func updateNSView(_ nsView: NSTextField, context: Context) {
+        if nsView.stringValue != text {
+            nsView.stringValue = text
+        }
+    }
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(self)
+    }
+
+    final class Coordinator: NSObject, NSTextFieldDelegate {
+        var parent: SingleLineTextField
+
+        init(_ parent: SingleLineTextField) {
+            self.parent = parent
+        }
+
+        func controlTextDidChange(_ obj: Notification) {
+            guard let field = obj.object as? NSTextField else { return }
+            parent.text = field.stringValue
+        }
+
+        func control(
+            _ control: NSControl,
+            textView _: NSTextView,
+            doCommandBy commandSelector: Selector,
+        ) -> Bool {
+            if commandSelector == #selector(NSResponder.insertNewline(_:)) {
+                parent.onSubmit()
+                return true
+            }
+            return false
         }
     }
 }
