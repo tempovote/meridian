@@ -119,6 +119,7 @@ final class MeridianDocument: NSDocument {
 
     private let fileTreeViewModel = FileTreeViewModel()
     private var sidebarHost: NSHostingView<FileTreeView>?
+    private var rootSplitView: NSSplitView?
     var isSidebarVisible = false
 
     /// Subscription token for the FavoritesStore publisher so the window
@@ -249,6 +250,12 @@ final class MeridianDocument: NSDocument {
 
             let mainSplitView = makeSidebarSplitView(containerStack: containerStack)
 
+            let verticalRootSplitView = NSSplitView()
+            verticalRootSplitView.isVertical = false
+            verticalRootSplitView.dividerStyle = .thin
+            verticalRootSplitView.addArrangedSubview(mainSplitView)
+            rootSplitView = verticalRootSplitView
+
             NSWindow.allowsAutomaticWindowTabbing = true
             let window = MeridianWindow(
                 contentRect: NSRect(x: 0, y: 0, width: 900, height: 600),
@@ -258,7 +265,7 @@ final class MeridianDocument: NSDocument {
             )
             window.tabbingMode = .preferred
             window.center()
-            window.contentView = mainSplitView
+            window.contentView = verticalRootSplitView
             let windowController = NSWindowController(window: window)
             windowController.shouldCascadeWindows = true
             addWindowController(windowController)
@@ -1006,25 +1013,21 @@ final class MeridianDocument: NSDocument {
         if let host = terminalHost {
             host.removeFromSuperview()
             terminalHost = nil
+            rootSplitView?.adjustSubviews()
         } else {
+            guard let rootSplitView else { return }
             let terminal = TerminalView()
             let host = NSHostingView(rootView: terminal)
             host.translatesAutoresizingMaskIntoConstraints = false
-            host.heightAnchor.constraint(greaterThanOrEqualToConstant: 180).isActive = true
+            host.heightAnchor.constraint(greaterThanOrEqualToConstant: 140).isActive = true
             terminalHost = host
 
-            let parentView = windowControllers.first?.window?.contentView
-            if let mainVStack = parentView?.subviews.first(where: { $0 is NSStackView }) as? NSStackView {
-                mainVStack.addArrangedSubview(host)
-            } else if let parentView {
-                parentView.addSubview(host)
-                NSLayoutConstraint.activate([
-                    host.leadingAnchor.constraint(equalTo: parentView.leadingAnchor),
-                    host.trailingAnchor.constraint(equalTo: parentView.trailingAnchor),
-                    host.bottomAnchor.constraint(equalTo: parentView.bottomAnchor),
-                    host.heightAnchor.constraint(equalToConstant: 220),
-                ])
+            rootSplitView.addArrangedSubview(host)
+            let totalHeight = rootSplitView.bounds.height
+            if totalHeight > 300 {
+                rootSplitView.setPosition(totalHeight - 220, ofDividerAt: 0)
             }
+            rootSplitView.adjustSubviews()
         }
     }
 
