@@ -20,9 +20,14 @@ struct KeybindingRegistryTests {
 
     @Test func parsesKeyEquivalentAndModifiers() {
         let (key, modifiers) = KeybindingRegistry.parseShortcut("cmd+shift+f")
-        #expect(key == "f")
+        #expect(key == "F")
         #expect(modifiers.contains(.command))
         #expect(modifiers.contains(.shift))
+
+        let (noShiftKey, noShiftModifiers) = KeybindingRegistry.parseShortcut("cmd+f")
+        #expect(noShiftKey == "f")
+        #expect(noShiftModifiers.contains(.command))
+        #expect(!noShiftModifiers.contains(.shift))
     }
 
     @Test func resolvesDefaultShortcutsFromSettingsKit() {
