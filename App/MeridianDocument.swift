@@ -1119,6 +1119,7 @@ final class MeridianDocument: NSDocument {
     @MainActor
     private func wireUndoCallback() {
         documentModel?.onNewUndoEntry = { [weak self] in
+            self?.updateChangeCount(.changeDone)
             self?.registerUndoReplay()
         }
     }
