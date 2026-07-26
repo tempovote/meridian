@@ -755,6 +755,7 @@ final class MeridianDocument: NSDocument {
         switch result {
         case let .success(formatted):
             let fullRange = ByteOffset(0) ..< ByteOffset(viewModel.buffer.utf8Count)
+            let edit = Edit(range: fullRange, replacement: formatted)
             let transaction = EditTransaction(
                 baseVersion: viewModel.buffer.version,
                 edits: [edit],
