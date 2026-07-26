@@ -41,6 +41,13 @@ targets:
       - package: ThemeKit
       - package: Sparkle
         product: Sparkle
+    postCompileScripts:
+      - name: Deep Sign Embedded Frameworks
+        script: |
+          if [ "$CODE_SIGNING_ALLOWED" != "NO" ] || [ "$CODE_SIGN_IDENTITY" = "-" ]; then
+            echo "Deep signing $TARGET_BUILD_DIR/$PRODUCT_NAME.app"
+            /usr/bin/codesign --force --deep -s "${CODE_SIGN_IDENTITY:--}" "$TARGET_BUILD_DIR/$PRODUCT_NAME.app" || true
+          fi
     info:
       path: App/Resources/Info.plist
       properties:
