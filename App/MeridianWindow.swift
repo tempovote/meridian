@@ -72,6 +72,18 @@ final class MeridianWindow: NSWindow {
         }
     }
 
+    @objc func toggleMinimap(_ sender: Any?) {
+        if let doc = windowController?.document as? MeridianDocument {
+            doc.toggleMinimap(sender)
+        }
+    }
+
+    @objc func toggleTerminal(_ sender: Any?) {
+        if let doc = windowController?.document as? MeridianDocument {
+            doc.toggleTerminal(sender)
+        }
+    }
+
     override func validateMenuItem(_ menuItem: NSMenuItem) -> Bool {
         if let doc = windowController?.document as? MeridianDocument {
             return doc.validateMenuItem(menuItem)

@@ -970,6 +970,64 @@ final class MeridianDocument: NSDocument {
         }
     }
 
+    private var minimapHost: NSView?
+
+    @objc func toggleMinimap(_ sender: Any?) {
+        guard let viewModel = focusedViewModel else { return }
+        if let host = minimapHost {
+            host.removeFromSuperview()
+            minimapHost = nil
+        } else {
+            let lines = viewModel.buffer.string.components(separatedBy: .newlines)
+            let minimap = MinimapView(lines: lines) { [weak self] targetLine in
+                guard let self, let viewModel = self.focusedViewModel else { return }
+                let maxLine = max(0, viewModel.buffer.lineCount - 1)
+                let clampedLine = max(0, min(targetLine, maxLine))
+                let pos = LinePosition(line: clampedLine, utf16Column: 0)
+                let byteOffset = viewModel.buffer.byteOffset(of: pos)
+                self.focusedEngine?.scrollTo(byteOffset, in: viewModel.buffer)
+            }
+            let host = NSHostingView(rootView: minimap)
+            host.translatesAutoresizingMaskIntoConstraints = false
+            host.widthAnchor.constraint(equalToConstant: 80).isActive = true
+            minimapHost = host
+
+            let splitView = (sidebarHost?.superview as? NSSplitView)
+                ?? (editorSlotView?.superview as? NSSplitView)
+                ?? (editorSlotView?.superview?.superview as? NSSplitView)
+            splitView?.addArrangedSubview(host)
+            splitView?.adjustSubviews()
+        }
+    }
+
+    private var terminalHost: NSView?
+
+    @objc func toggleTerminal(_ sender: Any?) {
+        if let host = terminalHost {
+            host.removeFromSuperview()
+            terminalHost = nil
+        } else {
+            let terminal = TerminalView()
+            let host = NSHostingView(rootView: terminal)
+            host.translatesAutoresizingMaskIntoConstraints = false
+            host.heightAnchor.constraint(greaterThanOrEqualToConstant: 180).isActive = true
+            terminalHost = host
+
+            let parentView = windowControllers.first?.window?.contentView
+            if let mainVStack = parentView?.subviews.first(where: { $0 is NSStackView }) as? NSStackView {
+                mainVStack.addArrangedSubview(host)
+            } else if let parentView {
+                parentView.addSubview(host)
+                NSLayoutConstraint.activate([
+                    host.leadingAnchor.constraint(equalTo: parentView.leadingAnchor),
+                    host.trailingAnchor.constraint(equalTo: parentView.trailingAnchor),
+                    host.bottomAnchor.constraint(equalTo: parentView.bottomAnchor),
+                    host.heightAnchor.constraint(equalToConstant: 220),
+                ])
+            }
+        }
+    }
+
     private var diffWindowControllers: [NSWindowController] = []
 
     @objc func compareWithFile(_ sender: Any?) {
@@ -1161,6 +1219,12 @@ final class MeridianDocument: NSDocument {
         case #selector(toggleHexView(_:)):
             menuItem.state = (hexInspectorHost != nil) ? .on : .off
             return focusedViewModel != nil
+        case #selector(toggleMinimap(_:)):
+            menuItem.state = (minimapHost != nil) ? .on : .off
+            return focusedViewModel != nil
+        case #selector(toggleTerminal(_:)):
+            menuItem.state = (terminalHost != nil) ? .on : .off
+            return true
         default:
             return nil
         }

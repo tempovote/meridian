@@ -228,6 +228,25 @@ private extension MainMenu {
 
     private static func viewMenuItem(settings: KeybindingSettings) -> NSMenuItem {
         let menu = NSMenu(title: "View")
+        addBasicViewCommands(to: menu, settings: settings)
+        addPanelsViewCommands(to: menu, settings: settings)
+        menu.addItem(.separator())
+        addTabControlCommands(to: menu)
+        menu.addItem(.separator())
+        addCommand(
+            to: menu, title: "Split Horizontally", action: Selector(("splitHorizontally:")),
+            keyEquivalent: "\\", modifierMask: [.command],
+        )
+        addCommand(
+            to: menu, title: "Split Vertically", action: Selector(("splitVertically:")),
+            keyEquivalent: "\\", modifierMask: [.command, .shift],
+        )
+        menu.addItem(.separator())
+        menu.addItem(foldMenuItem(settings: settings))
+        return wrapped(menu)
+    }
+
+    private static func addBasicViewCommands(to menu: NSMenu, settings: KeybindingSettings) {
         addCommand(
             to: menu, title: "Line Numbers", action: Selector(("toggleLineNumbers:")),
             keyEquivalent: "l", modifierMask: [.command, .option],
@@ -242,6 +261,9 @@ private extension MainMenu {
             to: menu, title: "Toggle Sidebar", action: Selector(("toggleSidebar:")),
             keyEquivalent: "b", modifierMask: [.command],
         )
+    }
+
+    private static func addPanelsViewCommands(to menu: NSMenu, settings: KeybindingSettings) {
         addCommand(
             to: menu, title: "Markdown Preview", action: Selector(("toggleMarkdownPreview:")),
             keyEquivalent: "M", modifierMask: [.command, .shift],
@@ -252,7 +274,19 @@ private extension MainMenu {
             keyEquivalent: "h", modifierMask: [.command, .option],
             actionID: "toggleHexView", settings: settings,
         )
-        menu.addItem(.separator())
+        addCommand(
+            to: menu, title: "Minimap", action: Selector(("toggleMinimap:")),
+            keyEquivalent: "m", modifierMask: [.command, .option],
+            actionID: "toggleMinimap", settings: settings,
+        )
+        addCommand(
+            to: menu, title: "Terminal", action: Selector(("toggleTerminal:")),
+            keyEquivalent: "`", modifierMask: [.control],
+            actionID: "toggleTerminal", settings: settings,
+        )
+    }
+
+    private static func addTabControlCommands(to menu: NSMenu) {
         addCommand(
             to: menu, title: "Show Tab Bar", action: Selector(("toggleTabBar:")),
             keyEquivalent: "T", modifierMask: [.command, .shift],
@@ -261,18 +295,6 @@ private extension MainMenu {
             to: menu, title: "Show All Tabs", action: Selector(("toggleTabOverview:")),
             keyEquivalent: "O", modifierMask: [.command, .shift],
         )
-        menu.addItem(.separator())
-        addCommand(
-            to: menu, title: "Split Horizontally", action: Selector(("splitHorizontally:")),
-            keyEquivalent: "\\", modifierMask: [.command],
-        )
-        addCommand(
-            to: menu, title: "Split Vertically", action: Selector(("splitVertically:")),
-            keyEquivalent: "\\", modifierMask: [.command, .shift],
-        )
-        menu.addItem(.separator())
-        menu.addItem(foldMenuItem(settings: settings))
-        return wrapped(menu)
     }
 
     /// Arrow-key equivalents use `NSEvent`'s function-key constants (imported
