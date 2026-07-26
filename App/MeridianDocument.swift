@@ -203,7 +203,17 @@ final class MeridianDocument: NSDocument {
     override func data(ofType typeName: String) throws -> Data {
         let buffer = MainActor.assumeIsolated { documentModel?.buffer } ?? pendingBuffer
         let metadata = loadedMetadata ?? (.utf8, false)
-        return try TextFileIO.encode(buffer, as: metadata.encoding, includeBOM: metadata.hadBOM)
+        do {
+            return try TextFileIO.encode(buffer, as: metadata.encoding, includeBOM: metadata.hadBOM)
+        } catch let FileKitError.unencodable(encoding) {
+            let desc = "The document contains characters that cannot be represented in "
+                + "\(encoding.displayName). Please select a Unicode encoding like UTF-8 before saving."
+            throw NSError(
+                domain: NSCocoaErrorDomain,
+                code: NSFileWriteInapplicableStringEncodingError,
+                userInfo: [NSLocalizedDescriptionKey: desc],
+            )
+        }
     }
 
     override func makeWindowControllers() {
@@ -218,11 +228,21 @@ final class MeridianDocument: NSDocument {
             wireMirroring()
             wireFocusTracking()
 
-            let encodingName = loadedMetadata?.encoding.displayName ?? "UTF-8"
+            let currentEnc = loadedMetadata?.encoding ?? .utf8
+            let hadBOM = loadedMetadata?.hadBOM ?? false
+            let encodingName = currentEnc.formattedDisplayName(includeBOM: hadBOM)
             let statusBar = StatusBarView(
                 viewModel: viewModel,
                 encodingName: encodingName,
                 lineEndingName: "LF",
+                currentEncoding: currentEnc,
+                currentIncludeBOM: hadBOM,
+                onSelectEncoding: { [weak self] newEncoding, includeBOM in
+                    self?.changeEncoding(to: newEncoding, includeBOM: includeBOM)
+                },
+                onReopenWithEncoding: { [weak self] newEncoding in
+                    self?.reopen(with: newEncoding)
+                },
             )
             let host = NSHostingView(rootView: statusBar)
             statusBarHost = host
@@ -541,11 +561,21 @@ final class MeridianDocument: NSDocument {
 
     private func refreshStatusBar() {
         guard let host = statusBarHost, let viewModel = focusedViewModel else { return }
-        let encodingName = loadedMetadata?.encoding.displayName ?? "UTF-8"
+        let currentEnc = loadedMetadata?.encoding ?? .utf8
+        let hadBOM = loadedMetadata?.hadBOM ?? false
+        let encodingName = currentEnc.formattedDisplayName(includeBOM: hadBOM)
         host.rootView = StatusBarView(
             viewModel: viewModel,
             encodingName: encodingName,
             lineEndingName: "LF",
+            currentEncoding: currentEnc,
+            currentIncludeBOM: hadBOM,
+            onSelectEncoding: { [weak self] newEncoding, includeBOM in
+                self?.changeEncoding(to: newEncoding, includeBOM: includeBOM)
+            },
+            onReopenWithEncoding: { [weak self] newEncoding in
+                self?.reopen(with: newEncoding)
+            },
         )
         // Reconcile visibility with the newly-focused pane's own toggle —
         // without this, hiding the bar while pane A is focused then
@@ -553,6 +583,43 @@ final class MeridianDocument: NSDocument {
         // true) would leave the bar hidden despite the View-menu checkmark
         // (which reads focusedViewModel.isStatusBarVisible) showing "on".
         host.isHidden = !viewModel.isStatusBarVisible
+    }
+
+    func changeEncoding(to newEncoding: TextEncoding, includeBOM: Bool) {
+        loadedMetadata = (newEncoding, includeBOM)
+        updateChangeCount(.changeDone)
+        refreshStatusBar()
+    }
+
+    func reopen(with encoding: TextEncoding) {
+        guard let url = fileURL else { return }
+        do {
+            let file = try TextFileIO.loadTextFile(at: url, overrideEncoding: encoding)
+            guard file.longestLineUTF8Length < Self.maxLineLength else {
+                throw DocumentOpenError.lineTooLong(utf8Length: file.longestLineUTF8Length)
+            }
+            loadedMetadata = (file.encoding, file.hadBOM)
+            pendingBuffer = file.buffer
+            let newDocumentModel = DocumentModel(buffer: file.buffer)
+            documentModel = newDocumentModel
+            if !panes.isEmpty {
+                let primaryEngine = panes[0].engine
+                let newViewModel = EditorViewModel(documentModel: newDocumentModel, engine: primaryEngine)
+                newViewModel.isSoftWrapEnabled = AppDelegate.settingsStore.current.editor.softWrapDefault
+                panes[0] = (newViewModel, primaryEngine)
+                wireUndoCallback()
+                wireMirroring()
+                wireFocusTracking()
+            }
+            refreshStatusBar()
+        } catch {
+            let alert = NSAlert(error: error)
+            if let window = windowControllers.first?.window {
+                alert.beginSheetModal(for: window)
+            } else {
+                alert.runModal()
+            }
+        }
     }
 
     private var findBarHost: NSHostingView<FindBarView>?

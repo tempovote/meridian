@@ -37,7 +37,9 @@ public enum TextFileIO {
     /// Reads and decodes the file at `url`, computing save-fidelity and
     /// guard metadata. Never interprets content — every byte sequence
     /// decodes (DocumentCore §6.4 total pipeline).
-    public static func loadTextFile(at url: URL) throws -> LoadedTextFile {
+    public static func loadTextFile(
+        at url: URL, overrideEncoding: TextEncoding? = nil,
+    ) throws -> LoadedTextFile {
         let attributes = try? FileManager.default.attributesOfItem(atPath: url.path)
         let byteSize = Int((attributes?[.size] as? Int64) ?? 0)
 
@@ -50,7 +52,7 @@ public enum TextFileIO {
             }
             return LoadedTextFile(
                 buffer: buffer,
-                encoding: .utf8,
+                encoding: overrideEncoding ?? .utf8,
                 hadBOM: false,
                 repairsMade: false,
                 dominantLineEnding: buffer.lineEndingStats().dominant,
@@ -64,7 +66,7 @@ public enum TextFileIO {
             } catch {
                 throw FileKitError.unreadable(url: url, underlying: error)
             }
-            let decoded = TextDecoder.decode(ArraySlice([UInt8](data)))
+            let decoded = TextDecoder.decode(ArraySlice([UInt8](data)), overrideEncoding: overrideEncoding)
             return LoadedTextFile(
                 buffer: decoded.buffer,
                 encoding: decoded.encoding,

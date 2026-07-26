@@ -53,3 +53,17 @@ import Testing
     #expect(TextEncoding.legacy(.shiftJIS) != TextEncoding.legacy(.isoLatin1))
     #expect(TextEncoding.utf8 != TextEncoding.legacy(.utf8))
 }
+
+@Test func formattedDisplayNameWithAndWithoutBOM() {
+    #expect(TextEncoding.utf8.formattedDisplayName(includeBOM: false) == "UTF-8")
+    #expect(TextEncoding.utf8.formattedDisplayName(includeBOM: true) == "UTF-8 with BOM")
+    #expect(TextEncoding.legacy(.shiftJIS).formattedDisplayName(includeBOM: true) == TextEncoding.legacy(.shiftJIS)
+        .displayName)
+}
+
+@Test func commonEncodingsContainsExpected() {
+    #expect(TextEncoding.commonEncodings.contains(.utf8))
+    #expect(TextEncoding.commonEncodings.contains(.utf16LittleEndian))
+    #expect(TextEncoding.commonEncodings.contains(.legacy(.shiftJIS)))
+    #expect(TextEncoding.commonEncodings.contains(.legacy(.windowsCP1252)))
+}

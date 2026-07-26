@@ -60,4 +60,30 @@ public extension TextEncoding {
         }
         return nil
     }
+
+    /// List of standard encodings supported for selection and conversion.
+    static var commonEncodings: [TextEncoding] {
+        [
+            .utf8,
+            .utf16LittleEndian,
+            .utf16BigEndian,
+            .utf32LittleEndian,
+            .utf32BigEndian,
+            .legacy(.windowsCP1252),
+            .legacy(.isoLatin1),
+            .legacy(.isoLatin2),
+            .legacy(.shiftJIS),
+            .legacy(.japaneseEUC),
+            .legacy(.macOSRoman),
+            .legacy(.ascii),
+        ]
+    }
+
+    /// Formatted display string including BOM state (e.g. "UTF-8 with BOM" or "UTF-8").
+    func formattedDisplayName(includeBOM: Bool) -> String {
+        if includeBOM, !byteOrderMark.isEmpty {
+            return "\(displayName) with BOM"
+        }
+        return displayName
+    }
 }

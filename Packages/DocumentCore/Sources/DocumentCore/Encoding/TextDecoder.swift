@@ -1,3 +1,5 @@
+import Foundation
+
 /// The result of decoding raw file bytes into the editor's internal UTF-8.
 public struct DecodedText: Sendable {
     /// The decoded content, at version 0.
@@ -15,34 +17,24 @@ public struct DecodedText: Sendable {
 /// Total: every byte sequence decodes to something.
 public enum TextDecoder {
     /// Decodes raw file bytes into the editor's internal UTF-8 representation.
-    public static func decode(_ bytes: ArraySlice<UInt8>) -> DecodedText {
+    public static func decode(_ bytes: ArraySlice<UInt8>, overrideEncoding: TextEncoding? = nil) -> DecodedText {
         guard !bytes.isEmpty else {
-            return DecodedText(buffer: TextBuffer(), encoding: .utf8, hadBOM: false, repairsMade: false)
+            return DecodedText(
+                buffer: TextBuffer(),
+                encoding: overrideEncoding ?? .utf8,
+                hadBOM: false,
+                repairsMade: false,
+            )
+        }
+        if let overrideEncoding {
+            let bom = overrideEncoding.byteOrderMark
+            let hasBOM = !bom.isEmpty && bytes.count >= bom.count && bytes.prefix(bom.count).elementsEqual(bom)
+            let payload = hasBOM ? bytes.dropFirst(bom.count) : bytes
+            return decodePayload(payload, forcedEncoding: overrideEncoding, hadBOM: hasBOM)
         }
         if let (encoding, bomLength) = TextEncoding.sniffBOM(in: bytes) {
             let payload = bytes.dropFirst(bomLength)
-            switch encoding {
-            case .utf8:
-                let isValid = UTF8Validator.validate(payload) == .valid
-                let text = isValid ? strictUTF8String(payload) : lossyUTF8String(payload)
-                return DecodedText(
-                    buffer: TextBuffer(text), encoding: .utf8, hadBOM: true, repairsMade: !isValid,
-                )
-            case .utf16LittleEndian, .utf16BigEndian:
-                let result = Transcoder.decodeUTF16(payload, littleEndian: encoding == .utf16LittleEndian)
-                return DecodedText(
-                    buffer: TextBuffer(result.text), encoding: encoding,
-                    hadBOM: true, repairsMade: result.repairsMade,
-                )
-            case .utf32LittleEndian, .utf32BigEndian:
-                let result = Transcoder.decodeUTF32(payload, littleEndian: encoding == .utf32LittleEndian)
-                return DecodedText(
-                    buffer: TextBuffer(result.text), encoding: encoding,
-                    hadBOM: true, repairsMade: result.repairsMade,
-                )
-            case .legacy:
-                preconditionFailure("sniffBOM never returns a legacy encoding")
-            }
+            return decodePayload(payload, forcedEncoding: encoding, hadBOM: true)
         }
         if UTF8Validator.validate(bytes) == .valid {
             let text = strictUTF8String(bytes)
@@ -60,6 +52,45 @@ public enum TextDecoder {
         return DecodedText(
             buffer: TextBuffer(text), encoding: .legacy(.isoLatin1), hadBOM: false, repairsMade: false,
         )
+    }
+
+    private static func decodePayload(
+        _ payload: ArraySlice<UInt8>, forcedEncoding: TextEncoding, hadBOM: Bool,
+    ) -> DecodedText {
+        switch forcedEncoding {
+        case .utf8:
+            let isValid = UTF8Validator.validate(payload) == .valid
+            let text = isValid ? strictUTF8String(payload) : lossyUTF8String(payload)
+            return DecodedText(buffer: TextBuffer(text), encoding: .utf8, hadBOM: hadBOM, repairsMade: !isValid)
+        case .utf16LittleEndian, .utf16BigEndian:
+            let result = Transcoder.decodeUTF16(payload, littleEndian: forcedEncoding == .utf16LittleEndian)
+            return DecodedText(
+                buffer: TextBuffer(result.text),
+                encoding: forcedEncoding,
+                hadBOM: hadBOM,
+                repairsMade: result.repairsMade,
+            )
+        case .utf32LittleEndian, .utf32BigEndian:
+            let result = Transcoder.decodeUTF32(payload, littleEndian: forcedEncoding == .utf32LittleEndian)
+            return DecodedText(
+                buffer: TextBuffer(result.text),
+                encoding: forcedEncoding,
+                hadBOM: hadBOM,
+                repairsMade: result.repairsMade,
+            )
+        case let .legacy(foundationEncoding):
+            let data = Data(payload)
+            if let string = String(data: data, encoding: foundationEncoding) {
+                return DecodedText(
+                    buffer: TextBuffer(string),
+                    encoding: forcedEncoding,
+                    hadBOM: false,
+                    repairsMade: false,
+                )
+            }
+            let text = LegacyEncodingDetector.latin1String(payload)
+            return DecodedText(buffer: TextBuffer(text), encoding: forcedEncoding, hadBOM: false, repairsMade: true)
+        }
     }
 
     /// Decodes bytes already known to be strict, well-formed UTF-8.

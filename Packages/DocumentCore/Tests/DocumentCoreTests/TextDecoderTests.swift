@@ -110,3 +110,13 @@ import Testing
     #expect(LegacyEncodingDetector.mapDetected(.utf32) == .utf32BigEndian)
     #expect(LegacyEncodingDetector.mapDetected(.shiftJIS) == .legacy(.shiftJIS))
 }
+
+@Test func decodeWithOverrideEncoding() throws {
+    let text = "こんにちは"
+    let shiftJISData = try #require(text.data(using: .shiftJIS))
+    let bytes = Array(shiftJISData)
+    let decoded = TextDecoder.decode(bytes[...], overrideEncoding: .legacy(.shiftJIS))
+    #expect(decoded.buffer.string == text)
+    #expect(decoded.encoding == .legacy(.shiftJIS))
+    #expect(!decoded.hadBOM)
+}
