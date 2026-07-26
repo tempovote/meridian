@@ -9,10 +9,20 @@ public struct PreferencesView: View {
         public var id: String {
             rawValue
         }
+
+        public var icon: String {
+            switch self {
+            case .editor: "text.alignleft"
+            case .keybindings: "keyboard"
+            }
+        }
     }
 
     @Bindable var viewModel: PreferencesViewModel
     @State private var selectedTab: Tab = .editor
+    @State private var searchText = ""
+    @State private var editingActionID: String?
+    @State private var editingShortcutText = ""
 
     public init(viewModel: PreferencesViewModel) {
         self.viewModel = viewModel
@@ -28,45 +38,97 @@ public struct PreferencesView: View {
                     .frame(maxWidth: .infinity)
                     .background(Color.orange)
             }
-            Picker("", selection: $selectedTab) {
+
+            // Segmented Header
+            HStack(spacing: 12) {
                 ForEach(Tab.allCases) { tab in
-                    Text(tab.rawValue).tag(tab)
+                    Button {
+                        selectedTab = tab
+                    } label: {
+                        HStack(spacing: 6) {
+                            Image(systemName: tab.icon)
+                                .font(.system(size: 13, weight: .medium))
+                            Text(tab.rawValue)
+                                .font(.system(size: 13, weight: .medium))
+                        }
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 6)
+                        .background(
+                            selectedTab == tab
+                                ? Color.accentColor.opacity(0.18)
+                                : Color.clear,
+                        )
+                        .foregroundColor(selectedTab == tab ? .accentColor : .primary)
+                        .cornerRadius(6)
+                    }
+                    .buttonStyle(.plain)
                 }
             }
-            .pickerStyle(.segmented)
-            .padding([.top, .horizontal], 16)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 10)
+            .background(Color(NSColor.windowBackgroundColor))
+
+            Divider()
 
             switch selectedTab {
             case .editor:
-                editorForm
+                editorTab
             case .keybindings:
-                keybindingsForm
+                keybindingsTab
             }
         }
-        .frame(width: 460, height: 380)
+        .frame(width: 500, height: 400)
     }
 
-    private var editorForm: some View {
+    private var editorTab: some View {
         Form {
-            Picker("Font Family", selection: $viewModel.fontFamily) {
-                ForEach(MonospacedFontFamilies.installed, id: \.self) { family in
-                    Text(family).tag(family)
+            Section("Typography") {
+                Picker("Font Family", selection: $viewModel.fontFamily) {
+                    ForEach(MonospacedFontFamilies.installed, id: \.self) { family in
+                        Text(family).tag(family)
+                    }
+                }
+                Stepper(
+                    "Font Size: \(Int(viewModel.fontSize)) pt",
+                    value: $viewModel.fontSize, in: 9 ... 24, step: 1,
+                )
+            }
+
+            Section("Editor Behavior") {
+                Stepper("Tab Width: \(viewModel.tabWidth) spaces", value: $viewModel.tabWidth, in: 1 ... 8)
+                Toggle("Soft Wrap by Default", isOn: $viewModel.softWrapDefault)
+            }
+        }
+        .formStyle(.grouped)
+    }
+
+    private var keybindingsTab: some View {
+        VStack(spacing: 8) {
+            // Search Bar
+            HStack {
+                Image(systemName: "magnifyingglass")
+                    .foregroundColor(.secondary)
+                TextField("Search Shortcuts...", text: $searchText)
+                    .textFieldStyle(.plain)
+                if !searchText.isEmpty {
+                    Button {
+                        searchText = ""
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .foregroundColor(.secondary)
+                    }
+                    .buttonStyle(.plain)
                 }
             }
-            Stepper(
-                "Font Size: \(Int(viewModel.fontSize))",
-                value: $viewModel.fontSize, in: 9 ... 24, step: 1,
-            )
-            Stepper("Tab Width: \(viewModel.tabWidth)", value: $viewModel.tabWidth, in: 1 ... 8)
-            Toggle("Soft Wrap by Default", isOn: $viewModel.softWrapDefault)
-        }
-        .padding(20)
-    }
+            .padding(.horizontal, 8)
+            .padding(.vertical, 6)
+            .background(Color(NSColor.controlBackgroundColor))
+            .cornerRadius(6)
+            .padding(.horizontal, 16)
+            .padding(.top, 10)
 
-    private var keybindingsForm: some View {
-        VStack(spacing: 12) {
             List {
-                ForEach(Array(KeybindingSettings.defaultShortcuts.keys.sorted()), id: \.self) { actionID in
+                ForEach(filteredActionIDs, id: \.self) { actionID in
                     HStack {
                         VStack(alignment: .leading, spacing: 2) {
                             Text(actionDisplayName(actionID))
@@ -76,20 +138,33 @@ public struct PreferencesView: View {
                                 .font(.caption)
                                 .foregroundColor(.secondary)
                         }
+
                         Spacer()
-                        let currentSc = viewModel.shortcut(for: actionID)
-                        TextField(
-                            "Shortcut",
-                            text: Binding(
-                                get: { currentSc },
-                                set: { newValue in viewModel.setShortcut(newValue, for: actionID) },
-                            ),
-                        )
-                        .textFieldStyle(.roundedBorder)
-                        .frame(width: 130)
-                        .multilineTextAlignment(.center)
+
+                        if editingActionID == actionID {
+                            HStack(spacing: 6) {
+                                TextField("Shortcut", text: $editingShortcutText)
+                                    .textFieldStyle(.roundedBorder)
+                                    .frame(width: 110)
+                                    .multilineTextAlignment(.center)
+                                Button("Save") {
+                                    viewModel.setShortcut(editingShortcutText, for: actionID)
+                                    editingActionID = nil
+                                }
+                                .buttonStyle(.borderedProminent)
+                                .controlSize(.small)
+                            }
+                        } else {
+                            Button {
+                                editingActionID = actionID
+                                editingShortcutText = viewModel.shortcut(for: actionID)
+                            } label: {
+                                KeycapBadgeView(shortcut: viewModel.shortcut(for: actionID))
+                            }
+                            .buttonStyle(.plain)
+                        }
                     }
-                    .padding(.vertical, 2)
+                    .padding(.vertical, 3)
                 }
             }
             .listStyle(.inset(alternatesRowBackgrounds: true))
@@ -100,8 +175,20 @@ public struct PreferencesView: View {
                     viewModel.resetKeybindingsToDefaults()
                 }
                 .buttonStyle(.bordered)
+                .controlSize(.small)
             }
-            .padding([.horizontal, .bottom], 16)
+            .padding([.horizontal, .bottom], 12)
+        }
+    }
+
+    private var filteredActionIDs: [String] {
+        let keys = KeybindingSettings.defaultShortcuts.keys.sorted()
+        if searchText.isEmpty {
+            return keys
+        }
+        return keys.filter { actionID in
+            actionID.localizedCaseInsensitiveContains(searchText) ||
+                actionDisplayName(actionID).localizedCaseInsensitiveContains(searchText)
         }
     }
 
@@ -116,6 +203,50 @@ public struct PreferencesView: View {
         case "toggleSoftWrap": "Toggle Soft Wrap"
         case "duplicateLine": "Duplicate Line"
         default: actionID
+        }
+    }
+}
+
+/// Renders a native macOS Keycap badge (e.g. ⌘ ⇧ F)
+public struct KeycapBadgeView: View {
+    let shortcut: String
+
+    public init(shortcut: String) {
+        self.shortcut = shortcut
+    }
+
+    public var body: some View {
+        HStack(spacing: 3) {
+            ForEach(keycapSymbols(for: shortcut), id: \.self) { symbol in
+                Text(symbol)
+                    .font(.system(size: 11, weight: .bold, design: .monospaced))
+                    .foregroundColor(.primary)
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 3)
+                    .background(
+                        RoundedRectangle(cornerRadius: 4)
+                            .fill(Color(NSColor.controlBackgroundColor))
+                            .shadow(color: Color.black.opacity(0.12), radius: 1, x: 0, y: 1),
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 4)
+                            .stroke(Color.primary.opacity(0.18), lineWidth: 1),
+                    )
+            }
+        }
+    }
+
+    private func keycapSymbols(for raw: String) -> [String] {
+        guard !raw.isEmpty else { return ["None"] }
+        let parts = raw.lowercased().components(separatedBy: "+")
+        return parts.map { part -> String in
+            switch part {
+            case "cmd", "command": return "⌘"
+            case "shift": return "⇧"
+            case "option", "alt": return "⌥"
+            case "ctrl", "control": return "⌃"
+            default: return part.uppercased()
+            }
         }
     }
 }
