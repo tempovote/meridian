@@ -41,7 +41,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let delegate = AppDelegate()
         app.delegate = delegate
         app.setActivationPolicy(.regular)
-        app.mainMenu = MainMenu.build()
+        app.mainMenu = MainMenu.build(settingsStore: AppDelegate.settingsStore)
         app.run()
     }
 
@@ -96,6 +96,36 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     @MainActor
     @objc func showPreferences(_ sender: Any?) {
         preferencesWindowController.show()
+    }
+
+    @MainActor
+    @objc func showCommandPalette(_ sender: Any?) {
+        if let doc = NSDocumentController.shared.currentDocument as? MeridianDocument {
+            doc.showCommandPalette(sender)
+        } else {
+            do {
+                if let doc = try NSDocumentController.shared.openUntitledDocumentAndDisplay(true) as? MeridianDocument {
+                    DispatchQueue.main.async {
+                        doc.showCommandPalette(sender)
+                    }
+                }
+            } catch {}
+        }
+    }
+
+    @MainActor
+    @objc func performFind(_ sender: Any?) {
+        if let doc = NSDocumentController.shared.currentDocument as? MeridianDocument {
+            doc.performFind(sender)
+        } else {
+            do {
+                if let doc = try NSDocumentController.shared.openUntitledDocumentAndDisplay(true) as? MeridianDocument {
+                    DispatchQueue.main.async {
+                        doc.performFind(sender)
+                    }
+                }
+            } catch {}
+        }
     }
 
     #if DEBUG

@@ -42,9 +42,28 @@ public final class KeybindingRegistry: Sendable {
                 modifiers.insert(.option)
             case "ctrl", "control":
                 modifiers.insert(.control)
+            case "left":
+                key = String(UnicodeScalar(NSLeftArrowFunctionKey)!)
+            case "right":
+                key = String(UnicodeScalar(NSRightArrowFunctionKey)!)
+            case "up":
+                key = String(UnicodeScalar(NSUpArrowFunctionKey)!)
+            case "down":
+                key = String(UnicodeScalar(NSDownArrowFunctionKey)!)
+            case "tab":
+                key = "\t"
+            case "delete", "backspace":
+                key = String(UnicodeScalar(NSDeleteCharacter)!)
+            case "escape", "esc":
+                key = "\u{1b}"
+            case "space":
+                key = " "
             default:
                 key = part
             }
+        }
+        if modifiers.contains(.shift), key.count == 1 {
+            key = key.uppercased()
         }
         return (key, modifiers)
     }

@@ -145,6 +145,7 @@ public final class SettingsStore {
         }
         raw.removeValue(forKey: "schemaVersion")
         raw.removeValue(forKey: "editor")
+        raw.removeValue(forKey: "keybindings")
         return (settings, raw)
     }
 
@@ -155,6 +156,13 @@ public final class SettingsStore {
         do {
             editorData = try JSONEncoder().encode(settings.editor)
             raw["editor"] = try JSONSerialization.jsonObject(with: editorData)
+        } catch {
+            throw SettingsKitError.writeFailed(underlying: error)
+        }
+        let keybindingsData: Data
+        do {
+            keybindingsData = try JSONEncoder().encode(settings.keybindings)
+            raw["keybindings"] = try JSONSerialization.jsonObject(with: keybindingsData)
         } catch {
             throw SettingsKitError.writeFailed(underlying: error)
         }

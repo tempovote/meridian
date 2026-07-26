@@ -76,23 +76,17 @@ public final class PreferencesViewModel {
     }
 
     public func setShortcut(_ shortcut: String, for actionID: String) {
-        print(
-            "[Keybinding Debug] PreferencesViewModel.setShortcut called: actionID='\(actionID)', shortcut='\(shortcut)'",
-        )
         var updated = customBindings
         let defaultVal = KeybindingSettings.defaultShortcuts[actionID] ?? ""
         if shortcut.isEmpty || shortcut == defaultVal {
             updated.removeValue(forKey: actionID)
-            print("[Keybinding Debug] Removed custom binding for '\(actionID)', reverting to default '\(defaultVal)'")
         } else {
             updated[actionID] = shortcut
-            print("[Keybinding Debug] Updated custom binding for '\(actionID)' to '\(shortcut)'")
         }
         customBindings = updated
     }
 
     public func resetKeybindingsToDefaults() {
-        print("[Keybinding Debug] Resetting all keybindings to defaults")
         customBindings = [:]
     }
 

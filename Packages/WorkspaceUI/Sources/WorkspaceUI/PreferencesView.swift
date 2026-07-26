@@ -132,13 +132,9 @@ public struct PreferencesView: View {
                                     KeyRecorderView(
                                         shortcutText: $editingShortcutText,
                                         onCancel: {
-                                            print("[Keybinding Debug] User cancelled editing for action '\(actionID)'")
                                             editingActionID = nil
                                         },
                                         onSubmit: {
-                                            print(
-                                                "[Keybinding Debug] User submitted shortcut '\(editingShortcutText)' for action '\(actionID)'",
-                                            )
                                             viewModel.setShortcut(editingShortcutText, for: actionID)
                                             editingActionID = nil
                                         },
@@ -157,9 +153,6 @@ public struct PreferencesView: View {
                                 )
 
                                 Button {
-                                    print(
-                                        "[Keybinding Debug] Save button clicked for action '\(actionID)' -> '\(editingShortcutText)'",
-                                    )
                                     viewModel.setShortcut(editingShortcutText, for: actionID)
                                     editingActionID = nil
                                 } label: {
@@ -171,7 +164,6 @@ public struct PreferencesView: View {
                                 .help("Save Shortcut")
 
                                 Button {
-                                    print("[Keybinding Debug] Cancel button clicked for action '\(actionID)'")
                                     editingActionID = nil
                                 } label: {
                                     Image(systemName: "xmark.circle.fill")
@@ -183,9 +175,6 @@ public struct PreferencesView: View {
                             }
                         } else {
                             Button {
-                                print(
-                                    "[Keybinding Debug] Clicked to edit shortcut for action '\(actionID)', current value: '\(viewModel.shortcut(for: actionID))'",
-                                )
                                 editingActionID = actionID
                                 editingShortcutText = viewModel.shortcut(for: actionID)
                             } label: {
@@ -201,7 +190,6 @@ public struct PreferencesView: View {
 
             Section {
                 Button("Reset Keybindings to Defaults") {
-                    print("[Keybinding Debug] Reset to Defaults button clicked")
                     viewModel.resetKeybindingsToDefaults()
                 }
                 .foregroundColor(.red)
@@ -317,27 +305,19 @@ struct KeyRecorderView: NSViewRepresentable {
     var onSubmit: () -> Void
 
     func makeNSView(context: Context) -> KeyRecorderNSView {
-        print("[Keybinding Debug] Creating KeyRecorderNSView...")
         let view = KeyRecorderNSView()
         view.onShortcutRecorded = { newShortcut in
-            print("[Keybinding Debug] KeyRecorderView received recorded shortcut: '\(newShortcut)'")
             shortcutText = newShortcut
         }
         view.onCancel = {
-            print("[Keybinding Debug] KeyRecorderView cancel callback fired")
             onCancel()
         }
         view.onSubmit = {
-            print("[Keybinding Debug] KeyRecorderView submit callback fired")
             onSubmit()
         }
         DispatchQueue.main.async {
-            print("[Keybinding Debug] Attempting makeFirstResponder on KeyRecorderNSView...")
             if let window = view.window {
-                let success = window.makeFirstResponder(view)
-                print("[Keybinding Debug] makeFirstResponder success: \(success)")
-            } else {
-                print("[Keybinding Debug] KeyRecorderNSView window is nil during makeNSView async")
+                _ = window.makeFirstResponder(view)
             }
         }
         return view
@@ -346,7 +326,6 @@ struct KeyRecorderView: NSViewRepresentable {
     func updateNSView(_ nsView: KeyRecorderNSView, context: Context) {
         DispatchQueue.main.async {
             if let window = nsView.window, window.firstResponder !== nsView {
-                print("[Keybinding Debug] Re-focusing KeyRecorderNSView as first responder")
                 window.makeFirstResponder(nsView)
             }
         }
@@ -365,18 +344,15 @@ final class KeyRecorderNSView: NSView {
     override func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()
         if let window {
-            print("[Keybinding Debug] KeyRecorderNSView viewDidMoveToWindow, making first responder...")
             window.makeFirstResponder(self)
         }
     }
 
     override func performKeyEquivalent(with event: NSEvent) -> Bool {
-        print("[Keybinding Debug] KeyRecorderNSView performKeyEquivalent: event=\(event)")
         return handleKeyEvent(event)
     }
 
     override func keyDown(with event: NSEvent) {
-        print("[Keybinding Debug] KeyRecorderNSView keyDown: event=\(event)")
         _ = handleKeyEvent(event)
     }
 
@@ -384,18 +360,14 @@ final class KeyRecorderNSView: NSView {
         let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
         let keyCode = event.keyCode
 
-        print("[Keybinding Debug] handleKeyEvent: keyCode=\(keyCode), flags=\(flags.rawValue)")
-
         // Escape key -> cancel
         if keyCode == 53 {
-            print("[Keybinding Debug] ESC key detected -> cancel editing")
             onCancel?()
             return true
         }
 
         // Return / Enter key -> submit
         if keyCode == 36 || keyCode == 76 {
-            print("[Keybinding Debug] Return/Enter key detected -> submit editing")
             onSubmit?()
             return true
         }
@@ -418,7 +390,6 @@ final class KeyRecorderNSView: NSView {
         // Modifier-only key codes: 54, 55 (Cmd), 56, 60 (Shift), 58, 61 (Option), 59, 62 (Control), 63 (Fn)
         let modifierKeyCodes: Set<UInt16> = [54, 55, 56, 57, 58, 59, 60, 61, 62, 63]
         if modifierKeyCodes.contains(keyCode) {
-            print("[Keybinding Debug] Pure modifier key press (keyCode=\(keyCode)), waiting for character key...")
             return true
         }
 
@@ -463,7 +434,6 @@ final class KeyRecorderNSView: NSView {
         if !keyString.isEmpty {
             parts.append(keyString)
             let result = parts.joined(separator: "+")
-            print("[Keybinding Debug] Recorded shortcut string: '\(result)'")
             onShortcutRecorded?(result)
             return true
         }

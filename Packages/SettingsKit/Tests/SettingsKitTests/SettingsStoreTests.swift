@@ -140,4 +140,19 @@ struct SettingsStoreTests {
         #expect(notificationCount > 0)
         #expect(store.lastLoadError != nil)
     }
+
+    @Test func keybindingsPersistAndReloadFromDisk() async throws {
+        let dir = try makeTempDir()
+        let store = SettingsStore(directoryURL: dir)
+        store.update { $0.keybindings.customBindings = ["findInFiles": "cmd+option+f"] }
+        #expect(store.current.keybindings.customBindings["findInFiles"] == "cmd+option+f")
+
+        let url = dir.appendingPathComponent("settings.json")
+        let data = try Data(contentsOf: url)
+        let reloaded = try JSONDecoder().decode(Settings.self, from: data)
+        #expect(reloaded.keybindings.customBindings["findInFiles"] == "cmd+option+f")
+
+        let freshStore = SettingsStore(directoryURL: dir)
+        #expect(freshStore.current.keybindings.customBindings["findInFiles"] == "cmd+option+f")
+    }
 }

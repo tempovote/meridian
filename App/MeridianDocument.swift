@@ -99,6 +99,7 @@ final class MeridianDocument: NSDocument {
     /// to — drives which pane View-menu toggles/text-transform commands
     /// act on, and which pane's state the status bar shows.
     private var focusedPaneIndex: Int = 0
+    private var containerStack: NSStackView?
     private var statusBarHost: NSHostingView<StatusBarView>?
     /// Whatever currently occupies the container stack's editor/split slot
     /// (a single pane's `engine.view`, or an `NSSplitView` wrapping two) —
@@ -230,6 +231,7 @@ final class MeridianDocument: NSDocument {
             containerStack.orientation = .vertical
             containerStack.spacing = 0
             containerStack.alignment = .width
+            self.containerStack = containerStack
             editorSlotView = engine.view
             host.setContentHuggingPriority(.required, for: .vertical)
 
@@ -444,8 +446,8 @@ final class MeridianDocument: NSDocument {
     /// (a single pane's view, or a previous split view) for the correct
     /// view given `panes.count` and `currentSplitOrientation`.
     private func rebuildSplitLayout() {
-        guard let window = windowControllers.first?.window,
-              let containerStack = window.contentView as? NSStackView
+        guard windowControllers.first?.window != nil,
+              let containerStack = self.containerStack
         else { return }
         // Remove the tracked editor slot specifically — NOT
         // `arrangedSubviews.first`, which the find bar / command palette
@@ -619,7 +621,7 @@ final class MeridianDocument: NSDocument {
         )
         let host = NSHostingView(rootView: paletteView)
         commandPaletteHost = host
-        if let window = windowControllers.first?.window, let containerStack = window.contentView as? NSStackView {
+        if let window = windowControllers.first?.window, let containerStack = self.containerStack {
             containerStack.insertView(host, at: 0, in: .top)
             window.makeFirstResponder(host)
             commandPaletteClickMonitor = NSEvent
@@ -856,7 +858,7 @@ final class MeridianDocument: NSDocument {
         let host = NSHostingView(rootView: findView)
         findBarHost = host
 
-        if let window = windowControllers.first?.window, let containerStack = window.contentView as? NSStackView {
+        if let window = windowControllers.first?.window, let containerStack = self.containerStack {
             containerStack.insertView(host, at: 0, in: .top)
             window.makeFirstResponder(host)
         }

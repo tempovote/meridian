@@ -47,4 +47,19 @@ public enum CommandRegistry {
             title: title, selector: selector, keyEquivalent: keyEquivalent, modifierMask: modifierMask,
         ))
     }
+
+    public static func updateShortcut(
+        for selector: Selector, keyEquivalent: String?, modifierMask: NSEvent.ModifierFlags
+    ) {
+        for i in 0 ..< commands.count {
+            if commands[i].selector == selector {
+                commands[i] = Command(
+                    title: commands[i].title,
+                    selector: selector,
+                    keyEquivalent: keyEquivalent,
+                    modifierMask: modifierMask
+                )
+            }
+        }
+    }
 }
