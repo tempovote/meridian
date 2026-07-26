@@ -250,7 +250,7 @@ final class MeridianDocument: NSDocument {
 
             let mainSplitView = makeSidebarSplitView(containerStack: containerStack)
 
-            let verticalRootSplitView = NSSplitView()
+            let verticalRootSplitView = WideDividerSplitView()
             verticalRootSplitView.isVertical = false
             verticalRootSplitView.dividerStyle = .thin
             verticalRootSplitView.addArrangedSubview(mainSplitView)
@@ -1018,16 +1018,13 @@ final class MeridianDocument: NSDocument {
             guard let rootSplitView else { return }
             let terminal = TerminalView()
             let host = NSHostingView(rootView: terminal)
-            host.translatesAutoresizingMaskIntoConstraints = false
-            host.heightAnchor.constraint(greaterThanOrEqualToConstant: 120).isActive = true
-            host.heightAnchor.constraint(lessThanOrEqualToConstant: 400).isActive = true
             terminalHost = host
 
             rootSplitView.addArrangedSubview(host)
             rootSplitView.setHoldingPriority(NSLayoutConstraint.Priority(250), forSubviewAt: 0)
             rootSplitView.setHoldingPriority(NSLayoutConstraint.Priority(750), forSubviewAt: 1)
             let totalHeight = rootSplitView.bounds.height
-            let targetDividerPos = max(150, totalHeight - 200)
+            let targetDividerPos = max(100, totalHeight - 300)
             rootSplitView.setPosition(targetDividerPos, ofDividerAt: 0)
             rootSplitView.adjustSubviews()
         }
