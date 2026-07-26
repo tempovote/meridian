@@ -103,10 +103,7 @@ public extension TextEncoding {
     /// (no-op for legacy encodings — they have none). Returns nil only when
     /// a legacy encoding cannot represent `text` losslessly.
     func encode(_ text: String, includeBOM: Bool) -> [UInt8]? {
-        let isFixedWidthUnicode = self == .utf16LittleEndian || self == .utf16BigEndian || self == .utf32LittleEndian ||
-            self == .utf32BigEndian
-        let writeBOM = includeBOM || isFixedWidthUnicode
-        var out: [UInt8] = writeBOM ? byteOrderMark : []
+        var out: [UInt8] = includeBOM ? byteOrderMark : []
         switch self {
         case .utf8:
             out.append(contentsOf: text.utf8)
