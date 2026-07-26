@@ -1083,7 +1083,7 @@ final class MeridianDocument: NSDocument {
             menuItem.state = isSidebarVisible ? .on : .off
             return true
         case #selector(checkForUpdates(_:)):
-            return true
+            return UpdaterService.shared.canCheckForUpdates
         case #selector(splitHorizontally(_:)):
             menuItem.state = (currentSplitOrientation == .horizontal) ? .on : .off
             return true

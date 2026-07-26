@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Meridian Appcast Feed
+  =====================
+  This file is the Sparkle update feed for Meridian. It is published to:
+    https://github.com/tempovote/meridian/releases/download/appcast/appcast.xml
+
+  HOW TO RELEASE A NEW VERSION
+  ─────────────────────────────
+  1. Build a signed + notarized .dmg (or .zip) of Meridian.app.
+
+  2. Sign the archive with the private EdDSA key stored in your Keychain:
+
+       sign_update /path/to/Meridian-X.Y.Z.dmg
+
+     `sign_update` lives next to `generate_keys` in:
+       ~/Library/Developer/Xcode/DerivedData/Meridian-.../SourcePackages/artifacts/sparkle/Sparkle/bin/
+
+  3. Copy the `sparkle:edSignature` and `length` values from the output
+     into a new <item> block below (copy from the template item).
+
+  4. Upload the .dmg to the GitHub release (tag = vX.Y.Z).
+
+  5. Create (or overwrite) the *appcast* GitHub release:
+       gh release create appcast --title "Appcast" --notes "" \
+         || gh release upload appcast appcast.xml --clobber
+
+  6. The URL the app polls is:
+       https://github.com/tempovote/meridian/releases/download/appcast/appcast.xml
+-->
+<rss version="2.0"
+     xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle"
+     xmlns:dc="http://purl.org/dc/elements/1.1/">
+  <channel>
+    <title>Meridian</title>
+    <link>https://github.com/tempovote/meridian</link>
+    <description>Meridian update feed</description>
+    <language>en</language>
+
+    <!--
+    TEMPLATE — copy and fill in for each release:
+
+    <item>
+      <title>Meridian X.Y.Z</title>
+      <sparkle:version>BUILD_NUMBER</sparkle:version>
+      <sparkle:shortVersionString>X.Y.Z</sparkle:shortVersionString>
+      <pubDate>Www, DD Mon YYYY HH:MM:SS +0000</pubDate>
+      <sparkle:minimumSystemVersion>15.0</sparkle:minimumSystemVersion>
+      <sparkle:releaseNotesLink>
+        https://github.com/tempovote/meridian/releases/tag/vX.Y.Z
+      </sparkle:releaseNotesLink>
+      <enclosure
+        url="https://github.com/tempovote/meridian/releases/download/vX.Y.Z/Meridian-X.Y.Z.dmg"
+        sparkle:version="BUILD_NUMBER"
+        sparkle:shortVersionString="X.Y.Z"
+        sparkle:edSignature="SIGNATURE_FROM_SIGN_UPDATE"
+        length="FILE_SIZE_IN_BYTES"
+        type="application/x-apple-diskimage"/>
+    </item>
+    -->
+
+  </channel>
+</rss>
