@@ -255,6 +255,7 @@ public final class TextKit2Engine: NSObject, TextLayoutEngine {
     }
 
     public func setSelection(_ selection: SelectionSet, in buffer: TextBuffer) {
+        Swift.print("[Meridian Selection Debug] setSelection called with selection.ranges=\(selection.ranges)")
         let maxByte = buffer.utf8Count
         let maxUtf16 = buffer.utf16Count
         let nsRanges = selection.ranges.compactMap { range -> NSValue? in
@@ -266,6 +267,7 @@ public final class TextKit2Engine: NSObject, TextLayoutEngine {
             return NSValue(range: NSRange(location: location, length: length))
         }
         guard !nsRanges.isEmpty else { return }
+        Swift.print("[Meridian Selection Debug] setSelection computed nsRanges=\(nsRanges.map(\.rangeValue))")
         if nsRanges.count > 1 {
             textView.applyMultiCaretRanges(nsRanges)
         } else {
