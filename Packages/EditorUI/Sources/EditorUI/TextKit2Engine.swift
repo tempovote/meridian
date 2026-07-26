@@ -240,7 +240,6 @@ public final class TextKit2Engine: NSObject, TextLayoutEngine {
                 }
             }
         }
-        debugDumpStorageAttributes(tag: "after apply edit")
         buffer.apply(transaction)
         assertMirrorInvariant()
         let foldedBefore = foldModel.folded
@@ -249,7 +248,6 @@ public final class TextKit2Engine: NSObject, TextLayoutEngine {
             refreshFoldLayout()
         }
         highlightCurrentBuffer()
-        debugDumpStorageAttributes(tag: "after highlightCurrentBuffer")
         if restoreSelection, !transaction.selectionAfter.ranges.isEmpty {
             setSelection(transaction.selectionAfter, in: buffer)
         }
