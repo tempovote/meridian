@@ -39,34 +39,15 @@ public struct PreferencesView: View {
                     .background(Color.orange)
             }
 
-            // Segmented Header
-            HStack(spacing: 12) {
+            // Native Segmented Control Header
+            Picker("", selection: $selectedTab) {
                 ForEach(Tab.allCases) { tab in
-                    Button {
-                        selectedTab = tab
-                    } label: {
-                        HStack(spacing: 6) {
-                            Image(systemName: tab.icon)
-                                .font(.system(size: 13, weight: .medium))
-                            Text(tab.rawValue)
-                                .font(.system(size: 13, weight: .medium))
-                        }
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 6)
-                        .background(
-                            selectedTab == tab
-                                ? Color.accentColor.opacity(0.18)
-                                : Color.clear,
-                        )
-                        .foregroundColor(selectedTab == tab ? .accentColor : .primary)
-                        .cornerRadius(6)
-                    }
-                    .buttonStyle(.plain)
+                    Label(tab.rawValue, systemImage: tab.icon).tag(tab)
                 }
             }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 10)
-            .background(Color(NSColor.windowBackgroundColor))
+            .pickerStyle(.segmented)
+            .frame(width: 240)
+            .padding(.vertical, 12)
 
             Divider()
 
@@ -77,7 +58,7 @@ public struct PreferencesView: View {
                 keybindingsTab
             }
         }
-        .frame(width: 500, height: 400)
+        .frame(width: 500, height: 420)
     }
 
     private var editorTab: some View {
@@ -103,41 +84,31 @@ public struct PreferencesView: View {
     }
 
     private var keybindingsTab: some View {
-        VStack(spacing: 8) {
-            // Search Bar
-            HStack {
-                Image(systemName: "magnifyingglass")
-                    .foregroundColor(.secondary)
-                TextField("Search Shortcuts...", text: $searchText)
-                    .textFieldStyle(.plain)
-                if !searchText.isEmpty {
-                    Button {
-                        searchText = ""
-                    } label: {
-                        Image(systemName: "xmark.circle.fill")
-                            .foregroundColor(.secondary)
-                    }
-                    .buttonStyle(.plain)
-                }
-            }
-            .padding(.horizontal, 8)
-            .padding(.vertical, 6)
-            .background(Color(NSColor.controlBackgroundColor))
-            .cornerRadius(6)
-            .padding(.horizontal, 16)
-            .padding(.top, 10)
-
-            List {
-                ForEach(filteredActionIDs, id: \.self) { actionID in
-                    HStack {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(actionDisplayName(actionID))
-                                .font(.body)
-                                .fontWeight(.medium)
-                            Text(actionID)
-                                .font(.caption)
+        Form {
+            Section {
+                HStack {
+                    Image(systemName: "magnifyingglass")
+                        .foregroundColor(.secondary)
+                    TextField("Search Shortcuts...", text: $searchText)
+                        .textFieldStyle(.plain)
+                    if !searchText.isEmpty {
+                        Button {
+                            searchText = ""
+                        } label: {
+                            Image(systemName: "xmark.circle.fill")
                                 .foregroundColor(.secondary)
                         }
+                        .buttonStyle(.plain)
+                    }
+                }
+            }
+
+            Section("Customizable Keybindings") {
+                ForEach(filteredActionIDs, id: \.self) { actionID in
+                    HStack {
+                        Text(actionDisplayName(actionID))
+                            .font(.body)
+                            .fontWeight(.medium)
 
                         Spacer()
 
@@ -145,7 +116,7 @@ public struct PreferencesView: View {
                             HStack(spacing: 6) {
                                 TextField("Shortcut", text: $editingShortcutText)
                                     .textFieldStyle(.roundedBorder)
-                                    .frame(width: 110)
+                                    .frame(width: 100)
                                     .multilineTextAlignment(.center)
                                 Button("Save") {
                                     viewModel.setShortcut(editingShortcutText, for: actionID)
@@ -164,21 +135,18 @@ public struct PreferencesView: View {
                             .buttonStyle(.plain)
                         }
                     }
-                    .padding(.vertical, 3)
+                    .padding(.vertical, 2)
                 }
             }
-            .listStyle(.inset(alternatesRowBackgrounds: true))
 
-            HStack {
-                Spacer()
+            Section {
                 Button("Reset Keybindings to Defaults") {
                     viewModel.resetKeybindingsToDefaults()
                 }
-                .buttonStyle(.bordered)
-                .controlSize(.small)
+                .foregroundColor(.red)
             }
-            .padding([.horizontal, .bottom], 12)
         }
+        .formStyle(.grouped)
     }
 
     private var filteredActionIDs: [String] {
