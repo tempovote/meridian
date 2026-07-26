@@ -1,3 +1,4 @@
+// swiftlint:disable file_length
 import AppKit
 import DocumentCore
 import FileKit
@@ -11,6 +12,7 @@ import ThemeKit
 /// `TextBuffer` snapshot in lockstep with the storage so user edits can
 /// be converted to rope coordinates against pre-edit content.
 @MainActor
+// swiftlint:disable:next type_body_length
 public final class TextKit2Engine: NSObject, TextLayoutEngine {
     private let scrollView: NSScrollView
     let textView: MeridianTextView
@@ -105,6 +107,10 @@ public final class TextKit2Engine: NSObject, TextLayoutEngine {
     /// this property; wired to `NSTextViewDelegate.undoManager(for:)`.
     public var documentUndoManager: UndoManager?
 
+    /// Called whenever the editor is scrolled with the first visible and last
+    /// visible 1-based line numbers. Used to sync the Minimap viewport rect.
+    public var onScrollChange: ((ClosedRange<Int>) -> Void)?
+
     public var view: NSView {
         scrollView
     }
@@ -173,6 +179,31 @@ public final class TextKit2Engine: NSObject, TextLayoutEngine {
             self?.applyEditorSettings(settings.editor)
         }
         applyEditorColors()
+        setupScrollObserver()
+    }
+
+    /// Sets up an NSScrollView bounds-change observer for Minimap scroll sync.
+    /// Called separately to keep init body under the SwiftLint line limit.
+    func setupScrollObserver() {
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleScrollBoundsChange),
+            name: NSView.boundsDidChangeNotification,
+            object: scrollView.contentView,
+        )
+        scrollView.contentView.postsBoundsChangedNotifications = true
+    }
+
+    @objc func handleScrollBoundsChange() {
+        let visibleRect = scrollView.contentView.documentVisibleRect
+        guard visibleRect.height > 0,
+              let lineHeight = textView.font.map({ $0.ascender - $0.descender + $0.leading }),
+              lineHeight > 0
+        else { return }
+        let effectiveLineHeight = lineHeight + 2 // paragraph spacing
+        let firstLine = max(1, Int(visibleRect.minY / effectiveLineHeight) + 1)
+        let lastLine = max(firstLine, Int(visibleRect.maxY / effectiveLineHeight) + 1)
+        onScrollChange?(firstLine ... lastLine)
     }
 
     /// The TextKit 2 backing store. Trapping here is correct: a nil

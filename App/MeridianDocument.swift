@@ -1014,9 +1014,11 @@ final class MeridianDocument: NSDocument {
         if let host = minimapHost {
             host.removeFromSuperview()
             minimapHost = nil
+            focusedEngine?.onScrollChange = nil
         } else {
             let lines = viewModel.buffer.string.components(separatedBy: .newlines)
-            let minimap = MinimapView(lines: lines) { [weak self] targetLine in
+            let minimapModel = MinimapViewModel(lines: lines)
+            let minimap = MinimapView(model: minimapModel) { [weak self] targetLine in
                 guard let self, let viewModel = focusedViewModel else { return }
                 let maxLine = max(0, viewModel.buffer.lineCount - 1)
                 let clampedLine = max(0, min(targetLine, maxLine))
@@ -1028,6 +1030,13 @@ final class MeridianDocument: NSDocument {
             host.translatesAutoresizingMaskIntoConstraints = false
             host.widthAnchor.constraint(equalToConstant: 80).isActive = true
             minimapHost = host
+
+            // Sync viewport highlight on every scroll event
+            focusedEngine?.onScrollChange = { [weak minimapModel] range in
+                DispatchQueue.main.async {
+                    minimapModel?.visibleLineRange = range
+                }
+            }
 
             let splitView = (sidebarHost?.superview as? NSSplitView)
                 ?? (editorSlotView?.superview as? NSSplitView)
@@ -1046,7 +1055,7 @@ final class MeridianDocument: NSDocument {
             rootSplitView?.adjustSubviews()
         } else {
             guard let rootSplitView else { return }
-            let terminal = TerminalView()
+            let terminal = TerminalView(documentURL: fileURL)
             let host = NSHostingView(rootView: terminal)
             terminalHost = host
 
