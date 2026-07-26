@@ -36,48 +36,57 @@ public struct MinimapView: View {
 
     public var body: some View {
         GeometryReader { geometry in
+            let totalLines = max(1, model.lines.count)
+            let height = geometry.size.height
+            let lineSpacing = height / CGFloat(totalLines)
+
             ZStack(alignment: .topLeading) {
                 Color(NSColor.controlBackgroundColor)
                     .opacity(0.4)
 
-                // Viewport highlight rectangle with sharp accent border
+                // Mini document lines scaled proportionally to minimap track height
+                ZStack(alignment: .topLeading) {
+                    ForEach(Array(model.lines.prefix(350).enumerated()), id: \.offset) { idx, line in
+                        let lineY = (CGFloat(idx) / CGFloat(totalLines)) * height
+                        let lineWidth = min(geometry.size.width * 0.75, CGFloat(max(4, line.count * 2)))
+                        let lineH = max(1, min(2.5, lineSpacing * 0.75))
+                        Rectangle()
+                            .fill(Color.secondary.opacity(0.35))
+                            .frame(width: lineWidth, height: lineH)
+                            .position(x: 4 + lineWidth / 2, y: lineY + lineH / 2)
+                    }
+                }
+
+                // Viewport indicator matching scrollbar proportions
                 if let range = model.visibleLineRange {
-                    let lineH: CGFloat = 3
-                    let startY = 4 + CGFloat(range.lowerBound - 1) * lineH
-                    let rectH = max(6, CGFloat(range.upperBound - range.lowerBound + 1) * lineH - 1)
+                    let firstLine = CGFloat(max(1, min(totalLines, range.lowerBound)))
+                    let lastLine = CGFloat(max(Int(firstLine), min(totalLines, range.upperBound)))
+                    let visibleCount = max(1, lastLine - firstLine + 1)
+
+                    let rawViewportRatio = visibleCount / CGFloat(totalLines)
+                    let rectH = max(24, min(height, rawViewportRatio * height))
+
+                    let maxScrollableLines = max(1, CGFloat(totalLines) - visibleCount)
+                    let scrollRatio = (firstLine - 1) / maxScrollableLines
+                    let clampedRatio = max(0, min(1, scrollRatio))
+                    let topY = clampedRatio * (height - rectH)
+
                     Rectangle()
                         .fill(Color.accentColor.opacity(0.18))
                         .overlay(
                             Rectangle()
-                                .stroke(Color.accentColor.opacity(0.4), lineWidth: 1),
+                                .stroke(Color.accentColor.opacity(0.5), lineWidth: 1),
                         )
-                        .frame(width: max(0, geometry.size.width - 8), height: rectH)
-                        .offset(
-                            x: 4,
-                            y: min(startY, max(4, geometry.size.height - rectH - 4)),
-                        )
+                        .frame(width: max(0, geometry.size.width - 4), height: rectH)
+                        .offset(x: 2, y: topY)
                 }
-
-                VStack(alignment: .leading, spacing: 1) {
-                    ForEach(Array(model.lines.prefix(400).enumerated()), id: \.offset) { _, line in
-                        Rectangle()
-                            .fill(Color.secondary.opacity(0.4))
-                            .frame(
-                                width: min(geometry.size.width * 0.8, CGFloat(max(4, line.count * 2))),
-                                height: 2,
-                            )
-                    }
-                }
-                .padding(.top, 4)
-                .padding(.horizontal, 4)
             }
             .gesture(
                 DragGesture(minimumDistance: 0)
                     .onChanged { value in
-                        let contentY = value.location.y - 4
-                        let usableH = max(1, geometry.size.height - 8)
-                        let ratio = max(0, min(1, contentY / usableH))
-                        let targetLine = Int(ratio * CGFloat(max(1, model.lines.count)))
+                        let contentY = value.location.y
+                        let ratio = max(0, min(1, contentY / max(1, height)))
+                        let targetLine = Int(ratio * CGFloat(totalLines))
                         onSelectLine?(targetLine)
                     },
             )

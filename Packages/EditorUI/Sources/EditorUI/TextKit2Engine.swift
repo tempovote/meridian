@@ -230,6 +230,14 @@ public final class TextKit2Engine: NSObject, TextLayoutEngine {
             lastLine = max(firstLine, Int(visibleRect.maxY / effectiveLineHeight) + 1)
         }
 
+        if visibleRect.minY <= 4 {
+            firstLine = 1
+        }
+        let docH = max(1, textView.bounds.height)
+        if visibleRect.maxY >= docH - 4 {
+            lastLine = max(firstLine, buffer.lineCount)
+        }
+
         onScrollChange?(firstLine ... max(firstLine, lastLine))
     }
 
