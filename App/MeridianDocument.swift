@@ -520,6 +520,7 @@ final class MeridianDocument: NSDocument {
                 for (otherIndex, other) in panes.enumerated() where otherIndex != index {
                     other.engine.apply(transaction, base: base, restoreSelection: false)
                 }
+                updateMarkdownPreviewIfActive()
             }
         }
     }
@@ -749,23 +750,37 @@ final class MeridianDocument: NSDocument {
             "[Meridian Debug] formatCurrentDocument: file='\(fileName)', langID='\(language)', pretty=\(pretty)",
         )
 
-        guard let formatted = DocumentFormatter.format(text: currentText, languageID: langID, pretty: pretty) else {
-            Swift.print(
-                "[Meridian Debug] formatCurrentDocument: Formatting returned nil (syntax error or unsupported format)",
+        let result = DocumentFormatter.formatResult(text: currentText, languageID: langID, pretty: pretty)
+        switch result {
+        case let .success(formatted):
+            let fullRange = ByteOffset(0) ..< ByteOffset(viewModel.buffer.utf8Count)
+            let edit = Edit(range: fullRange, replacement: formatted)
+            let transaction = EditTransaction(
+                baseVersion: viewModel.buffer.version,
+                edits: [edit],
+                selectionBefore: viewModel.selection,
+                selectionAfter: SelectionSet(caretAt: ByteOffset(0)),
             )
+            viewModel.perform(transaction)
+            Swift.print("[Meridian Debug] formatCurrentDocument: Format transaction performed successfully!")
+        case let .failure(error):
+            Swift.print("[Meridian Debug] formatCurrentDocument: \(error.localizedDescription)")
             NSSound.beep()
-            return
+            showFormatErrorAlert(reason: error.localizedDescription)
         }
-        let fullRange = ByteOffset(0) ..< ByteOffset(viewModel.buffer.utf8Count)
-        let edit = Edit(range: fullRange, replacement: formatted)
-        let transaction = EditTransaction(
-            baseVersion: viewModel.buffer.version,
-            edits: [edit],
-            selectionBefore: viewModel.selection,
-            selectionAfter: SelectionSet(caretAt: ByteOffset(0)),
-        )
-        viewModel.perform(transaction)
-        Swift.print("[Meridian Debug] formatCurrentDocument: Format transaction performed successfully!")
+    }
+
+    private func showFormatErrorAlert(reason: String) {
+        let alert = NSAlert()
+        alert.messageText = "Cannot Format Document"
+        alert.informativeText = reason
+        alert.alertStyle = .warning
+        alert.addButton(withTitle: "OK")
+        if let window = windowControllers.first?.window {
+            alert.beginSheetModal(for: window)
+        } else {
+            alert.runModal()
+        }
     }
 
     @objc func toggleMarkdownPreview(_ sender: Any?) {
@@ -784,18 +799,31 @@ final class MeridianDocument: NSDocument {
             let isDark = NSApp.effectiveAppearance.name == .darkAqua
             let preview = MarkdownPreviewView(markdownText: viewModel.buffer.string, isDarkMode: isDark)
             let host = NSHostingView(rootView: preview)
+            host.translatesAutoresizingMaskIntoConstraints = false
+            host.widthAnchor.constraint(greaterThanOrEqualToConstant: 280).isActive = true
             markdownPreviewHost = host
+
             let splitView = (sidebarHost?.superview as? NSSplitView)
                 ?? (editorSlotView?.superview as? NSSplitView)
                 ?? (editorSlotView?.superview?.superview as? NSSplitView)
             if let splitView {
                 splitView.addArrangedSubview(host)
+                let totalWidth = splitView.bounds.width
+                if totalWidth > 400 {
+                    splitView.setPosition(totalWidth * 0.5, ofDividerAt: splitView.arrangedSubviews.count - 2)
+                }
                 splitView.adjustSubviews()
-                Swift.print("[Meridian Debug] Added MarkdownPreviewView to splitView successfully!")
+                Swift.print("[Meridian Debug] Added MarkdownPreviewView to splitView successfully with 50% ratio!")
             } else {
                 Swift.print("[Meridian Debug] toggleMarkdownPreview error: Could not find parent NSSplitView")
             }
         }
+    }
+
+    private func updateMarkdownPreviewIfActive() {
+        guard let previewHost = markdownPreviewHost, let viewModel = focusedViewModel else { return }
+        let isDark = NSApp.effectiveAppearance.name == .darkAqua
+        previewHost.rootView = MarkdownPreviewView(markdownText: viewModel.buffer.string, isDarkMode: isDark)
     }
 
     private func showFindBar(startExpanded: Bool) {
