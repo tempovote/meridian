@@ -769,6 +769,9 @@ final class MeridianDocument: NSDocument {
             DispatchQueue.main.async { [weak viewModel] in
                 viewModel?.setSelection(singleCaret)
             }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { [weak viewModel] in
+                viewModel?.setSelection(singleCaret)
+            }
             Swift.print("[Meridian Debug] formatCurrentDocument: Format transaction performed successfully!")
         case let .failure(error):
             Swift.print("[Meridian Debug] formatCurrentDocument: \(error.localizedDescription)")

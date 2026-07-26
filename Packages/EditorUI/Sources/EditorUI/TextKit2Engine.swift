@@ -269,7 +269,7 @@ public final class TextKit2Engine: NSObject, TextLayoutEngine {
         if nsRanges.count > 1 {
             textView.applyMultiCaretRanges(nsRanges)
         } else {
-            textView.selectedRanges = nsRanges
+            textView.setSelectedRange(nsRanges[0].rangeValue)
         }
         textView.needsDisplay = true
     }
