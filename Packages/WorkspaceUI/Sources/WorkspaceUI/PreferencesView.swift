@@ -113,17 +113,48 @@ public struct PreferencesView: View {
                         Spacer()
 
                         if editingActionID == actionID {
-                            HStack(spacing: 6) {
-                                TextField("Shortcut", text: $editingShortcutText)
-                                    .textFieldStyle(.roundedBorder)
-                                    .frame(width: 100)
-                                    .multilineTextAlignment(.center)
-                                Button("Save") {
+                            HStack(spacing: 8) {
+                                KeycapBadgeView(shortcut: editingShortcutText, isEditing: true)
+
+                                TextField("e.g. cmd+shift+k", text: $editingShortcutText)
+                                    .textFieldStyle(.plain)
+                                    .font(.system(size: 11, weight: .medium, design: .monospaced))
+                                    .padding(.horizontal, 6)
+                                    .padding(.vertical, 3)
+                                    .background(
+                                        RoundedRectangle(cornerRadius: 4)
+                                            .fill(Color(NSColor.controlBackgroundColor)),
+                                    )
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 4)
+                                            .stroke(Color.accentColor, lineWidth: 1.5),
+                                    )
+                                    .frame(width: 110)
+                                    .onSubmit {
+                                        viewModel.setShortcut(editingShortcutText, for: actionID)
+                                        editingActionID = nil
+                                    }
+
+                                Button {
                                     viewModel.setShortcut(editingShortcutText, for: actionID)
                                     editingActionID = nil
+                                } label: {
+                                    Image(systemName: "checkmark.circle.fill")
+                                        .foregroundColor(.green)
+                                        .font(.system(size: 16))
                                 }
-                                .buttonStyle(.borderedProminent)
-                                .controlSize(.small)
+                                .buttonStyle(.plain)
+                                .help("Save Shortcut")
+
+                                Button {
+                                    editingActionID = nil
+                                } label: {
+                                    Image(systemName: "xmark.circle.fill")
+                                        .foregroundColor(.secondary)
+                                        .font(.system(size: 16))
+                                }
+                                .buttonStyle(.plain)
+                                .help("Cancel")
                             }
                         } else {
                             Button {
@@ -178,35 +209,46 @@ public struct PreferencesView: View {
 /// Renders a native macOS Keycap badge (e.g. ⌘ ⇧ F)
 public struct KeycapBadgeView: View {
     let shortcut: String
+    var isEditing: Bool
 
-    public init(shortcut: String) {
+    public init(shortcut: String, isEditing: Bool = false) {
         self.shortcut = shortcut
+        self.isEditing = isEditing
     }
 
     public var body: some View {
         HStack(spacing: 3) {
-            ForEach(keycapSymbols(for: shortcut), id: \.self) { symbol in
-                Text(symbol)
-                    .font(.system(size: 11, weight: .bold, design: .monospaced))
-                    .foregroundColor(.primary)
+            let symbols = keycapSymbols(for: shortcut)
+            if symbols.isEmpty, isEditing {
+                Text("Type keys...")
+                    .font(.system(size: 11, weight: .regular, design: .monospaced))
+                    .foregroundColor(.secondary)
                     .padding(.horizontal, 6)
                     .padding(.vertical, 3)
-                    .background(
-                        RoundedRectangle(cornerRadius: 4)
-                            .fill(Color(NSColor.controlBackgroundColor))
-                            .shadow(color: Color.black.opacity(0.12), radius: 1, x: 0, y: 1),
-                    )
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 4)
-                            .stroke(Color.primary.opacity(0.18), lineWidth: 1),
-                    )
+            } else {
+                ForEach(Array(symbols.enumerated()), id: \.offset) { _, symbol in
+                    Text(symbol)
+                        .font(.system(size: 11, weight: .bold, design: .monospaced))
+                        .foregroundColor(isEditing ? .accentColor : .primary)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 3)
+                        .background(
+                            RoundedRectangle(cornerRadius: 4)
+                                .fill(Color(NSColor.controlBackgroundColor))
+                                .shadow(color: Color.black.opacity(0.12), radius: 1, x: 0, y: 1),
+                        )
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 4)
+                                .stroke(isEditing ? Color.accentColor : Color.primary.opacity(0.18), lineWidth: 1),
+                        )
+                }
             }
         }
     }
 
     private func keycapSymbols(for raw: String) -> [String] {
-        guard !raw.isEmpty else { return ["None"] }
-        let parts = raw.lowercased().components(separatedBy: "+")
+        guard !raw.trimmingCharacters(in: .whitespaces).isEmpty else { return [] }
+        let parts = raw.lowercased().components(separatedBy: "+").filter { !$0.isEmpty }
         return parts.map { part -> String in
             switch part {
             case "cmd", "command": return "⌘"
