@@ -26,15 +26,11 @@ public struct MarkdownPreviewView: NSViewRepresentable {
 
     private func updateHTMLContent(in webView: WKWebView) {
         let htmlContent = generateHTML(from: markdownText, isDarkMode: isDarkMode)
-        webView.loadHTMLString(htmlContent, baseURL: nil)
+        webView.loadHTMLString(htmlContent, baseURL: URL(string: "about:blank"))
     }
 
     private func generateHTML(from markdown: String, isDarkMode: Bool) -> String {
-        let escapedMarkdown = markdown
-            .replacingOccurrences(of: "&", with: "&amp;")
-            .replacingOccurrences(of: "<", with: "&lt;")
-            .replacingOccurrences(of: ">", with: "&gt;")
-
+        let parsedHTML = renderMarkdownToHTML(markdown)
         let bgColor = isDarkMode ? "#1e1e1e" : "#ffffff"
         let textColor = isDarkMode ? "#d4d4d4" : "#24292e"
         let codeBgColor = isDarkMode ? "#2d2d2d" : "#f6f8fa"
@@ -48,10 +44,76 @@ public struct MarkdownPreviewView: NSViewRepresentable {
         <style>\(style)</style>
         </head>
         <body>
-        <pre>\(escapedMarkdown)</pre>
+        \(parsedHTML)
         </body>
         </html>
         """
+    }
+
+    private func renderMarkdownToHTML(_ markdown: String) -> String {
+        let lines = markdown.components(separatedBy: .newlines)
+        var result: [String] = []
+        var inCodeBlock = false
+
+        for line in lines {
+            if line.hasPrefix("```") {
+                if inCodeBlock {
+                    result.append("</code></pre>")
+                    inCodeBlock = false
+                } else {
+                    result.append("<pre><code>")
+                    inCodeBlock = true
+                }
+                continue
+            }
+
+            if inCodeBlock {
+                result.append(escapeHTML(line))
+                continue
+            }
+
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            if trimmed.hasPrefix("# ") {
+                result.append("<h1>\(renderInline(String(trimmed.dropFirst(2))))</h1>")
+            } else if trimmed.hasPrefix("## ") {
+                result.append("<h2>\(renderInline(String(trimmed.dropFirst(3))))</h2>")
+            } else if trimmed.hasPrefix("### ") {
+                result.append("<h3>\(renderInline(String(trimmed.dropFirst(4))))</h3>")
+            } else if trimmed.hasPrefix("- ") || trimmed.hasPrefix("* ") {
+                result.append("<ul><li>\(renderInline(String(trimmed.dropFirst(2))))</li></ul>")
+            } else if trimmed.isEmpty {
+                result.append("<br>")
+            } else {
+                result.append("<p>\(renderInline(line))</p>")
+            }
+        }
+
+        if inCodeBlock {
+            result.append("</code></pre>")
+        }
+
+        return result.joined(separator: "\n")
+    }
+
+    private func renderInline(_ text: String) -> String {
+        var escaped = escapeHTML(text)
+        // Convert **bold**
+        while let range = escaped.range(of: "\\*\\*(.*?)\\*\\*", options: .regularExpression) {
+            let inner = escaped[range].dropFirst(2).dropLast(2)
+            escaped.replaceSubrange(range, with: "<strong>\(inner)</strong>")
+        }
+        // Convert `code`
+        while let range = escaped.range(of: "`([^`]+)`", options: .regularExpression) {
+            let inner = escaped[range].dropFirst(1).dropLast(1)
+            escaped.replaceSubrange(range, with: "<code>\(inner)</code>")
+        }
+        return escaped
+    }
+
+    private func escapeHTML(_ text: String) -> String {
+        text.replacingOccurrences(of: "&", with: "&amp;")
+            .replacingOccurrences(of: "<", with: "&lt;")
+            .replacingOccurrences(of: ">", with: "&gt;")
     }
 
     private func cssStyle(bgColor: String, textColor: String, codeBgColor: String) -> String {

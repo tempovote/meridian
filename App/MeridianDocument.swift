@@ -264,6 +264,7 @@ final class MeridianDocument: NSDocument {
 
         sidebarHost.widthAnchor.constraint(greaterThanOrEqualToConstant: 180).isActive = true
         sidebarHost.widthAnchor.constraint(lessThanOrEqualToConstant: 320).isActive = true
+        containerStack.widthAnchor.constraint(greaterThanOrEqualToConstant: 300).isActive = true
 
         let initialFolder = fileURL?.deletingLastPathComponent()
             ?? URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
@@ -754,7 +755,6 @@ final class MeridianDocument: NSDocument {
         switch result {
         case let .success(formatted):
             let fullRange = ByteOffset(0) ..< ByteOffset(viewModel.buffer.utf8Count)
-            let edit = Edit(range: fullRange, replacement: formatted)
             let transaction = EditTransaction(
                 baseVersion: viewModel.buffer.version,
                 edits: [edit],
@@ -762,6 +762,9 @@ final class MeridianDocument: NSDocument {
                 selectionAfter: SelectionSet(caretAt: ByteOffset(0)),
             )
             viewModel.perform(transaction)
+            DispatchQueue.main.async { [weak viewModel] in
+                viewModel?.setSelection(SelectionSet(caretAt: ByteOffset(0)))
+            }
             Swift.print("[Meridian Debug] formatCurrentDocument: Format transaction performed successfully!")
         case let .failure(error):
             Swift.print("[Meridian Debug] formatCurrentDocument: \(error.localizedDescription)")
@@ -800,7 +803,7 @@ final class MeridianDocument: NSDocument {
             let preview = MarkdownPreviewView(markdownText: viewModel.buffer.string, isDarkMode: isDark)
             let host = NSHostingView(rootView: preview)
             host.translatesAutoresizingMaskIntoConstraints = false
-            host.widthAnchor.constraint(greaterThanOrEqualToConstant: 280).isActive = true
+            host.widthAnchor.constraint(greaterThanOrEqualToConstant: 300).isActive = true
             markdownPreviewHost = host
 
             let splitView = (sidebarHost?.superview as? NSSplitView)
@@ -809,7 +812,7 @@ final class MeridianDocument: NSDocument {
             if let splitView {
                 splitView.addArrangedSubview(host)
                 let totalWidth = splitView.bounds.width
-                if totalWidth > 400 {
+                if totalWidth > 500 {
                     splitView.setPosition(totalWidth * 0.5, ofDividerAt: splitView.arrangedSubviews.count - 2)
                 }
                 splitView.adjustSubviews()
