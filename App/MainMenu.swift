@@ -247,6 +247,11 @@ private extension MainMenu {
             keyEquivalent: "M", modifierMask: [.command, .shift],
             actionID: "toggleMarkdownPreview", settings: settings,
         )
+        addCommand(
+            to: menu, title: "Hex Inspector", action: Selector(("toggleHexView:")),
+            keyEquivalent: "h", modifierMask: [.command, .option],
+            actionID: "toggleHexView", settings: settings,
+        )
         menu.addItem(.separator())
         addCommand(
             to: menu, title: "Show Tab Bar", action: Selector(("toggleTabBar:")),

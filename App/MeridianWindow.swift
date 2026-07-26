@@ -66,6 +66,12 @@ final class MeridianWindow: NSWindow {
         }
     }
 
+    @objc func toggleHexView(_ sender: Any?) {
+        if let doc = windowController?.document as? MeridianDocument {
+            doc.toggleHexView(sender)
+        }
+    }
+
     override func validateMenuItem(_ menuItem: NSMenuItem) -> Bool {
         if let doc = windowController?.document as? MeridianDocument {
             return doc.validateMenuItem(menuItem)

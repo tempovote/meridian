@@ -9,11 +9,12 @@ let package = Package(
     ],
     dependencies: [
         .package(path: "../EditorUI"),
+        .package(path: "../FileKit"),
         .package(path: "../SearchKit"),
         .package(path: "../SettingsKit"),
     ],
     targets: [
-        .target(name: "WorkspaceUI", dependencies: ["EditorUI", "SearchKit", "SettingsKit"]),
+        .target(name: "WorkspaceUI", dependencies: ["EditorUI", "FileKit", "SearchKit", "SettingsKit"]),
         .testTarget(name: "WorkspaceUITests", dependencies: ["WorkspaceUI"]),
     ],
 )

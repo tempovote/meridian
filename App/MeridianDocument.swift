@@ -940,6 +940,36 @@ final class MeridianDocument: NSDocument {
         }
     }
 
+    private var hexInspectorHost: NSView?
+
+    @objc func toggleHexView(_ sender: Any?) {
+        guard let viewModel = focusedViewModel else { return }
+        if let host = hexInspectorHost {
+            host.removeFromSuperview()
+            hexInspectorHost = nil
+        } else {
+            let data = Data(viewModel.buffer.string.utf8)
+            let name = fileURL?.lastPathComponent ?? "Untitled"
+            let hexView = HexInspectorView(data: data, fileName: name)
+            let host = NSHostingView(rootView: hexView)
+            host.translatesAutoresizingMaskIntoConstraints = false
+            host.widthAnchor.constraint(greaterThanOrEqualToConstant: 450).isActive = true
+            hexInspectorHost = host
+
+            let splitView = (sidebarHost?.superview as? NSSplitView)
+                ?? (editorSlotView?.superview as? NSSplitView)
+                ?? (editorSlotView?.superview?.superview as? NSSplitView)
+            if let splitView {
+                splitView.addArrangedSubview(host)
+                let totalWidth = splitView.bounds.width
+                if totalWidth > 600 {
+                    splitView.setPosition(totalWidth * 0.5, ofDividerAt: splitView.arrangedSubviews.count - 2)
+                }
+                splitView.adjustSubviews()
+            }
+        }
+    }
+
     private var diffWindowControllers: [NSWindowController] = []
 
     @objc func compareWithFile(_ sender: Any?) {
@@ -1127,6 +1157,9 @@ final class MeridianDocument: NSDocument {
             return focusedViewModel != nil
         case #selector(toggleMarkdownPreview(_:)):
             menuItem.state = (markdownPreviewHost != nil) ? .on : .off
+            return focusedViewModel != nil
+        case #selector(toggleHexView(_:)):
+            menuItem.state = (hexInspectorHost != nil) ? .on : .off
             return focusedViewModel != nil
         default:
             return nil
