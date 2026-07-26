@@ -754,17 +754,20 @@ final class MeridianDocument: NSDocument {
         let result = DocumentFormatter.formatResult(text: currentText, languageID: langID, pretty: pretty)
         switch result {
         case let .success(formatted):
+            let singleCaret = SelectionSet(caretAt: ByteOffset(0))
+            viewModel.setSelection(singleCaret)
             let fullRange = ByteOffset(0) ..< ByteOffset(viewModel.buffer.utf8Count)
             let edit = Edit(range: fullRange, replacement: formatted)
             let transaction = EditTransaction(
                 baseVersion: viewModel.buffer.version,
                 edits: [edit],
-                selectionBefore: viewModel.selection,
-                selectionAfter: SelectionSet(caretAt: ByteOffset(0)),
+                selectionBefore: singleCaret,
+                selectionAfter: singleCaret,
             )
             viewModel.perform(transaction)
+            viewModel.setSelection(singleCaret)
             DispatchQueue.main.async { [weak viewModel] in
-                viewModel?.setSelection(SelectionSet(caretAt: ByteOffset(0)))
+                viewModel?.setSelection(singleCaret)
             }
             Swift.print("[Meridian Debug] formatCurrentDocument: Format transaction performed successfully!")
         case let .failure(error):
