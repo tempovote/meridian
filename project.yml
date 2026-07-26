@@ -144,12 +144,11 @@ schemes:
       targets:
         Meridian: all
         MeridianUITests: [test]
-        MeridianPerformanceTests: [test]
     run:
       config: Debug
     test:
       config: Debug
-      targets: [MeridianUITests, MeridianPerformanceTests]
+      targets: [MeridianUITests]
 
   MeridianPerformanceTests:
     build:
