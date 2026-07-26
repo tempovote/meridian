@@ -30,6 +30,9 @@ targets:
     type: application
     platform: macOS
     sources: [App]
+    settings:
+      base:
+        OTHER_CODE_SIGN_FLAGS: "--deep"
     dependencies:
       - package: WorkspaceUI
       - package: SearchKit
