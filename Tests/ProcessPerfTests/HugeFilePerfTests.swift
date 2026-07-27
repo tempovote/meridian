@@ -43,16 +43,29 @@ final class HugeFilePerfTests: XCTestCase {
         return result
     }
 
-    /// These three are measurement instruments, not behavioural tests: they
-    /// exist to produce the numbers the Task 8 gate compares against, and
-    /// they assert only that a measurement was actually obtained. Naming
-    /// them `record…` rather than `test…` keeps that honest — XCTest still
-    /// discovers them, since discovery is by `func test` prefix, so each is
-    /// invoked through an explicit `test`-prefixed wrapper below.
+    /// These are measurement instruments, not behavioural tests: they exist
+    /// to produce the numbers the gate compares against, and they assert only
+    /// that a measurement was actually obtained. Naming them `record…` rather
+    /// than `test…` keeps that honest — XCTest discovers by the `func test`
+    /// prefix, so each is invoked through an explicit wrapper below.
     func recordBaseline(label: String, path: String) throws {
         _ = try measure(label, path: path)
     }
 
+    /// The primary case: a 100 MB file of ordinary lines, right at the open
+    /// ceiling. This is the measurement the milestone lives or dies by.
+    func testRecord100MBMultiLine() throws {
+        try recordBaseline(label: "100MB multi-line", path: PerfCorpus.text100MB.path)
+    }
+
+    /// The realistic minified-bundle case: 10 MB on one line. Below the
+    /// 64 MiB huge threshold, so it keeps syntax highlighting and only loses
+    /// soft wrap — the shape `HugeFileProfile.pathologicalLines` exists for.
+    func testRecordMinifiedJSON() throws {
+        try recordBaseline(label: "10MB minified JSON", path: PerfCorpus.minifiedJSON.path)
+    }
+
+    /// The extreme line shape: 100 MB on a single line, at the ceiling.
     func testRecordSingleLine100MB() throws {
         try recordBaseline(label: "100MB single line", path: PerfCorpus.singleLine100MB.path)
     }
