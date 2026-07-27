@@ -70,3 +70,22 @@ jobs:
             -destination 'platform=macOS' CODE_SIGN_IDENTITY="-" \
             CODE_SIGNING_REQUIRED=YES CODE_SIGNING_ALLOWED=YES
 
+  process-perf:
+    runs-on: macos-15
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install XcodeGen
+        run: brew install xcodegen
+      - name: Generate project
+        run: xcodegen generate
+      # Full MeridianProcessPerfTests scheme, unrestricted: LaunchAndMemoryPerfTests
+      # (also run per-PR in ci.yml) plus HugeFilePerfTests' record-only cases
+      # (84s + 24s + a 300s timeout, ~210 MB of corpus generation), which are too
+      # heavy for the PR path and assert nothing — see ci.yml's matching step.
+      - name: Process performance budget tests (full scheme)
+        run: >
+          xcodebuild test -project Meridian.xcodeproj -scheme MeridianProcessPerfTests
+          -destination 'platform=macOS' ENABLE_HARDENED_RUNTIME=NO
+          CODE_SIGN_IDENTITY="-" CODE_SIGNING_REQUIRED=YES CODE_SIGNING_ALLOWED=YES
+
