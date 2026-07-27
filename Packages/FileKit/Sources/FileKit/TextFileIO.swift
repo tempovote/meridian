@@ -19,6 +19,8 @@ public struct LoadedTextFile: Sendable {
     /// The longest line's length in UTF-8 bytes, excluding break characters.
     /// Drives the pathological-line-shape guard (ADR 0009).
     public let longestLineUTF8Length: Int
+    /// Which editor features this file's size and line shape permit.
+    public let profile: HugeFileProfile
 }
 
 /// Errors thrown by FileKit's text-file I/O. Typed per project convention.
@@ -31,8 +33,9 @@ public enum FileKitError: Error {
     case unencodable(encoding: TextEncoding)
 }
 
-/// Synchronous text-file loading and saving (P1 scope: files are small —
-/// the ≥ 64 MB guard rejects before this code runs on anything huge).
+/// Synchronous text-file loading and saving. Files at or above
+/// ``HugeFileProfile/hugeThresholdBytes`` load through a memory mapping and
+/// carry a restricted ``HugeFileProfile``.
 public enum TextFileIO {
     /// Reads and decodes the file at `url`, computing save-fidelity and
     /// guard metadata. Never interprets content — every byte sequence
@@ -50,14 +53,20 @@ public enum TextFileIO {
             } catch {
                 throw FileKitError.unreadable(url: url, underlying: error)
             }
+            let longestLine = longestLineUTF8Length(
+                of: buffer, stopOnceAtLeast: HugeFileProfile.pathologicalLineBytes,
+            )
             return LoadedTextFile(
                 buffer: buffer,
                 encoding: overrideEncoding ?? .utf8,
                 hadBOM: false,
                 repairsMade: false,
-                dominantLineEnding: buffer.lineEndingStats().dominant,
+                dominantLineEnding: buffer.lineEndingStats(
+                    limitedToFirst: 1024 * 1024,
+                ).dominant,
                 byteSize: byteSize,
-                longestLineUTF8Length: longestLineUTF8Length(of: buffer),
+                longestLineUTF8Length: longestLine,
+                profile: HugeFileProfile(byteSize: byteSize, longestLineUTF8Length: longestLine),
             )
         } else {
             let data: Data
@@ -70,6 +79,7 @@ public enum TextFileIO {
             let effectiveOverride = overrideEncoding ??
                 (TextEncoding.sniffBOM(in: payload) == nil ? TextEncoding.readXattr(from: url) : nil)
             let decoded = TextDecoder.decode(payload, overrideEncoding: effectiveOverride)
+            let longestLine = longestLineUTF8Length(of: decoded.buffer)
             return LoadedTextFile(
                 buffer: decoded.buffer,
                 encoding: decoded.encoding,
@@ -77,7 +87,8 @@ public enum TextFileIO {
                 repairsMade: decoded.repairsMade,
                 dominantLineEnding: decoded.buffer.lineEndingStats().dominant,
                 byteSize: data.count,
-                longestLineUTF8Length: longestLineUTF8Length(of: decoded.buffer),
+                longestLineUTF8Length: longestLine,
+                profile: HugeFileProfile(byteSize: data.count, longestLineUTF8Length: longestLine),
             )
         }
     }
@@ -113,7 +124,16 @@ public enum TextFileIO {
     /// breaks (CR, LF, and CRLF all terminate; break bytes never counted).
     /// Byte-level scanning is safe: UTF-8 continuation bytes are ≥ 0x80,
     /// so every 0x0A/0x0D byte is a genuine break character.
-    static func longestLineUTF8Length(of buffer: TextBuffer) -> Int {
+    ///
+    /// `stopOnceAtLeast` lets huge-file loads bail out as soon as the answer
+    /// can no longer change the resulting ``HugeFileProfile`` — the profile
+    /// only asks whether any line reaches the pathological threshold, so
+    /// scanning the remaining gigabyte is wasted work. The returned value is
+    /// then a lower bound, which is why it must never be used for anything
+    /// but that threshold comparison.
+    static func longestLineUTF8Length(
+        of buffer: TextBuffer, stopOnceAtLeast: Int? = nil,
+    ) -> Int {
         var longest = 0
         var current = 0
         for chunk in buffer.chunks() {
@@ -124,6 +144,9 @@ public enum TextFileIO {
                 } else {
                     current += 1
                 }
+            }
+            if let limit = stopOnceAtLeast, max(longest, current) >= limit {
+                return max(longest, current)
             }
         }
         return max(longest, current)

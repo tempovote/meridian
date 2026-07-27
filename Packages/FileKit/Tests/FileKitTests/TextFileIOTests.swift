@@ -70,6 +70,46 @@ struct TextFileIOLoadTests {
             _ = try TextFileIO.loadTextFile(at: url)
         }
     }
+
+    @Test func smallFileGetsNormalProfile() throws {
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let url = dir.appendingPathComponent("small.txt")
+        try Data("hello\nworld\n".utf8).write(to: url)
+
+        let loaded = try TextFileIO.loadTextFile(at: url)
+        #expect(loaded.profile.level == .normal)
+        #expect(loaded.profile.capabilities.softWrap)
+    }
+
+    @Test func fileWithOneMillionByteLineGetsPathologicalProfile() throws {
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let url = dir.appendingPathComponent("longline.txt")
+        let line = String(repeating: "a", count: 1024 * 1024 + 10)
+        try Data(line.utf8).write(to: url)
+
+        let loaded = try TextFileIO.loadTextFile(at: url)
+        #expect(loaded.profile.level == .pathologicalLines)
+        #expect(!loaded.profile.capabilities.softWrap)
+        #expect(loaded.profile.capabilities.syntaxHighlighting)
+    }
+
+    @Test func longestLineExcludesBreakBytes() throws {
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let url = dir.appendingPathComponent("crlf.txt")
+        try Data("abc\r\nde\r\n".utf8).write(to: url)
+
+        let loaded = try TextFileIO.loadTextFile(at: url)
+        #expect(loaded.longestLineUTF8Length == 3)
+    }
 }
 
 @Suite("TextFileIO saving")

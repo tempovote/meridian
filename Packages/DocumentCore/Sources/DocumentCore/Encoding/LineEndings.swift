@@ -89,6 +89,54 @@ public extension TextBuffer {
         return LineEndingStats(lfCount: lf, crlfCount: crlf, crCount: cr)
     }
 
+    /// Line-ending statistics over at most the first `byteLimit` bytes.
+    ///
+    /// Huge files use this instead of ``lineEndingStats()``: the dominant
+    /// style is what save fidelity and the status bar need, and a sample
+    /// from the head of the file answers that as well as a full scan would
+    /// while costing a bounded amount of work. A file whose line-ending
+    /// style changes after the first megabyte is malformed by any editor's
+    /// reckoning; we pick the dominant style of the part we looked at and
+    /// preserve unedited bytes verbatim on save regardless.
+    ///
+    /// - Parameter byteLimit: The maximum number of leading bytes to scan;
+    ///   clamped to the buffer's length.
+    /// - Returns: Statistics about the line-ending styles in that prefix.
+    func lineEndingStats(limitedToFirst byteLimit: Int) -> LineEndingStats {
+        let end = ByteOffset(min(byteLimit, utf8Count))
+        var lf = 0
+        var crlf = 0
+        var cr = 0
+        var pendingCR = false
+        for chunk in chunks(in: ByteOffset(0) ..< end) {
+            for byte in chunk.bytes {
+                switch byte {
+                case 0x0D:
+                    if pendingCR {
+                        cr += 1
+                    }
+                    pendingCR = true
+                case 0x0A:
+                    if pendingCR {
+                        crlf += 1
+                        pendingCR = false
+                    } else {
+                        lf += 1
+                    }
+                default:
+                    if pendingCR {
+                        cr += 1
+                        pendingCR = false
+                    }
+                }
+            }
+        }
+        if pendingCR {
+            cr += 1
+        }
+        return LineEndingStats(lfCount: lf, crlfCount: crlf, crCount: cr)
+    }
+
     /// A new buffer (version 0) with every line break rewritten to `target`.
     ///
     /// - Parameter target: The line-ending style to convert all breaks to.
