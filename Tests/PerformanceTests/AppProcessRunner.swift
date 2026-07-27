@@ -101,6 +101,72 @@ enum AppProcessRunner {
         return nil
     }
 
+    /// One file-open measurement through the real app process.
+    struct FileOpenMeasurement {
+        let timeToVisible: Duration
+        let peakRSSBytes: UInt64
+        let openFailed: Bool
+    }
+
+    /// Launches the app with `--perf-open`, samples RSS every 50 ms while
+    /// the open proceeds, and returns the peak. Sampling (rather than a
+    /// single reading at the end) is required: the transient copies this
+    /// milestone exists to remove are freed before the open completes, so
+    /// an end-state reading would under-report the true peak.
+    static func measureFileOpen(path: String, timeout: TimeInterval = 120) throws -> FileOpenMeasurement? {
+        guard let exeURL = appExecutableURL else { return nil }
+
+        let process = Process()
+        process.executableURL = exeURL
+        process.arguments = ["--perf-open", path]
+        let pipe = Pipe()
+        process.standardOutput = pipe
+        try process.run()
+        defer {
+            if process.isRunning {
+                process.terminate()
+                process.waitUntilExit()
+            }
+        }
+
+        let reader = pipe.fileHandleForReading
+        let deadline = Date().addingTimeInterval(timeout)
+        var lineBuffer = ""
+        var peakRSS: UInt64 = 0
+
+        while Date() < deadline, process.isRunning {
+            if let rss = getProcessResidentMemoryBytes(pid: process.processIdentifier) {
+                peakRSS = max(peakRSS, rss)
+            }
+            let data = reader.availableData
+            if !data.isEmpty, let str = String(data: data, encoding: .utf8) {
+                lineBuffer += str
+            }
+            if lineBuffer.contains("[MERIDIAN_PERF] FILE_VISIBLE")
+                || lineBuffer.contains("[MERIDIAN_PERF] FILE_OPEN_FAILED")
+            {
+                break
+            }
+            Thread.sleep(forTimeInterval: 0.05)
+        }
+
+        if lineBuffer.contains("[MERIDIAN_PERF] FILE_OPEN_FAILED") {
+            return FileOpenMeasurement(timeToVisible: .zero, peakRSSBytes: peakRSS, openFailed: true)
+        }
+        guard let markerRange = lineBuffer.range(of: "[MERIDIAN_PERF] FILE_VISIBLE ") else {
+            return nil
+        }
+        let tail = lineBuffer[markerRange.upperBound...]
+        let msText = tail.prefix { !$0.isNewline }
+        guard let ms = Double(msText) else { return nil }
+
+        return FileOpenMeasurement(
+            timeToVisible: .milliseconds(Int(ms.rounded())),
+            peakRSSBytes: peakRSS,
+            openFailed: false,
+        )
+    }
+
     private static func getProcessResidentMemoryBytes(pid: pid_t) -> UInt64? {
         var procInfo = proc_taskinfo()
         let size = MemoryLayout<proc_taskinfo>.size

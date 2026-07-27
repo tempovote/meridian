@@ -66,6 +66,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
         } else {
             handleIdleTabsIfNeeded(args: args)
+            handlePerfOpenIfNeeded(args: args)
             if didCrash {
                 DispatchQueue.main.async { [weak self] in
                     let report = DiagnosticReportCollector.collectLatestReport()
@@ -96,6 +97,38 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
             Swift.print("[MERIDIAN_PERF] IDLE_TABS_READY")
             fflush(stdout)
+        }
+    }
+
+    /// Perf harness hook: opens `path` and prints a timing marker once the
+    /// document's text is actually on screen. Distinct from
+    /// `--perf-idle-tabs` because it must survive an open failure and
+    /// report it rather than hanging until the harness times out.
+    @MainActor
+    private func handlePerfOpenIfNeeded(args: [String]) {
+        guard let idx = args.firstIndex(of: "--perf-open"), idx + 1 < args.count else { return }
+        let url = URL(fileURLWithPath: args[idx + 1])
+        let clock = ContinuousClock()
+        let start = clock.now
+        NSDocumentController.shared.openDocument(withContentsOf: url, display: true) { _, _, error in
+            MainActor.assumeIsolated {
+                if let error {
+                    Swift.print("[MERIDIAN_PERF] FILE_OPEN_FAILED \(error.localizedDescription)")
+                    fflush(stdout)
+                    return
+                }
+                // One turn of the run loop after the open callback: the
+                // document is loaded, but the first layout pass has not
+                // necessarily drawn. Measuring here matches "time to
+                // visible text" in ROADMAP's budget table.
+                DispatchQueue.main.async {
+                    let elapsed = start.duration(to: clock.now)
+                    let ms = Double(elapsed.components.seconds) * 1000
+                        + Double(elapsed.components.attoseconds) / 1e15
+                    Swift.print("[MERIDIAN_PERF] FILE_VISIBLE \(ms)")
+                    fflush(stdout)
+                }
+            }
         }
     }
 
