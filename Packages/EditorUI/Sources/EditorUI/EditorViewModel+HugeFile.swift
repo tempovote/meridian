@@ -37,6 +37,25 @@ public extension EditorViewModel {
         engine.profile = hugeFileProfile
         engine.capabilitiesOverride = effectiveCapabilities
     }
+
+    /// Copies `other`'s size-restriction state onto `self`: profile,
+    /// override acceptance, and banner dismissal. Used when a new pane is
+    /// created alongside `other` (a split's secondary pane) — plain
+    /// `hugeFileProfile = other.hugeFileProfile` is not enough, because
+    /// that property's own `didSet` unconditionally resets
+    /// `hasOverriddenCapabilities`/`isBannerDismissed`, which would
+    /// silently discard an already-accepted "Enable Anyway" override on
+    /// the new pane. Callers should still set the new pane's engine's
+    /// `profile` themselves before constructing its `EditorViewModel` —
+    /// this method only fixes up the view-model-side state once the pane
+    /// already exists, same as `hugeFileProfile`'s own assignment.
+    func inheritHugeFileState(from other: EditorViewModel) {
+        hugeFileProfile = other.hugeFileProfile
+        isBannerDismissed = other.isBannerDismissed
+        if other.hasOverriddenCapabilities {
+            overrideCapabilities()
+        }
+    }
 }
 
 extension EditorViewModel {

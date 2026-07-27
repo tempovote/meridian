@@ -91,6 +91,14 @@ public final class TextKit2Engine: NSObject, TextLayoutEngine {
         /// Test-only: counts `relayoutForFoldChange()` calls — asserts the
         /// relayout/purge path was skipped when nothing fold-related changed.
         var foldRelayoutInvocationCountForTesting = 0
+        /// Test-only: counts calls to `highlightCurrentBuffer()` that got
+        /// past the `activeCapabilities.syntaxHighlighting` guard and
+        /// actually launched a parse `Task` — i.e. the exact whole-file
+        /// cost huge-file mode exists to avoid. Proves `profile`/
+        /// `capabilitiesOverride` must be in force on the engine BEFORE
+        /// `load(buffer:)` runs: setting them afterward cannot stop a
+        /// parse that already launched under the wrong capabilities.
+        var parseLaunchCountForTesting = 0
     #endif
 
     public var onUserEdit: ((EditTransaction) -> Void)?

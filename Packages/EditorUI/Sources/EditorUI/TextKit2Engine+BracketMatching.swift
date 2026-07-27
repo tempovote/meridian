@@ -16,6 +16,9 @@ extension TextKit2Engine {
         // exists to avoid; on a gigabyte file it never completes usefully.
         guard activeCapabilities.syntaxHighlighting else { return }
         guard let languageID else { return }
+        #if DEBUG
+            parseLaunchCountForTesting += 1
+        #endif
         let snapshot = buffer
         let requestedVersion = snapshot.version
         let requestedGeneration = loadGeneration

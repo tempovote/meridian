@@ -343,4 +343,52 @@ struct EditorViewModelTests {
         // no partial version of it.
         #expect(!model.effectiveCapabilities.softWrap)
     }
+
+    // MARK: - M10PA Task 5 Finding 3: split must inherit an accepted override
+
+    /// `setSplit()` propagates `hugeFileProfile` to the new secondary
+    /// pane. A plain `hugeFileProfile = primary.hugeFileProfile` alone
+    /// would silently discard an already-accepted "Enable Anyway"
+    /// override on the new pane, because `hugeFileProfile`'s own
+    /// `didSet` unconditionally resets `hasOverriddenCapabilities`.
+    /// `inheritHugeFileState(from:)` must carry the override across.
+    @Test @MainActor func inheritHugeFileStateCarriesAnAcceptedOverrideToTheNewPane() {
+        let primary = makeViewModel()
+        primary.hugeFileProfile = HugeFileProfile(byteSize: 1_000_000_000, longestLineUTF8Length: 80)
+        primary.overrideCapabilities()
+        #expect(primary.effectiveCapabilities.syntaxHighlighting)
+
+        let secondary = makeViewModel()
+        secondary.inheritHugeFileState(from: primary)
+
+        #expect(secondary.hugeFileProfile == primary.hugeFileProfile)
+        #expect(secondary.effectiveCapabilities.syntaxHighlighting)
+        #expect(secondary.effectiveCapabilities.minimap)
+    }
+
+    /// The dismissal state must also carry over: a pane split off of a
+    /// primary whose banner is already dismissed must not pop the banner
+    /// back up.
+    @Test @MainActor func inheritHugeFileStateCarriesBannerDismissal() {
+        let primary = makeViewModel()
+        primary.hugeFileProfile = HugeFileProfile(byteSize: 1_000_000_000, longestLineUTF8Length: 80)
+        primary.isBannerDismissed = true
+
+        let secondary = makeViewModel()
+        secondary.inheritHugeFileState(from: primary)
+
+        #expect(!secondary.isHugeFileBannerVisible)
+    }
+
+    /// Without any override on the primary, the new pane must stay
+    /// restricted — inheriting must not itself grant an override.
+    @Test @MainActor func inheritHugeFileStateWithNoOverrideLeavesNewPaneRestricted() {
+        let primary = makeViewModel()
+        primary.hugeFileProfile = HugeFileProfile(byteSize: 1_000_000_000, longestLineUTF8Length: 80)
+
+        let secondary = makeViewModel()
+        secondary.inheritHugeFileState(from: primary)
+
+        #expect(!secondary.effectiveCapabilities.syntaxHighlighting)
+    }
 }

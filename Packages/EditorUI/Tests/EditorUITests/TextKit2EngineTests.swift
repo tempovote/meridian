@@ -1,5 +1,6 @@
 import AppKit
 import DocumentCore
+import FileKit
 import SettingsKit
 import Testing
 import ThemeKit
@@ -221,5 +222,63 @@ struct TextKit2EngineTests {
     @Test func chunkedLoadOfEmptyBufferProducesEmptyStorage() {
         let (engine, _) = makeEngine("")
         #expect(engine.storageStringForTesting.isEmpty)
+    }
+
+    // MARK: - M10PA Task 5 Finding 1: huge-file profile must gate the FIRST load
+
+    /// Mirrors the fix applied at all four `EditorViewModel` construction
+    /// sites in `App/MeridianDocument.swift` (Finding 1): `EditorViewModel
+    /// .init` calls `engine.load(buffer:)` synchronously, which ends by
+    /// calling `highlightCurrentBuffer()` — so `engine.profile` must
+    /// already be restrictive before `EditorViewModel` is built, not set
+    /// afterward on the view model. Before that fix, every one of those
+    /// sites constructed the `EditorViewModel` (and so triggered the
+    /// first `load`) BEFORE assigning `hugeFileProfile`, so a full
+    /// tree-sitter parse launched under the still-default `.unrestricted`
+    /// profile on every huge-file open, revert, reopen, and split — the
+    /// exact whole-file cost huge mode exists to avoid. Nothing cancels
+    /// that already-launched parse: `highlightCurrentBuffer()`'s own
+    /// staleness check only compares `loadGeneration`/`buffer.version`,
+    /// never capabilities.
+    ///
+    /// Swapping this test back to the old (buggy) order — constructing
+    /// `EditorViewModel` first and setting `engine.profile` only
+    /// afterward — makes `parseLaunchCountForTesting` come back `1`
+    /// instead of `0`, i.e. this assertion fails against the pre-fix call
+    /// order and passes only once the profile precedes construction.
+    @Test func hugeProfileSetOnEngineBeforeConstructionNeverLaunchesFirstParse() {
+        let themeEngine = ThemeEngine(darkTheme: BundledThemes.meridianDark, lightTheme: BundledThemes.meridianLight)
+        let engine = TextKit2Engine(
+            themeEngine: themeEngine,
+            settingsStore: SettingsStore(directoryURL: testSettingsDirectory()),
+        )
+        // A language must be set or `highlightCurrentBuffer()` bails for
+        // an unrelated reason (no languageID), masking what this test
+        // checks.
+        engine.languageID = "swift"
+        // The fix: assign the restrictive profile BEFORE the
+        // `EditorViewModel` (and so the first `load(buffer:)`) exists.
+        engine.profile = HugeFileProfile(byteSize: 1_000_000_000, longestLineUTF8Length: 80)
+        let documentModel = DocumentModel(buffer: TextBuffer("func foo() {}"))
+        _ = EditorViewModel(documentModel: documentModel, engine: engine)
+        #expect(engine.parseLaunchCountForTesting == 0)
+    }
+
+    /// The inverse: pins down that an `.unrestricted` engine (the default
+    /// every construction site starts from) genuinely does launch a parse
+    /// on first load when a `languageID` is set — i.e. that the guard in
+    /// `highlightCurrentBuffer()` is capability-driven, not a blanket
+    /// no-op, so the previous test is actually exercising the gate and
+    /// not vacuously passing.
+    @Test func unrestrictedProfileDoesLaunchFirstParse() {
+        let themeEngine = ThemeEngine(darkTheme: BundledThemes.meridianDark, lightTheme: BundledThemes.meridianLight)
+        let engine = TextKit2Engine(
+            themeEngine: themeEngine,
+            settingsStore: SettingsStore(directoryURL: testSettingsDirectory()),
+        )
+        engine.languageID = "swift"
+        let documentModel = DocumentModel(buffer: TextBuffer("func foo() {}"))
+        _ = EditorViewModel(documentModel: documentModel, engine: engine)
+        #expect(engine.parseLaunchCountForTesting == 1)
     }
 }

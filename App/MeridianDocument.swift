@@ -229,6 +229,17 @@ final class MeridianDocument: NSDocument {
             documentModel = newDocumentModel
             let primaryEngine = panes[0].engine
             primaryEngine.languageID = languageID(forFileExtension: url.pathExtension)
+            // Set on the engine BEFORE `EditorViewModel.init` triggers its
+            // synchronous `load(buffer:)` — that call ends by starting a
+            // parse if the engine's capabilities allow it, so the profile
+            // must already be in force here or a huge file's first load
+            // (including every revert, which reuses this engine) launches
+            // one whole-file parse before anything gets a chance to
+            // forbid it. Setting `newViewModel.hugeFileProfile` below is
+            // still needed for the view-model-side state (soft wrap
+            // clamping, banner visibility) — it is just too late to gate
+            // the engine's first load.
+            primaryEngine.profile = loadedProfile
             let newViewModel = EditorViewModel(documentModel: newDocumentModel, engine: primaryEngine)
             newViewModel.hugeFileProfile = loadedProfile
             newViewModel.isSoftWrapEnabled = AppDelegate.settingsStore.current.editor.softWrapDefault
@@ -268,6 +279,12 @@ final class MeridianDocument: NSDocument {
             let documentModel = DocumentModel(buffer: pendingBuffer)
             self.documentModel = documentModel
             let engine = makeEngine(languageID: fileURL.flatMap { languageID(forFileExtension: $0.pathExtension) })
+            // Must precede `EditorViewModel.init` — see the matching
+            // comment in `read(from:ofType:)`. `loadedProfile` was already
+            // populated by `read(from:ofType:)`, which NSDocument runs
+            // before `makeWindowControllers()` for a file opened from
+            // disk; it stays `.unrestricted` for a brand-new document.
+            engine.profile = loadedProfile
             let viewModel = EditorViewModel(documentModel: documentModel, engine: engine)
             viewModel.hugeFileProfile = loadedProfile
             viewModel.isSoftWrapEnabled = AppDelegate.settingsStore.current.editor.softWrapDefault
@@ -515,12 +532,22 @@ final class MeridianDocument: NSDocument {
         }
         if panes.count == 1 {
             let secondaryEngine = makeEngine(languageID: primary.engine.languageID)
+            // Must precede `EditorViewModel.init` — see the matching
+            // comment in `read(from:ofType:)`: the engine's `load(buffer:)`
+            // (triggered synchronously by that init) starts a parse gated
+            // on `engine.activeCapabilities`, so an unrestricted default
+            // here would launch one whole-file parse on the new pane
+            // before anything gets a chance to forbid it.
+            secondaryEngine.profile = primary.viewModel.hugeFileProfile
             let secondaryViewModel = EditorViewModel(documentModel: documentModel, engine: secondaryEngine)
             // Must be set before `isSoftWrapEnabled` below: the profile's
             // own didSet re-clamps soft wrap, and a huge-file document
             // must gate the split pane's engine the same as the primary's
             // (or its syntax highlighter would keep running unrestricted).
-            secondaryViewModel.hugeFileProfile = primary.viewModel.hugeFileProfile
+            // `inheritHugeFileState` also carries over an already-accepted
+            // "Enable Anyway" override and the banner's dismissal state —
+            // plain `hugeFileProfile = ...` would silently reset both.
+            secondaryViewModel.inheritHugeFileState(from: primary.viewModel)
             secondaryViewModel.isGutterVisible = primary.viewModel.isGutterVisible
             secondaryViewModel.isSoftWrapEnabled = primary.viewModel.isSoftWrapEnabled
             secondaryViewModel.isCurrentLineHighlightEnabled = primary.viewModel.isCurrentLineHighlightEnabled
@@ -719,6 +746,9 @@ final class MeridianDocument: NSDocument {
             documentModel = newDocumentModel
             if !panes.isEmpty {
                 let primaryEngine = panes[0].engine
+                // Must precede `EditorViewModel.init` — see the matching
+                // comment in `read(from:ofType:)`.
+                primaryEngine.profile = loadedProfile
                 let newViewModel = EditorViewModel(documentModel: newDocumentModel, engine: primaryEngine)
                 newViewModel.hugeFileProfile = loadedProfile
                 newViewModel.isSoftWrapEnabled = AppDelegate.settingsStore.current.editor.softWrapDefault
@@ -1050,15 +1080,21 @@ final class MeridianDocument: NSDocument {
 
     @objc func toggleMinimap(_ sender: Any?) {
         guard let viewModel = focusedViewModel else { return }
-        guard viewModel.effectiveCapabilities.minimap else {
-            NSSound.beep()
-            return
-        }
+        // Closing an already-open minimap must always be allowed: the
+        // capability can go from permitted to forbidden out from under an
+        // open minimap (e.g. a revert that turns the document huge), and
+        // gating the close branch on the same guard as the open branch
+        // would strand the user with an open minimap and no way to turn
+        // it off (`validateMenuItem` would also grey out the menu item).
         if let host = minimapHost {
             host.removeFromSuperview()
             minimapHost = nil
             focusedEngine?.onScrollChange = nil
         } else {
+            guard viewModel.effectiveCapabilities.minimap else {
+                NSSound.beep()
+                return
+            }
             let lines = viewModel.buffer.string.components(separatedBy: .newlines)
             let minimapModel = MinimapViewModel(lines: lines)
             let minimap = MinimapView(model: minimapModel) { [weak self] targetLine in
@@ -1316,7 +1352,10 @@ final class MeridianDocument: NSDocument {
             return focusedViewModel != nil
         case #selector(toggleMinimap(_:)):
             menuItem.state = (minimapHost != nil) ? .on : .off
-            return focusedViewModel?.effectiveCapabilities.minimap == true
+            // Stay enabled while the minimap is already open even if the
+            // capability has since gone false — closing it must always be
+            // possible (see `toggleMinimap`'s doc comment).
+            return minimapHost != nil || focusedViewModel?.effectiveCapabilities.minimap == true
         case #selector(toggleTerminal(_:)):
             menuItem.state = (terminalHost != nil) ? .on : .off
             return true
