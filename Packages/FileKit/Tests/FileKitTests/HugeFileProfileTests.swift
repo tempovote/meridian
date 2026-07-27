@@ -57,11 +57,33 @@ struct HugeFileProfileTests {
         #expect(profile.capabilities.softWrap)
     }
 
-    @Test func hugeAndPathologicalTakesUnionOfRestrictions() {
-        let profile = HugeFileProfile(byteSize: 1_000_000_000, longestLineUTF8Length: 50_000_000)
-        #expect(profile.level == .huge)
+    @Test func exactlyAtLineThresholdIsPathological() {
+        let profile = HugeFileProfile(byteSize: 2 * 1024 * 1024, longestLineUTF8Length: 1024 * 1024)
+        #expect(profile.level == .pathologicalLines)
         #expect(!profile.capabilities.softWrap)
-        #expect(!profile.capabilities.syntaxHighlighting)
+    }
+
+    @Test func hugeAndPathologicalCapabilitiesMatchPlainHuge() {
+        // The point of this test is the equality assertion below, not the individual
+        // flags: a huge+pathological file's capabilities must be byte-for-byte identical
+        // to a plain huge file's, because every restriction the pathological-line rule
+        // imposes is already imposed by the huge-size rule. A `switch level` design has
+        // a distinct `.huge` case it could (incorrectly) special-case differently when a
+        // pathological line is also present; computing each flag independently from
+        // `isHuge`/`hasPathologicalLine`, as the real implementation does, cannot drift
+        // from plain huge in that way. This guards the per-capability design, not any
+        // one flag's value.
+        let hugeAndPathological = HugeFileProfile(byteSize: 1_000_000_000, longestLineUTF8Length: 50_000_000)
+        let plainHuge = HugeFileProfile(byteSize: 1_000_000_000, longestLineUTF8Length: 80)
+        #expect(hugeAndPathological.level == .huge)
+        #expect(hugeAndPathological.capabilities == plainHuge.capabilities)
+        #expect(!hugeAndPathological.capabilities.syntaxHighlighting)
+        #expect(!hugeAndPathological.capabilities.folding)
+        #expect(!hugeAndPathological.capabilities.minimap)
+        #expect(!hugeAndPathological.capabilities.gitGutter)
+        #expect(!hugeAndPathological.capabilities.bracketMatching)
+        #expect(!hugeAndPathological.capabilities.softWrap)
+        #expect(hugeAndPathological.capabilities.findInFiles)
     }
 
     @Test func disabledFeatureNamesAreHumanReadable() {
