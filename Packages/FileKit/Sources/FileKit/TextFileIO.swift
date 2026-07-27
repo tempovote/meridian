@@ -19,9 +19,10 @@ public struct LoadedTextFile: Sendable {
     /// The longest line's length in UTF-8 bytes, excluding break characters.
     /// Drives the pathological-line-shape guard (ADR 0009). Exact below
     /// ``HugeFileProfile/hugeThresholdBytes``; at or above it, this is only
-    /// a **lower bound** — the scan stops as soon as it can no longer
-    /// change ``profile``'s tier, so treat this value as a threshold signal
-    /// in huge mode, never as the true longest line.
+    /// a **lower bound** — the scan is bounded by both a pathological-length
+    /// early-out and a fixed byte budget, so an ordinary huge file costs a
+    /// fixed amount of work rather than a full pass. Treat this value as a
+    /// threshold signal in huge mode, never as the true longest line.
     public let longestLineUTF8Length: Int
     /// Which editor features this file's size and line shape permit.
     public let profile: HugeFileProfile
@@ -58,7 +59,9 @@ public enum TextFileIO {
                 throw FileKitError.unreadable(url: url, underlying: error)
             }
             let longestLine = longestLineUTF8Length(
-                of: buffer, stopOnceAtLeast: HugeFileProfile.pathologicalLineBytes,
+                of: buffer,
+                stopOnceAtLeast: HugeFileProfile.pathologicalLineBytes,
+                scanAtMostBytes: HugeFileProfile.pathologicalLineBytes,
             )
             return LoadedTextFile(
                 buffer: buffer,
@@ -129,17 +132,22 @@ public enum TextFileIO {
     /// Byte-level scanning is safe: UTF-8 continuation bytes are ≥ 0x80,
     /// so every 0x0A/0x0D byte is a genuine break character.
     ///
-    /// `stopOnceAtLeast` lets huge-file loads bail out as soon as the answer
-    /// can no longer change the resulting ``HugeFileProfile`` — the profile
-    /// only asks whether any line reaches the pathological threshold, so
-    /// scanning the remaining gigabyte is wasted work. The returned value is
-    /// then a lower bound, which is why it must never be used for anything
-    /// but that threshold comparison.
+    /// Huge-file loads pass both bounds. `stopOnceAtLeast` ends the scan as
+    /// soon as a line reaches the pathological threshold; `scanAtMostBytes`
+    /// ends it once enough of the file has been examined, so a file of
+    /// ordinary lines costs a fixed amount of work instead of a full pass.
+    ///
+    /// With either bound in force the result is a **lower bound**, not the
+    /// true longest line. It is sound for the threshold comparison that
+    /// drives ``HugeFileProfile`` and must not be presented as exact.
     static func longestLineUTF8Length(
-        of buffer: TextBuffer, stopOnceAtLeast: Int? = nil,
+        of buffer: TextBuffer,
+        stopOnceAtLeast: Int? = nil,
+        scanAtMostBytes: Int? = nil,
     ) -> Int {
         var longest = 0
         var current = 0
+        var scanned = 0
         for chunk in buffer.chunks() {
             for byte in chunk.bytes {
                 if byte == 0x0A || byte == 0x0D {
@@ -149,7 +157,11 @@ public enum TextFileIO {
                     current += 1
                 }
             }
+            scanned += chunk.bytes.count
             if let limit = stopOnceAtLeast, max(longest, current) >= limit {
+                return max(longest, current)
+            }
+            if let budget = scanAtMostBytes, scanned >= budget {
                 return max(longest, current)
             }
         }

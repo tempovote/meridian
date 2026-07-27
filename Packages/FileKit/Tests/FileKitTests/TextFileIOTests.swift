@@ -112,6 +112,65 @@ struct TextFileIOLoadTests {
     }
 }
 
+@Suite("longestLineUTF8Length bounds")
+struct LongestLineUTF8LengthBoundsTests {
+    /// `scanAtMostBytes` must actually bound the scan: with the long line
+    /// placed after the budget, a bounded call may never see it, while the
+    /// unbounded call must. A no-op budget (one that silently scans
+    /// everything) would make both calls agree and this test would fail.
+    @Test func scanAtMostBytesStopsBeforeALaterLongLine() {
+        let shortLines = String(repeating: "x\n", count: 2000) // 4000 bytes, each line length 1.
+        let longLine = String(repeating: "y", count: 50)
+        let buffer = TextBuffer(shortLines + longLine)
+
+        let bounded = TextFileIO.longestLineUTF8Length(of: buffer, scanAtMostBytes: 1000)
+        let unbounded = TextFileIO.longestLineUTF8Length(of: buffer)
+
+        #expect(bounded == 1)
+        #expect(unbounded == 50)
+    }
+
+    /// When the long line sits before the budget is spent, the bounded scan
+    /// has already recorded it before it stops, so bounded and unbounded
+    /// must agree.
+    @Test func scanAtMostBytesAgreesWithUnboundedWhenLongLineIsEarly() {
+        let longLine = String(repeating: "y", count: 50)
+        let shortLines = String(repeating: "x\n", count: 2000) // 4000 bytes after the long line.
+        let buffer = TextBuffer(longLine + "\n" + shortLines)
+
+        let bounded = TextFileIO.longestLineUTF8Length(of: buffer, scanAtMostBytes: 3000)
+        let unbounded = TextFileIO.longestLineUTF8Length(of: buffer)
+
+        #expect(bounded == 50)
+        #expect(unbounded == 50)
+    }
+
+    /// `stopOnceAtLeast` alone must stop as soon as a line reaches the
+    /// threshold, never scanning on to find an even longer later line.
+    @Test func stopOnceAtLeastDoesNotKeepScanningForALongerLine() {
+        let earlyLine = String(repeating: "a", count: 100)
+        let laterLongerLine = String(repeating: "b", count: 5000)
+        let buffer = TextBuffer(earlyLine + "\n" + laterLongerLine)
+
+        let result = TextFileIO.longestLineUTF8Length(of: buffer, stopOnceAtLeast: 50)
+
+        #expect(result >= 50)
+        #expect(result < 5000)
+    }
+
+    /// With both bounds absent, the scan is exact and unbounded even across
+    /// many chunks — the small-file load path relies on this.
+    @Test func bothBoundsNilYieldsTheExactValueAcrossManyChunks() {
+        let head = String(repeating: "x\n", count: 1000) // 2000 bytes.
+        let middle = String(repeating: "y", count: 10) // The true longest line.
+        let tail = String(repeating: "z\n", count: 1000) // 2000 bytes.
+        let buffer = TextBuffer(head + middle + "\n" + tail)
+
+        #expect(TextFileIO.longestLineUTF8Length(of: buffer) == 10)
+        #expect(TextFileIO.longestLineUTF8Length(of: buffer, stopOnceAtLeast: nil, scanAtMostBytes: nil) == 10)
+    }
+}
+
 @Suite("TextFileIO saving")
 struct TextFileIOSaveTests {
     private func tempDir() throws -> URL {
