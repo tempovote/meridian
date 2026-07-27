@@ -149,7 +149,31 @@ targets:
     entitlements:
       path: App/Resources/Meridian.entitlements
       properties:
-        com.apple.security.app-sandbox: true
+        # Off deliberately: the App Sandbox and `GitService` are mutually
+        # exclusive, which was only discovered by measurement (2026-07-28).
+        # Two independent blockers, both verified in a running build:
+        #
+        #  1. `/usr/bin/git` is Apple's `xcrun` shim, and `xcrun` refuses to
+        #     run inside a sandbox at all — every invocation came back
+        #     "xcrun: error: cannot be used within an App Sandbox", status 1.
+        #     Pointing `Process` at a real git binary does clear this one.
+        #  2. Which then exposes the blocker that cannot be cleared: the file
+        #     access an open panel grants belongs to the *app* process, and a
+        #     spawned child inherits only the static sandbox profile, not
+        #     those dynamic grants. So git ran and still reported "fatal: not
+        #     a git repository" for a file inside this very repo, whether the
+        #     user had opened the file or the enclosing folder.
+        #
+        # The gutter therefore never worked from the day it shipped; the
+        # solid green bar it drew was `diffStatus`'s "treat every line as
+        # added" fallback masking total failure. Sandboxing would mean
+        # dropping the feature (or reimplementing git object reading
+        # in-process). Meridian ships as a Developer ID-signed, notarized
+        # DMG, which requires the Hardened Runtime but not the sandbox; only
+        # Mac App Store distribution is given up here.
+        com.apple.security.app-sandbox: false
+        # Below are no-ops without the sandbox. Kept so the set stays intact
+        # if it is ever turned back on.
         com.apple.security.files.user-selected.read-write: true
         # Outgoing network connections: required for Sparkle to download
         # the appcast feed and update packages from GitHub Releases.

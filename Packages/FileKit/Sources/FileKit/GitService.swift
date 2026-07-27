@@ -14,7 +14,15 @@ public actor GitService {
 
     public init() {}
 
-    private func fetchHeadText(fileURL: URL, directory: String) async -> String? {
+    /// The file's path relative to its repository root, or `nil` when
+    /// `directory` is not inside a git work tree at all.
+    ///
+    /// The `nil` case must stay distinguishable from "in a repository, but
+    /// git has never seen this file": the latter is legitimately all-new
+    /// content, the former has no history to compare against and so has no
+    /// marks to show. Collapsing the two painted the whole gutter green for
+    /// every file opened from a non-repo directory.
+    private func repositoryRelativePath(fileURL: URL, directory: String) -> String? {
         let fileName = fileURL.lastPathComponent
         let rootProcess = Process()
         rootProcess.executableURL = URL(fileURLWithPath: "/usr/bin/git")
@@ -25,20 +33,20 @@ public actor GitService {
         rootProcess.standardOutput = rootPipe
         rootProcess.standardError = Pipe()
 
-        var relativePath = fileName
         do {
             try rootProcess.run()
             rootProcess.waitUntilExit()
-            if rootProcess.terminationStatus == 0 {
-                let data = rootPipe.fileHandleForReading.readDataToEndOfFile()
-                let rawPrefix = String(data: data, encoding: .utf8)?
-                    .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-                if !rawPrefix.isEmpty {
-                    relativePath = rawPrefix + fileName
-                }
-            }
-        } catch {}
+            guard rootProcess.terminationStatus == 0 else { return nil }
+            let data = rootPipe.fileHandleForReading.readDataToEndOfFile()
+            let rawPrefix = String(data: data, encoding: .utf8)?
+                .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            return rawPrefix.isEmpty ? fileName : rawPrefix + fileName
+        } catch {
+            return nil
+        }
+    }
 
+    private func fetchHeadText(relativePath: String, directory: String) async -> String? {
         let showProcess = Process()
         showProcess.executableURL = URL(fileURLWithPath: "/usr/bin/git")
         showProcess.arguments = ["show", "HEAD:\(relativePath)"]
@@ -63,7 +71,11 @@ public actor GitService {
     /// Works for both saved and unsaved in-memory edits.
     public func diffStatus(bufferText: String, fileURL: URL) async -> [Int: GitGutterMark] {
         let directory = fileURL.deletingLastPathComponent().path
-        guard let headText = await fetchHeadText(fileURL: fileURL, directory: directory) else {
+        guard let relativePath = repositoryRelativePath(fileURL: fileURL, directory: directory) else {
+            // Not version-controlled at all — nothing to diff, no marks.
+            return [:]
+        }
+        guard let headText = await fetchHeadText(relativePath: relativePath, directory: directory) else {
             let diskMarks = await diffStatus(for: fileURL)
             if !diskMarks.isEmpty {
                 return diskMarks
