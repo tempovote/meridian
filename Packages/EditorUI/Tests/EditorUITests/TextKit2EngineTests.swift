@@ -55,6 +55,20 @@ struct TextKit2EngineTests {
         #expect(engine.storageAttributeForTesting(.backgroundColor, at: 7) != nil)
     }
 
+    /// Final-review Fix 8: the `bracketMatching` gate itself had no test.
+    /// Under a restricting profile, `updateBracketHighlight()`'s
+    /// `activeCapabilities.bracketMatching` guard must bail before ever
+    /// painting a match — the unbounded outward scan it would otherwise
+    /// run on every selection change is exactly the per-keystroke cost
+    /// this capability exists to avoid on a huge file.
+    @Test func hugeProfileGatesBracketMatching() {
+        let (engine, buffer) = makeEngine("foo(bar)")
+        engine.profile = HugeFileProfile(byteSize: 1_000_000_000, longestLineUTF8Length: 80)
+        engine.setSelection(SelectionSet(caretAt: ByteOffset(3)), in: buffer)
+        #expect(engine.storageAttributeForTesting(.backgroundColor, at: 3) == nil)
+        #expect(engine.storageAttributeForTesting(.backgroundColor, at: 7) == nil)
+    }
+
     @Test func movingCaretAwayFromBracketClearsHighlight() {
         let (engine, buffer) = makeEngine("foo(bar)")
         engine.setSelection(SelectionSet(caretAt: ByteOffset(3)), in: buffer)
@@ -279,6 +293,63 @@ struct TextKit2EngineTests {
         engine.languageID = "swift"
         let documentModel = DocumentModel(buffer: TextBuffer("func foo() {}"))
         _ = EditorViewModel(documentModel: documentModel, engine: engine)
+        #expect(engine.parseLaunchCountForTesting == 1)
+    }
+
+    // MARK: - Final-review Fix 3: "Enable Anyway" must actually kick off a reparse
+
+    /// Before this fix, `capabilitiesOverride` was a plain stored
+    /// property: setting it to widen `activeCapabilities.syntaxHighlighting`
+    /// from off to on changed what the NEXT parse would be gated by, but
+    /// started nothing itself — the user saw no visible change (and
+    /// folding never came back, since `foldModel.foldable` is populated
+    /// only by a successful parse) until an unrelated edit happened to
+    /// trigger one. The `didSet` added by this fix must launch exactly
+    /// one parse the moment the override widens syntax highlighting from
+    /// off to on.
+    @Test func wideningCapabilitiesOverrideLaunchesAReparse() {
+        let themeEngine = ThemeEngine(darkTheme: BundledThemes.meridianDark, lightTheme: BundledThemes.meridianLight)
+        let engine = TextKit2Engine(
+            themeEngine: themeEngine,
+            settingsStore: SettingsStore(directoryURL: testSettingsDirectory()),
+        )
+        engine.languageID = "swift"
+        engine.profile = HugeFileProfile(byteSize: 1_000_000_000, longestLineUTF8Length: 80)
+        let documentModel = DocumentModel(buffer: TextBuffer("func foo() {}"))
+        _ = EditorViewModel(documentModel: documentModel, engine: engine)
+        // The restrictive profile suppressed the first-load parse (as
+        // pinned by `hugeProfileSetOnEngineBeforeConstructionNeverLaunchesFirstParse`).
+        #expect(engine.parseLaunchCountForTesting == 0)
+
+        engine.capabilitiesOverride = HugeFileProfile.Capabilities(
+            syntaxHighlighting: true, folding: true, minimap: true, gitGutter: true,
+            bracketMatching: true, softWrap: false, findInFiles: true,
+        )
+        #expect(engine.parseLaunchCountForTesting == 1)
+    }
+
+    /// The inverse: narrowing (or reassigning to an equally-restrictive
+    /// value) must NOT trigger a reparse — that would run exactly the
+    /// whole-file parse huge mode exists to avoid, at exactly the moment
+    /// a caller is trying to clamp back down.
+    @Test func narrowingCapabilitiesOverrideDoesNotLaunchAReparse() {
+        let themeEngine = ThemeEngine(darkTheme: BundledThemes.meridianDark, lightTheme: BundledThemes.meridianLight)
+        let engine = TextKit2Engine(
+            themeEngine: themeEngine,
+            settingsStore: SettingsStore(directoryURL: testSettingsDirectory()),
+        )
+        engine.languageID = "swift"
+        engine.profile = HugeFileProfile(byteSize: 1_000_000_000, longestLineUTF8Length: 80)
+        let documentModel = DocumentModel(buffer: TextBuffer("func foo() {}"))
+        _ = EditorViewModel(documentModel: documentModel, engine: engine)
+        engine.capabilitiesOverride = HugeFileProfile.Capabilities(
+            syntaxHighlighting: true, folding: true, minimap: true, gitGutter: true,
+            bracketMatching: true, softWrap: false, findInFiles: true,
+        )
+        #expect(engine.parseLaunchCountForTesting == 1)
+
+        // Narrow back to nil (re-clamp): must not fire another parse.
+        engine.capabilitiesOverride = nil
         #expect(engine.parseLaunchCountForTesting == 1)
     }
 }

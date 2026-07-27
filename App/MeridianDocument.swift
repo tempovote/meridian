@@ -13,6 +13,9 @@ import WorkspaceUI
 enum DocumentOpenError: LocalizedError {
     /// File exceeds the openable-file ceiling (bytes given).
     case tooLarge(byteSize: Int)
+    /// A single line exceeds the pathological-line threshold (ADR 0009:
+    /// a 100 MB single-line file drives TextKit RSS to 11 GB).
+    case lineTooLong(utf8Length: Int)
 
     var errorDescription: String? {
         switch self {
@@ -20,6 +23,10 @@ enum DocumentOpenError: LocalizedError {
             "This file is \(byteSize / (1024 * 1024)) MB. Meridian opens files "
                 + "up to 100 MB. Larger files are refused rather than opened "
                 + "slowly — use a streaming viewer such as `less` for them."
+        case let .lineTooLong(utf8Length):
+            "This file's longest line is \(utf8Length / (1024 * 1024)) MB. "
+                + "Meridian cannot open it yet — laying out one enormous line "
+                + "blocks the app for minutes with no progress or cancel."
         }
     }
 }
@@ -116,6 +123,17 @@ final class MeridianDocument: NSDocument {
     /// a windowed text mirror first (ADR 0011).
     nonisolated static let maxFileSize = 100 * 1024 * 1024
 
+    /// Hard ceiling on a single line's length, in UTF-8 bytes.
+    ///
+    /// Temporary, pending the viewport-layout milestone. A file whose longest
+    /// line reaches this is refused, because laying out one enormous line
+    /// blocks the main run loop for minutes with no progress and no cancel —
+    /// measurably worse than an immediate, honest refusal. The threshold is
+    /// the pre-M10 value rather than a measured one on purpose: every number
+    /// available today is polluted by the full-document-layout defect, so it
+    /// must be re-derived once that is fixed (ADR 0011).
+    nonisolated static let maxLineLength = 1_000_000
+
     private var documentModel: DocumentModel?
     /// One entry when unsplit, two when split. Index 0 is always the
     /// original/primary pane; index 1 (when present) is the secondary
@@ -197,6 +215,9 @@ final class MeridianDocument: NSDocument {
             throw DocumentOpenError.tooLarge(byteSize: size)
         }
         let file = try TextFileIO.loadTextFile(at: url)
+        guard file.longestLineUTF8Length < Self.maxLineLength else {
+            throw DocumentOpenError.lineTooLong(utf8Length: file.longestLineUTF8Length)
+        }
         MainActor.assumeIsolated {
             loadedMetadata = (file.encoding, file.hadBOM)
             pendingBuffer = file.buffer
@@ -647,11 +668,16 @@ final class MeridianDocument: NSDocument {
             newPrimarySlot = panes[0].engine.view
         }
         newPrimarySlot.setContentHuggingPriority(.defaultLow, for: .vertical)
-        // Insert below any open overlay (find bar / command palette), not
-        // unconditionally at index 0 — an open overlay currently occupies
-        // that slot and must stay on top of the editor, not be displaced.
+        // Insert below any open overlay (find bar / command palette) and
+        // below the huge-file banner host — both currently occupy slots
+        // above the editor and must stay there, not be displaced. The
+        // banner host is inserted once in `makeWindowControllers()` and
+        // never removed (its visibility is controlled by SwiftUI content,
+        // not by adding/removing the arranged subview), so it is always
+        // present by the time a split can happen; the `nil` check is just
+        // defensive.
         let overlayIsOpen = findBarHost != nil || commandPaletteHost != nil
-        let insertIndex = overlayIsOpen ? 1 : 0
+        let insertIndex = (overlayIsOpen ? 1 : 0) + (bannerHost != nil ? 1 : 0)
         containerStack.insertView(newPrimarySlot, at: insertIndex, in: .top)
         editorSlotView = newPrimarySlot
     }
@@ -733,6 +759,9 @@ final class MeridianDocument: NSDocument {
         guard let url = fileURL else { return }
         do {
             let file = try TextFileIO.loadTextFile(at: url, overrideEncoding: encoding)
+            guard file.longestLineUTF8Length < Self.maxLineLength else {
+                throw DocumentOpenError.lineTooLong(utf8Length: file.longestLineUTF8Length)
+            }
             loadedMetadata = (file.encoding, file.hadBOM)
             pendingBuffer = file.buffer
             loadedProfile = file.profile
@@ -1367,7 +1396,7 @@ final class MeridianDocument: NSDocument {
             return true
         case #selector(toggleSoftWrap(_:)):
             menuItem.state = (focusedViewModel?.isSoftWrapEnabled == true) ? .on : .off
-            return true
+            return focusedViewModel?.effectiveCapabilities.softWrap == true
         case #selector(toggleStatusBar(_:)):
             menuItem.state = (focusedViewModel?.isStatusBarVisible == true) ? .on : .off
             return true
@@ -1448,6 +1477,8 @@ private struct HugeFileBannerHost: View {
         if viewModel.isHugeFileBannerVisible {
             HugeFileBannerView(
                 profile: viewModel.hugeFileProfile,
+                effectiveCapabilities: viewModel.effectiveCapabilities,
+                hasOverriddenCapabilities: viewModel.hasEnabledHeavyFeatureOverride,
                 onOverride: { viewModel.overrideCapabilities() },
                 onDismiss: { viewModel.isBannerDismissed = true },
             )

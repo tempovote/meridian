@@ -60,15 +60,18 @@ final class MockLayoutEngine: TextLayoutEngine {
     }
 }
 
+/// Not `private`: `EditorViewModelHugeFileTests.swift` (a separate file,
+/// same module) reuses this rather than duplicating it.
 @MainActor
-private func makeViewModel(_ buffer: TextBuffer, engine: MockLayoutEngine) -> EditorViewModel {
+func makeViewModel(_ buffer: TextBuffer, engine: MockLayoutEngine) -> EditorViewModel {
     EditorViewModel(documentModel: DocumentModel(buffer: buffer), engine: engine)
 }
 
 /// Convenience for tests that only care about huge-file-profile gating,
-/// not the buffer content or a specific mock engine instance.
+/// not the buffer content or a specific mock engine instance. Not
+/// `private`: see the other overload's doc comment.
 @MainActor
-private func makeViewModel() -> EditorViewModel {
+func makeViewModel() -> EditorViewModel {
     makeViewModel(TextBuffer(""), engine: MockLayoutEngine())
 }
 
@@ -293,102 +296,5 @@ struct EditorViewModelTests {
         #expect(vm2.selection.ranges.count == 2)
         let line2Offset = vm2.buffer.byteOffset(of: LinePosition(line: 2, utf16Column: 0))
         #expect(vm2.selection.ranges[1] == line2Offset ..< line2Offset)
-    }
-
-    @Test @MainActor func hugeProfileForcesSoftWrapOff() {
-        let model = makeViewModel()
-        model.isSoftWrapEnabled = true
-        model.hugeFileProfile = HugeFileProfile(byteSize: 1_000_000_000, longestLineUTF8Length: 80)
-        #expect(!model.isSoftWrapEnabled)
-    }
-
-    @Test @MainActor func softWrapCannotBeTurnedBackOnUnderHugeProfile() {
-        let model = makeViewModel()
-        model.hugeFileProfile = HugeFileProfile(byteSize: 1_000_000_000, longestLineUTF8Length: 80)
-        model.isSoftWrapEnabled = true
-        #expect(!model.isSoftWrapEnabled)
-    }
-
-    @Test @MainActor func normalProfileLeavesSoftWrapAlone() {
-        let model = makeViewModel()
-        model.hugeFileProfile = .unrestricted
-        model.isSoftWrapEnabled = true
-        #expect(model.isSoftWrapEnabled)
-    }
-
-    @Test @MainActor func bannerIsShownOnlyForRestrictedProfiles() {
-        let model = makeViewModel()
-        #expect(!model.isHugeFileBannerVisible)
-        model.hugeFileProfile = HugeFileProfile(byteSize: 1_000_000_000, longestLineUTF8Length: 80)
-        #expect(model.isHugeFileBannerVisible)
-    }
-
-    @Test @MainActor func dismissingTheBannerDoesNotRestoreCapabilities() {
-        let model = makeViewModel()
-        model.hugeFileProfile = HugeFileProfile(byteSize: 1_000_000_000, longestLineUTF8Length: 80)
-        model.isBannerDismissed = true
-        #expect(!model.isHugeFileBannerVisible)
-        #expect(!model.effectiveCapabilities.syntaxHighlighting)
-    }
-
-    @Test @MainActor func overrideRestoresCapabilitiesButNotSoftWrapForLongLines() {
-        let model = makeViewModel()
-        model.hugeFileProfile = HugeFileProfile(
-            byteSize: 1_000_000_000, longestLineUTF8Length: 50_000_000,
-        )
-        model.overrideCapabilities()
-        #expect(model.effectiveCapabilities.syntaxHighlighting)
-        // Soft wrap stays off: it is the one restriction that exists to
-        // avoid a layout blow-up the user cannot recover from, and there is
-        // no partial version of it.
-        #expect(!model.effectiveCapabilities.softWrap)
-    }
-
-    // MARK: - M10PA Task 5 Finding 3: split must inherit an accepted override
-
-    /// `setSplit()` propagates `hugeFileProfile` to the new secondary
-    /// pane. A plain `hugeFileProfile = primary.hugeFileProfile` alone
-    /// would silently discard an already-accepted "Enable Anyway"
-    /// override on the new pane, because `hugeFileProfile`'s own
-    /// `didSet` unconditionally resets `hasOverriddenCapabilities`.
-    /// `inheritHugeFileState(from:)` must carry the override across.
-    @Test @MainActor func inheritHugeFileStateCarriesAnAcceptedOverrideToTheNewPane() {
-        let primary = makeViewModel()
-        primary.hugeFileProfile = HugeFileProfile(byteSize: 1_000_000_000, longestLineUTF8Length: 80)
-        primary.overrideCapabilities()
-        #expect(primary.effectiveCapabilities.syntaxHighlighting)
-
-        let secondary = makeViewModel()
-        secondary.inheritHugeFileState(from: primary)
-
-        #expect(secondary.hugeFileProfile == primary.hugeFileProfile)
-        #expect(secondary.effectiveCapabilities.syntaxHighlighting)
-        #expect(secondary.effectiveCapabilities.minimap)
-    }
-
-    /// The dismissal state must also carry over: a pane split off of a
-    /// primary whose banner is already dismissed must not pop the banner
-    /// back up.
-    @Test @MainActor func inheritHugeFileStateCarriesBannerDismissal() {
-        let primary = makeViewModel()
-        primary.hugeFileProfile = HugeFileProfile(byteSize: 1_000_000_000, longestLineUTF8Length: 80)
-        primary.isBannerDismissed = true
-
-        let secondary = makeViewModel()
-        secondary.inheritHugeFileState(from: primary)
-
-        #expect(!secondary.isHugeFileBannerVisible)
-    }
-
-    /// Without any override on the primary, the new pane must stay
-    /// restricted — inheriting must not itself grant an override.
-    @Test @MainActor func inheritHugeFileStateWithNoOverrideLeavesNewPaneRestricted() {
-        let primary = makeViewModel()
-        primary.hugeFileProfile = HugeFileProfile(byteSize: 1_000_000_000, longestLineUTF8Length: 80)
-
-        let secondary = makeViewModel()
-        secondary.inheritHugeFileState(from: primary)
-
-        #expect(!secondary.effectiveCapabilities.syntaxHighlighting)
     }
 }

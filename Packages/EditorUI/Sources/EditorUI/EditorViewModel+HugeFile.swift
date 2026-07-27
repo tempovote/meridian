@@ -8,9 +8,26 @@ import FileKit
 /// budget — the same convention `TextKit2Engine+*.swift` already uses.
 public extension EditorViewModel {
     /// Whether the huge-file banner should currently be shown: there is
-    /// something to warn about and the user hasn't dismissed it.
+    /// something STILL restricted in ``effectiveCapabilities`` — not just
+    /// in the original ``hugeFileProfile`` — and the user hasn't dismissed
+    /// it. Consulting `effectiveCapabilities` rather than `hugeFileProfile`
+    /// directly is what makes the banner keep tracking reality after
+    /// ``overrideCapabilities()``: for a huge (not pathological-line) file
+    /// with every capability restored except soft wrap, this stays `true`
+    /// (there is still something to explain — see `HugeFileBannerView`'s
+    /// override-aware copy) instead of continuing to report the pre-override
+    /// five-feature list, or vanishing and leaving the still-disabled soft
+    /// wrap toggle unexplained.
     var isHugeFileBannerVisible: Bool {
-        hugeFileProfile.level != .normal && !isBannerDismissed
+        !effectiveCapabilities.disabledFeatureNames.isEmpty && !isBannerDismissed
+    }
+
+    /// Whether the user has explicitly re-enabled heavy features via
+    /// ``overrideCapabilities()``. Read-only outside the module — exposed
+    /// so callers such as the huge-file banner can adapt their copy after
+    /// an override without needing write access to the underlying flag.
+    var hasEnabledHeavyFeatureOverride: Bool {
+        hasOverriddenCapabilities
     }
 
     /// The capabilities actually in force, after any user override.

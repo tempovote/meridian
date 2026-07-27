@@ -9,19 +9,31 @@ import SwiftUI
 /// is a decision the user should make deliberately.
 public struct HugeFileBannerView: View {
     private let profile: HugeFileProfile
+    private let effectiveCapabilities: HugeFileProfile.Capabilities
+    private let hasOverriddenCapabilities: Bool
     private let onOverride: () -> Void
     private let onDismiss: () -> Void
     @State private var isConfirmingOverride = false
 
-    /// Creates the banner for the given restriction `profile`. `onOverride`
-    /// is called only after the user confirms the "Enable Anyway" dialog;
-    /// `onDismiss` is called directly from the close button.
+    /// Creates the banner for the given restriction `profile`.
+    /// `effectiveCapabilities` and `hasOverriddenCapabilities` describe
+    /// what is ACTUALLY in force right now, which can differ from
+    /// `profile.capabilities` once the user has confirmed "Enable
+    /// Anyway" — the banner's copy and controls key off those, not off
+    /// `profile` directly, so it never claims a feature is off after it
+    /// has been turned back on. `onOverride` is called only after the
+    /// user confirms the "Enable Anyway" dialog; `onDismiss` is called
+    /// directly from the close button.
     public init(
         profile: HugeFileProfile,
+        effectiveCapabilities: HugeFileProfile.Capabilities,
+        hasOverriddenCapabilities: Bool,
         onOverride: @escaping () -> Void,
         onDismiss: @escaping () -> Void,
     ) {
         self.profile = profile
+        self.effectiveCapabilities = effectiveCapabilities
+        self.hasOverriddenCapabilities = hasOverriddenCapabilities
         self.onOverride = onOverride
         self.onDismiss = onDismiss
     }
@@ -30,12 +42,25 @@ public struct HugeFileBannerView: View {
         ByteCountFormatter.string(fromByteCount: Int64(profile.byteSize), countStyle: .file)
     }
 
+    /// After an override, the original per-tier headline ("Huge file
+    /// mode…" / "Long-line mode…") would misleadingly suggest nothing
+    /// has changed — swap in copy naming what actually remains
+    /// restricted instead.
     private var headline: String {
-        switch profile.level {
-        case .normal: ""
-        case .huge: "Huge file mode — \(sizeText)"
-        case .pathologicalLines: "Long-line mode — longest line is \(profile.longestLineUTF8Length / (1024 * 1024)) MB"
+        guard !hasOverriddenCapabilities else {
+            return "Heavy features enabled — \(sizeText)"
         }
+        switch profile.level {
+        case .normal: return ""
+        case .huge: return "Huge file mode — \(sizeText)"
+        case .pathologicalLines:
+            return "Long-line mode — longest line is \(profile.longestLineUTF8Length / (1024 * 1024)) MB"
+        }
+    }
+
+    private var subtext: String {
+        let names = effectiveCapabilities.disabledFeatureNames.joined(separator: ", ")
+        return hasOverriddenCapabilities ? "Still off: \(names)" : "Turned off: \(names)"
     }
 
     public var body: some View {
@@ -44,13 +69,19 @@ public struct HugeFileBannerView: View {
                 .foregroundStyle(.orange)
             VStack(alignment: .leading, spacing: 1) {
                 Text(headline).font(.system(size: 12, weight: .semibold))
-                Text("Turned off: \(profile.disabledFeatureNames.joined(separator: ", "))")
+                Text(subtext)
                     .font(.system(size: 11))
                     .foregroundStyle(.secondary)
             }
             Spacer()
-            Button("Enable Anyway") { isConfirmingOverride = true }
-                .controlSize(.small)
+            // Once heavy features are already on, offering "Enable
+            // Anyway" again is meaningless — soft wrap is the one
+            // capability that never comes back (see `effectiveCapabilities`'s
+            // doc comment), so there is nothing left to confirm.
+            if !hasOverriddenCapabilities {
+                Button("Enable Anyway") { isConfirmingOverride = true }
+                    .controlSize(.small)
+            }
             Button {
                 onDismiss()
             } label: {

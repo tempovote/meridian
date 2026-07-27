@@ -75,7 +75,10 @@ public final class EditorViewModel {
 
     /// True once the user has explicitly accepted the cost and asked for
     /// the heavy features back. Not `private`: see `engine`'s doc comment.
-    @ObservationIgnored var hasOverriddenCapabilities = false
+    /// Deliberately NOT `@ObservationIgnored` — the huge-file banner host
+    /// reads it (via `effectiveCapabilities`/`isHugeFileBannerVisible`) and
+    /// must re-render the moment "Enable Anyway" flips it.
+    var hasOverriddenCapabilities = false
 
     /// The banner is dismissible independently of the restrictions it
     /// describes — hiding the message never restores a capability.

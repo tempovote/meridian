@@ -79,6 +79,35 @@ public struct HugeFileProfile: Sendable, Equatable {
             self.softWrap = softWrap
             self.findInFiles = findInFiles
         }
+
+        /// Display names of the features this set switches off, for the
+        /// huge-file banner. Ordered for stable presentation, not
+        /// alphabetically. Works on any `Capabilities` value — including
+        /// one produced by a user's "Enable Anyway" override — so the
+        /// banner can describe what is ACTUALLY in force rather than only
+        /// a profile's original restrictions.
+        public var disabledFeatureNames: [String] {
+            var names: [String] = []
+            if !syntaxHighlighting {
+                names.append("Syntax highlighting")
+            }
+            if !folding {
+                names.append("Code folding")
+            }
+            if !minimap {
+                names.append("Minimap")
+            }
+            if !gitGutter {
+                names.append("Git gutter")
+            }
+            if !bracketMatching {
+                names.append("Bracket matching")
+            }
+            if !softWrap {
+                names.append("Soft wrap")
+            }
+            return names
+        }
     }
 
     /// The restriction tier this profile falls into. A coarse summary of
@@ -131,26 +160,9 @@ public struct HugeFileProfile: Sendable, Equatable {
 
     /// Display names of the features this profile switches off, for the
     /// banner. Ordered for stable presentation, not alphabetically.
+    /// Delegates to ``Capabilities/disabledFeatureNames`` — kept here too
+    /// since most callers already hold a `HugeFileProfile`.
     public var disabledFeatureNames: [String] {
-        var names: [String] = []
-        if !capabilities.syntaxHighlighting {
-            names.append("Syntax highlighting")
-        }
-        if !capabilities.folding {
-            names.append("Code folding")
-        }
-        if !capabilities.minimap {
-            names.append("Minimap")
-        }
-        if !capabilities.gitGutter {
-            names.append("Git gutter")
-        }
-        if !capabilities.bracketMatching {
-            names.append("Bracket matching")
-        }
-        if !capabilities.softWrap {
-            names.append("Soft wrap")
-        }
-        return names
+        capabilities.disabledFeatureNames
     }
 }

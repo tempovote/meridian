@@ -106,7 +106,21 @@ public final class TextKit2Engine: NSObject, TextLayoutEngine {
     /// The document's restriction profile. Set by `EditorViewModel`.
     public var profile: HugeFileProfile = .unrestricted
     /// Non-nil once the user has explicitly re-enabled heavy features.
-    public var capabilitiesOverride: HugeFileProfile.Capabilities?
+    ///
+    /// Setting this widens or narrows `activeCapabilities` immediately, but
+    /// nothing else about the engine reacts on its own — in particular
+    /// there is no live re-highlight, so a `didSet` kicks one off exactly
+    /// when syntax highlighting flips from off to on ("Enable Anyway").
+    /// Narrowing never re-highlights: that would force a full parse at
+    /// exactly the moment the caller is trying to avoid one.
+    public var capabilitiesOverride: HugeFileProfile.Capabilities? {
+        didSet {
+            let wasHighlighting = (oldValue ?? profile.capabilities).syntaxHighlighting
+            let isHighlighting = activeCapabilities.syntaxHighlighting
+            guard !wasHighlighting, isHighlighting else { return }
+            highlightCurrentBuffer()
+        }
+    }
 
     /// The capabilities in force for this engine.
     var activeCapabilities: HugeFileProfile.Capabilities {
@@ -293,9 +307,14 @@ public final class TextKit2Engine: NSObject, TextLayoutEngine {
             // Append chunk by chunk. `newBuffer.string` would allocate a
             // second copy of the entire document before this loop even
             // starts — a gigabyte of transient peak on a gigabyte file.
-            // Rope chunks never split a Unicode scalar (Leaf's split points
-            // are scalar boundaries), so decoding each chunk independently
-            // is safe and cannot produce a replacement character at a seam.
+            // For well-formed UTF-8, rope chunks split only on scalar
+            // boundaries (`Leaf`'s split points), so decoding each chunk
+            // independently produces no replacement character at a seam.
+            // `Leaf.leaves(from:)` does have a degenerate fallback — a run
+            // of ≥2048 bytes with no scalar-leading byte, i.e. malformed
+            // UTF-8 — that takes a chunk boundary mid-scalar; the huge-file
+            // load path this method mirrors skips `TextDecoder` and so
+            // never repairs that case before it reaches here.
             var appendLocation = 0
             for chunk in newBuffer.chunks() {
                 // False positive: this decodes `ArraySlice<UInt8>`, not
