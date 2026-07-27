@@ -4,16 +4,40 @@ import Foundation
 enum AppProcessRunner {
     /// Locates the compiled `Meridian` application executable.
     static var appExecutableURL: URL? {
+        let env = ProcessInfo.processInfo.environment
+        var possibleLocations: [URL] = []
+
+        // When this bundle runs un-hosted (no TEST_HOST — see
+        // MeridianProcessPerfTests in project.yml), the process is
+        // `xctest` itself, loaded from inside Xcode's own toolchain
+        // directory, so `Bundle.main` is useless: it points at Xcode, not
+        // at BuiltProductsDir. `xcodebuild test` does, however, always set
+        // these two environment variables to locate the un-hosted bundle,
+        // so prefer them.
+        if let xctestBundlePath = env["XCTestBundlePath"] {
+            possibleLocations.append(
+                URL(fileURLWithPath: xctestBundlePath).deletingLastPathComponent()
+                    .appendingPathComponent("Meridian.app/Contents/MacOS/Meridian"),
+            )
+        }
+        if let builtProductsDir = env["__XCODE_BUILT_PRODUCTS_DIR_PATHS"]?.split(separator: ":").first {
+            possibleLocations.append(
+                URL(fileURLWithPath: String(builtProductsDir))
+                    .appendingPathComponent("Meridian.app/Contents/MacOS/Meridian"),
+            )
+        }
+
+        // Fallback heuristics for a hosted test bundle, where Bundle.main
+        // does point inside BuiltProductsDir/<Something>.xctest.
         let bundleURL = Bundle.main.bundleURL
-        // When running under `xcodebuild test`, Bundle.main points inside
-        // BuiltProductsDir/MeridianPerformanceTests.xctest
-        let possibleLocations = [
+        possibleLocations.append(contentsOf: [
             bundleURL.deletingLastPathComponent().appendingPathComponent("Meridian.app/Contents/MacOS/Meridian"),
             bundleURL.deletingLastPathComponent().deletingLastPathComponent()
                 .appendingPathComponent("Meridian.app/Contents/MacOS/Meridian"),
             URL(fileURLWithPath: CommandLine.arguments[0]).deletingLastPathComponent()
                 .appendingPathComponent("Meridian.app/Contents/MacOS/Meridian"),
-        ]
+        ])
+
         for url in possibleLocations {
             if FileManager.default.isExecutableFile(atPath: url.path) {
                 return url
@@ -106,6 +130,10 @@ enum AppProcessRunner {
         let timeToVisible: Duration
         let peakRSSBytes: UInt64
         let openFailed: Bool
+        /// True when the app never reported the file visible before the
+        /// deadline. A legitimate baseline result, not a harness error —
+        /// which is exactly why it is a field rather than a nil return.
+        let timedOut: Bool
     }
 
     /// Launches the app with `--perf-open`, samples RSS every 50 ms while
@@ -113,7 +141,7 @@ enum AppProcessRunner {
     /// single reading at the end) is required: the transient copies this
     /// milestone exists to remove are freed before the open completes, so
     /// an end-state reading would under-report the true peak.
-    static func measureFileOpen(path: String, timeout: TimeInterval = 120) throws -> FileOpenMeasurement? {
+    static func measureFileOpen(path: String, timeout: TimeInterval = 300) throws -> FileOpenMeasurement? {
         guard let exeURL = appExecutableURL else { return nil }
 
         let process = Process()
@@ -151,10 +179,17 @@ enum AppProcessRunner {
         }
 
         if lineBuffer.contains("[MERIDIAN_PERF] FILE_OPEN_FAILED") {
-            return FileOpenMeasurement(timeToVisible: .zero, peakRSSBytes: peakRSS, openFailed: true)
+            return FileOpenMeasurement(timeToVisible: .zero, peakRSSBytes: peakRSS, openFailed: true, timedOut: false)
         }
         guard let markerRange = lineBuffer.range(of: "[MERIDIAN_PERF] FILE_VISIBLE ") else {
-            return nil
+            // No marker before the deadline: the app is still working. Report
+            // it as a timed-out measurement so the caller can record it.
+            return FileOpenMeasurement(
+                timeToVisible: .seconds(Int(timeout)),
+                peakRSSBytes: peakRSS,
+                openFailed: false,
+                timedOut: true,
+            )
         }
         let tail = lineBuffer[markerRange.upperBound...]
         let msText = tail.prefix { !$0.isNewline }
@@ -164,6 +199,7 @@ enum AppProcessRunner {
             timeToVisible: .milliseconds(Int(ms.rounded())),
             peakRSSBytes: peakRSS,
             openFailed: false,
+            timedOut: false,
         )
     }
 

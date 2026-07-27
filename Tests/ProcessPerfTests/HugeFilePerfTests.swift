@@ -35,7 +35,7 @@ final class HugeFilePerfTests: XCTestCase {
         let sizeBytes = try? FileManager.default.attributesOfItem(atPath: path)[.size] as? Int64
         let ratio = sizeBytes.map { Double(result.peakRSSBytes) / Double($0) } ?? 0
         print("""
-        [BASELINE] \(label): failed=\(result.openFailed) \
+        [BASELINE] \(label): failed=\(result.openFailed) timedOut=\(result.timedOut) \
         timeToVisible=\(result.timeToVisible) \
         peakRSS=\(result.peakRSSBytes / (1024 * 1024))MB \
         ratio=\(String(format: "%.2f", ratio))x

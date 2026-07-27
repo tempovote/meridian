@@ -113,6 +113,16 @@ jobs:
           xcodebuild test -project Meridian.xcodeproj -scheme MeridianPerformanceTests
           -destination 'platform=macOS' CODE_SIGN_IDENTITY="-"
           CODE_SIGNING_REQUIRED=YES CODE_SIGNING_ALLOWED=YES
+      # ENABLE_HARDENED_RUNTIME=NO is required, not incidental: this scheme
+      # builds Release, where the project-wide hardened runtime setting is
+      # honoured, and its library validation rejects the ad-hoc-signed
+      # embedded Sparkle.framework — the app then dies in dyld before main
+      # and every measurement silently becomes a timeout.
+      - name: Process performance budget tests
+        run: >
+          xcodebuild test -project Meridian.xcodeproj -scheme MeridianProcessPerfTests
+          -destination 'platform=macOS' ENABLE_HARDENED_RUNTIME=NO
+          CODE_SIGN_IDENTITY="-" CODE_SIGNING_REQUIRED=YES CODE_SIGNING_ALLOWED=YES
 
 
   perf-smoke:
