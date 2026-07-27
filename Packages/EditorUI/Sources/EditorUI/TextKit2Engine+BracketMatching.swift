@@ -12,6 +12,9 @@ extension TextKit2Engine {
     /// otherwise share the stale request's version number by coincidence
     /// since `TextBuffer.version` resets to 0 on every new instance.
     func highlightCurrentBuffer() {
+        // A whole-file tree-sitter parse is exactly the cost huge mode
+        // exists to avoid; on a gigabyte file it never completes usefully.
+        guard activeCapabilities.syntaxHighlighting else { return }
         guard let languageID else { return }
         let snapshot = buffer
         let requestedVersion = snapshot.version
@@ -68,10 +71,33 @@ extension TextKit2Engine {
         }
         currentBracketHighlightRanges = []
 
-        // Skip bracket matching for large files (> 10 MB) — the linear
-        // scan costs ~45ms per caret move on a 32 MB file.
+        // Without a parsed token classification, matching falls back to an
+        // unbounded outward scan from the caret (`BracketMatcher`'s doc
+        // comment on `HugeFileProfile.Capabilities.bracketMatching`) — the
+        // exact per-selection-change cost this capability exists to avoid.
+        // The clearing above still runs so a highlight painted before the
+        // profile restricted this never lingers as a stale artifact.
+        guard activeCapabilities.bracketMatching else { return }
+
+        // Below the `HugeFileProfile` huge threshold (64 MB) the capability
+        // above stays on, but the linear scan alone still costs ~45ms per
+        // caret move on a 32 MB file — well past the 16ms budget. Skip it
+        // independently of `HugeFileProfile` until that threshold is
+        // reconsidered (both guards must clear for matching to run).
         guard buffer.utf8Count < 10 * 1024 * 1024 else { return }
 
+        // `buffer` (the rope mirror) is only advanced by `buffer.apply(...)`
+        // *after* `performEditingTransaction`'s closure returns, but AppKit
+        // can fire `textViewDidChangeSelection` synchronously as a side
+        // effect of `storage.replaceCharacters` itself — mid-transaction,
+        // while `buffer` still holds the pre-edit content but `storage`/
+        // `textView.selectedRanges` already reflect the post-edit content.
+        // `storage.length` is always current, so a length mismatch is a
+        // reliable, cheap signal that `buffer` is momentarily stale; skip
+        // this recomputation and let the caller that eventually re-syncs
+        // `buffer` (`apply`/`handleUserEdit`, both of which call
+        // `highlightCurrentBuffer()` → `applyHighlighting` →
+        // `updateBracketHighlight()` again once consistent) repaint it.
         guard storage.length == buffer.utf16Count else { return }
 
         let selectedRanges = textView.selectedRanges.map(\.rangeValue)

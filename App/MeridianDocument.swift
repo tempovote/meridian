@@ -128,6 +128,13 @@ final class MeridianDocument: NSDocument {
     private var focusedPaneIndex: Int = 0
     private var containerStack: NSStackView?
     private var statusBarHost: NSHostingView<StatusBarView>?
+    /// Persistently hosted (never added/removed): its SwiftUI body reads
+    /// `HugeFileBannerHost.viewModel.isHugeFileBannerVisible` directly, so
+    /// the banner appears/disappears reactively as that `@Observable`
+    /// state changes, rather than needing an explicit show/hide call each
+    /// time — see `refreshHugeFileBanner()` for the one thing that DOES
+    /// need to be explicit: rebinding to a new `EditorViewModel` instance.
+    private var bannerHost: NSHostingView<HugeFileBannerHost>?
     /// Whatever currently occupies the container stack's editor/split slot
     /// (a single pane's `engine.view`, or an `NSSplitView` wrapping two) —
     /// tracked explicitly rather than assumed to be
@@ -142,6 +149,8 @@ final class MeridianDocument: NSDocument {
     private var loadedMetadata: (encoding: TextEncoding, hadBOM: Bool)?
     /// Buffer read before window controllers exist.
     private var pendingBuffer = TextBuffer()
+    /// The restriction profile of the file most recently read from disk.
+    private var loadedProfile: HugeFileProfile = .unrestricted
 
     private let fileTreeViewModel = FileTreeViewModel()
     private var sidebarHost: NSHostingView<FileTreeView>?
@@ -194,6 +203,7 @@ final class MeridianDocument: NSDocument {
         MainActor.assumeIsolated {
             loadedMetadata = (file.encoding, file.hadBOM)
             pendingBuffer = file.buffer
+            loadedProfile = file.profile
             fileTreeViewModel.setRootURL(url.deletingLastPathComponent())
             // Re-opened into an existing window (revert): reload the
             // model. Rebuild rather than diff — P1 has no revert UI; this
@@ -220,6 +230,7 @@ final class MeridianDocument: NSDocument {
             let primaryEngine = panes[0].engine
             primaryEngine.languageID = languageID(forFileExtension: url.pathExtension)
             let newViewModel = EditorViewModel(documentModel: newDocumentModel, engine: primaryEngine)
+            newViewModel.hugeFileProfile = loadedProfile
             newViewModel.isSoftWrapEnabled = AppDelegate.settingsStore.current.editor.softWrapDefault
             panes = [(newViewModel, primaryEngine)]
             currentSplitOrientation = nil
@@ -230,6 +241,7 @@ final class MeridianDocument: NSDocument {
             rebuildSplitLayout()
             windowControllers.first?.window?.makeFirstResponder(panes[0].engine.keyView)
             refreshStatusBar()
+            refreshHugeFileBanner()
         }
     }
 
@@ -257,6 +269,7 @@ final class MeridianDocument: NSDocument {
             self.documentModel = documentModel
             let engine = makeEngine(languageID: fileURL.flatMap { languageID(forFileExtension: $0.pathExtension) })
             let viewModel = EditorViewModel(documentModel: documentModel, engine: engine)
+            viewModel.hugeFileProfile = loadedProfile
             viewModel.isSoftWrapEnabled = AppDelegate.settingsStore.current.editor.softWrapDefault
             panes = [(viewModel, engine)]
             wireUndoCallback()
@@ -274,6 +287,10 @@ final class MeridianDocument: NSDocument {
             self.containerStack = containerStack
             editorSlotView = engine.view
             host.setContentHuggingPriority(.required, for: .vertical)
+
+            let bannerHostView = NSHostingView(rootView: HugeFileBannerHost(viewModel: viewModel))
+            bannerHost = bannerHostView
+            containerStack.insertView(bannerHostView, at: 0, in: .top)
 
             let mainSplitView = makeSidebarSplitView(containerStack: containerStack)
 
@@ -499,6 +516,11 @@ final class MeridianDocument: NSDocument {
         if panes.count == 1 {
             let secondaryEngine = makeEngine(languageID: primary.engine.languageID)
             let secondaryViewModel = EditorViewModel(documentModel: documentModel, engine: secondaryEngine)
+            // Must be set before `isSoftWrapEnabled` below: the profile's
+            // own didSet re-clamps soft wrap, and a huge-file document
+            // must gate the split pane's engine the same as the primary's
+            // (or its syntax highlighter would keep running unrestricted).
+            secondaryViewModel.hugeFileProfile = primary.viewModel.hugeFileProfile
             secondaryViewModel.isGutterVisible = primary.viewModel.isGutterVisible
             secondaryViewModel.isSoftWrapEnabled = primary.viewModel.isSoftWrapEnabled
             secondaryViewModel.isCurrentLineHighlightEnabled = primary.viewModel.isCurrentLineHighlightEnabled
@@ -537,6 +559,7 @@ final class MeridianDocument: NSDocument {
         rebuildSplitLayout()
         windowControllers.first?.window?.makeFirstResponder(panes[0].engine.keyView)
         refreshStatusBar()
+        refreshHugeFileBanner()
     }
 
     /// Swaps whatever currently occupies the container stack's top slot
@@ -633,6 +656,7 @@ final class MeridianDocument: NSDocument {
             pane.engine.onBecomeFirstResponder = { [weak self] in
                 self?.focusedPaneIndex = index
                 self?.refreshStatusBar()
+                self?.refreshHugeFileBanner()
             }
         }
     }
@@ -663,6 +687,18 @@ final class MeridianDocument: NSDocument {
         host.isHidden = !viewModel.isStatusBarVisible
     }
 
+    /// Rebinds the huge-file banner host to the currently focused pane's
+    /// view model — needed alongside `refreshStatusBar()` at every point
+    /// that can replace or add an `EditorViewModel` (revert, reopen with
+    /// a different encoding, split, focus change): the host's SwiftUI
+    /// tree otherwise keeps observing a stale instance. Visibility itself
+    /// does NOT need an explicit refresh — `HugeFileBannerHost`'s body
+    /// reads `isHugeFileBannerVisible` directly and reacts on its own.
+    private func refreshHugeFileBanner() {
+        guard let viewModel = focusedViewModel else { return }
+        bannerHost?.rootView = HugeFileBannerHost(viewModel: viewModel)
+    }
+
     func changeEncoding(to newEncoding: TextEncoding, includeBOM: Bool) {
         loadedMetadata = (newEncoding, includeBOM)
         updateChangeCount(.changeDone)
@@ -678,11 +714,13 @@ final class MeridianDocument: NSDocument {
             }
             loadedMetadata = (file.encoding, file.hadBOM)
             pendingBuffer = file.buffer
+            loadedProfile = file.profile
             let newDocumentModel = DocumentModel(buffer: file.buffer)
             documentModel = newDocumentModel
             if !panes.isEmpty {
                 let primaryEngine = panes[0].engine
                 let newViewModel = EditorViewModel(documentModel: newDocumentModel, engine: primaryEngine)
+                newViewModel.hugeFileProfile = loadedProfile
                 newViewModel.isSoftWrapEnabled = AppDelegate.settingsStore.current.editor.softWrapDefault
                 panes[0] = (newViewModel, primaryEngine)
                 wireUndoCallback()
@@ -690,6 +728,7 @@ final class MeridianDocument: NSDocument {
                 wireFocusTracking()
             }
             refreshStatusBar()
+            refreshHugeFileBanner()
         } catch {
             let alert = NSAlert(error: error)
             if let window = windowControllers.first?.window {
@@ -1011,6 +1050,10 @@ final class MeridianDocument: NSDocument {
 
     @objc func toggleMinimap(_ sender: Any?) {
         guard let viewModel = focusedViewModel else { return }
+        guard viewModel.effectiveCapabilities.minimap else {
+            NSSound.beep()
+            return
+        }
         if let host = minimapHost {
             host.removeFromSuperview()
             minimapHost = nil
@@ -1123,7 +1166,9 @@ final class MeridianDocument: NSDocument {
     private var gitGutterMarks: [Int: GitGutterMark] = [:]
 
     private func refreshGitGutter() {
-        guard let url = fileURL, let viewModel = focusedViewModel else {
+        guard let url = fileURL, let viewModel = focusedViewModel,
+              viewModel.effectiveCapabilities.gitGutter
+        else {
             gitGutterMarks = [:]
             updateGitGutterMarkProviders()
             return
@@ -1271,7 +1316,7 @@ final class MeridianDocument: NSDocument {
             return focusedViewModel != nil
         case #selector(toggleMinimap(_:)):
             menuItem.state = (minimapHost != nil) ? .on : .off
-            return focusedViewModel != nil
+            return focusedViewModel?.effectiveCapabilities.minimap == true
         case #selector(toggleTerminal(_:)):
             menuItem.state = (terminalHost != nil) ? .on : .off
             return true
@@ -1350,6 +1395,29 @@ final class MeridianDocument: NSDocument {
                 }
                 document.registerUndoReplay()
             }
+        }
+    }
+}
+
+/// Wraps ``HugeFileBannerView`` so its presence, not just its content,
+/// tracks `EditorViewModel`'s `@Observable` state: reading
+/// `viewModel.isHugeFileBannerVisible` directly in `body` means SwiftUI
+/// re-renders (and the hosting `NSStackView` collapses this to zero
+/// height) the moment the profile changes, the user dismisses the
+/// banner, or overrides the capabilities — with no imperative
+/// insert/remove bookkeeping in `MeridianDocument` beyond rebinding
+/// `viewModel` itself when a pane's view model instance changes (see
+/// `MeridianDocument.refreshHugeFileBanner()`).
+private struct HugeFileBannerHost: View {
+    let viewModel: EditorViewModel
+
+    var body: some View {
+        if viewModel.isHugeFileBannerVisible {
+            HugeFileBannerView(
+                profile: viewModel.hugeFileProfile,
+                onOverride: { viewModel.overrideCapabilities() },
+                onDismiss: { viewModel.isBannerDismissed = true },
+            )
         }
     }
 }

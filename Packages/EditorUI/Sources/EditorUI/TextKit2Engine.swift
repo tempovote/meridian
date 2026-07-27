@@ -95,6 +95,16 @@ public final class TextKit2Engine: NSObject, TextLayoutEngine {
 
     public var onUserEdit: ((EditTransaction) -> Void)?
 
+    /// The document's restriction profile. Set by `EditorViewModel`.
+    public var profile: HugeFileProfile = .unrestricted
+    /// Non-nil once the user has explicitly re-enabled heavy features.
+    public var capabilitiesOverride: HugeFileProfile.Capabilities?
+
+    /// The capabilities in force for this engine.
+    var activeCapabilities: HugeFileProfile.Capabilities {
+        capabilitiesOverride ?? profile.capabilities
+    }
+
     /// The undo manager Cmd+Z/Cmd+Shift+Z should resolve to. `NSTextView`
     /// implements `-undo:`/`-redo:`/`-undoManager` itself and answers them
     /// directly (against its own private undo manager if no delegate

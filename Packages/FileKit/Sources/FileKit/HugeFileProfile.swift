@@ -55,6 +55,30 @@ public struct HugeFileProfile: Sendable, Equatable {
         /// Search streams over rope chunks and never materializes the
         /// document, so it survives huge mode.
         public let findInFiles: Bool
+
+        /// Builds a capabilities set directly from its seven flags. Most
+        /// callers get a ``Capabilities`` value from
+        /// ``HugeFileProfile/capabilities`` rather than constructing one;
+        /// this exists for callers building an explicit override (e.g. a
+        /// consumer restoring every capability except ``softWrap`` once a
+        /// user has accepted the cost of doing so on a huge file).
+        public init(
+            syntaxHighlighting: Bool,
+            folding: Bool,
+            minimap: Bool,
+            gitGutter: Bool,
+            bracketMatching: Bool,
+            softWrap: Bool,
+            findInFiles: Bool,
+        ) {
+            self.syntaxHighlighting = syntaxHighlighting
+            self.folding = folding
+            self.minimap = minimap
+            self.gitGutter = gitGutter
+            self.bracketMatching = bracketMatching
+            self.softWrap = softWrap
+            self.findInFiles = findInFiles
+        }
     }
 
     /// The restriction tier this profile falls into. A coarse summary of

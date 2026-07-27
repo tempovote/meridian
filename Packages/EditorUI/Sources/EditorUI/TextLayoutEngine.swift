@@ -80,6 +80,16 @@ public protocol TextLayoutEngine: AnyObject {
     var canUnfoldAll: Bool { get }
     /// Sets the Git diff mark provider for the line number ruler.
     func setGitGutterMarkProvider(_ provider: ((Int) -> GitGutterMark)?)
+
+    /// The document's restriction profile, set by ``EditorViewModel``
+    /// whenever its own `hugeFileProfile` changes, so the engine can gate
+    /// whole-file-scan work (e.g. tree-sitter highlighting) without going
+    /// through the view model for every check.
+    var profile: HugeFileProfile { get set }
+    /// Non-nil once the user has explicitly re-enabled heavy features
+    /// above what `profile` alone would allow. `nil` means "defer to
+    /// `profile.capabilities`".
+    var capabilitiesOverride: HugeFileProfile.Capabilities? { get set }
 }
 
 public extension TextLayoutEngine {

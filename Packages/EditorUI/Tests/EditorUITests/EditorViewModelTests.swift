@@ -1,5 +1,6 @@
 import AppKit
 import DocumentCore
+import FileKit
 import Testing
 @testable import EditorUI
 
@@ -14,6 +15,8 @@ final class MockLayoutEngine: TextLayoutEngine {
 
     var onUserEdit: ((EditTransaction) -> Void)?
     var onBecomeFirstResponder: (() -> Void)?
+    var profile: HugeFileProfile = .unrestricted
+    var capabilitiesOverride: HugeFileProfile.Capabilities?
     var loaded: [TextBuffer] = []
     // Matches TextLayoutEngine.apply's own 3-arg shape.
     // swiftlint:disable:next large_tuple
@@ -60,6 +63,13 @@ final class MockLayoutEngine: TextLayoutEngine {
 @MainActor
 private func makeViewModel(_ buffer: TextBuffer, engine: MockLayoutEngine) -> EditorViewModel {
     EditorViewModel(documentModel: DocumentModel(buffer: buffer), engine: engine)
+}
+
+/// Convenience for tests that only care about huge-file-profile gating,
+/// not the buffer content or a specific mock engine instance.
+@MainActor
+private func makeViewModel() -> EditorViewModel {
+    makeViewModel(TextBuffer(""), engine: MockLayoutEngine())
 }
 
 @MainActor
@@ -283,5 +293,54 @@ struct EditorViewModelTests {
         #expect(vm2.selection.ranges.count == 2)
         let line2Offset = vm2.buffer.byteOffset(of: LinePosition(line: 2, utf16Column: 0))
         #expect(vm2.selection.ranges[1] == line2Offset ..< line2Offset)
+    }
+
+    @Test @MainActor func hugeProfileForcesSoftWrapOff() {
+        let model = makeViewModel()
+        model.isSoftWrapEnabled = true
+        model.hugeFileProfile = HugeFileProfile(byteSize: 1_000_000_000, longestLineUTF8Length: 80)
+        #expect(!model.isSoftWrapEnabled)
+    }
+
+    @Test @MainActor func softWrapCannotBeTurnedBackOnUnderHugeProfile() {
+        let model = makeViewModel()
+        model.hugeFileProfile = HugeFileProfile(byteSize: 1_000_000_000, longestLineUTF8Length: 80)
+        model.isSoftWrapEnabled = true
+        #expect(!model.isSoftWrapEnabled)
+    }
+
+    @Test @MainActor func normalProfileLeavesSoftWrapAlone() {
+        let model = makeViewModel()
+        model.hugeFileProfile = .unrestricted
+        model.isSoftWrapEnabled = true
+        #expect(model.isSoftWrapEnabled)
+    }
+
+    @Test @MainActor func bannerIsShownOnlyForRestrictedProfiles() {
+        let model = makeViewModel()
+        #expect(!model.isHugeFileBannerVisible)
+        model.hugeFileProfile = HugeFileProfile(byteSize: 1_000_000_000, longestLineUTF8Length: 80)
+        #expect(model.isHugeFileBannerVisible)
+    }
+
+    @Test @MainActor func dismissingTheBannerDoesNotRestoreCapabilities() {
+        let model = makeViewModel()
+        model.hugeFileProfile = HugeFileProfile(byteSize: 1_000_000_000, longestLineUTF8Length: 80)
+        model.isBannerDismissed = true
+        #expect(!model.isHugeFileBannerVisible)
+        #expect(!model.effectiveCapabilities.syntaxHighlighting)
+    }
+
+    @Test @MainActor func overrideRestoresCapabilitiesButNotSoftWrapForLongLines() {
+        let model = makeViewModel()
+        model.hugeFileProfile = HugeFileProfile(
+            byteSize: 1_000_000_000, longestLineUTF8Length: 50_000_000,
+        )
+        model.overrideCapabilities()
+        #expect(model.effectiveCapabilities.syntaxHighlighting)
+        // Soft wrap stays off: it is the one restriction that exists to
+        // avoid a layout blow-up the user cannot recover from, and there is
+        // no partial version of it.
+        #expect(!model.effectiveCapabilities.softWrap)
     }
 }
