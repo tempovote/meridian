@@ -203,4 +203,23 @@ struct TextKit2EngineTests {
             }
         }
     }
+
+    @Test func chunkedLoadMatchesWholeStringLoad() {
+        // Content deliberately larger than Leaf.maxBytes (2048) so the rope
+        // holds many leaves and the chunked path actually iterates, and with
+        // multi-byte scalars straddling likely chunk boundaries.
+        var text = ""
+        for index in 0 ..< 4000 {
+            text += "line \(index) — chào bạn 🇻🇳 emoji test\n"
+        }
+        let (engine, buffer) = makeEngine(text)
+
+        #expect(engine.storageStringForTesting == text)
+        #expect(engine.storageStringForTesting.utf16.count == buffer.utf16Count)
+    }
+
+    @Test func chunkedLoadOfEmptyBufferProducesEmptyStorage() {
+        let (engine, _) = makeEngine("")
+        #expect(engine.storageStringForTesting.isEmpty)
+    }
 }

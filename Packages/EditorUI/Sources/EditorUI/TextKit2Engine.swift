@@ -271,10 +271,25 @@ public final class TextKit2Engine: NSObject, TextLayoutEngine {
         isMirroring = true
         defer { isMirroring = false }
         contentStorage.performEditingTransaction {
-            storage.replaceCharacters(
-                in: NSRange(location: 0, length: storage.length),
-                with: newBuffer.string,
-            )
+            storage.replaceCharacters(in: NSRange(location: 0, length: storage.length), with: "")
+            // Append chunk by chunk. `newBuffer.string` would allocate a
+            // second copy of the entire document before this loop even
+            // starts — a gigabyte of transient peak on a gigabyte file.
+            // Rope chunks never split a Unicode scalar (Leaf's split points
+            // are scalar boundaries), so decoding each chunk independently
+            // is safe and cannot produce a replacement character at a seam.
+            var appendLocation = 0
+            for chunk in newBuffer.chunks() {
+                // False positive: this decodes `ArraySlice<UInt8>`, not
+                // `Data` — the rule matches on `String(decoding:as:)`
+                // syntax alone. Same pattern as `TextBuffer.string`.
+                // swiftlint:disable:next optional_data_string_conversion
+                let piece = String(decoding: chunk.bytes, as: UTF8.self)
+                storage.replaceCharacters(
+                    in: NSRange(location: appendLocation, length: 0), with: piece,
+                )
+                appendLocation += (piece as NSString).length
+            }
             storage.setAttributes(
                 typingAttributes, range: NSRange(location: 0, length: storage.length),
             )
