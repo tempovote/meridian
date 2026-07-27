@@ -40,7 +40,9 @@ public struct HugeFileProfile: Sendable, Equatable {
 
     public let level: Level
     public let capabilities: Capabilities
+    /// The file's size on disk, in bytes, as supplied to ``init(byteSize:longestLineUTF8Length:)``.
     public let byteSize: Int
+    /// The longest line's length in UTF-8 bytes, as supplied to ``init(byteSize:longestLineUTF8Length:)``.
     public let longestLineUTF8Length: Int
 
     public init(byteSize: Int, longestLineUTF8Length: Int) {
