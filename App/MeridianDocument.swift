@@ -11,20 +11,15 @@ import WorkspaceUI
 
 /// Errors that block opening a document, with user-facing text.
 enum DocumentOpenError: LocalizedError {
-    /// File exceeds the huge-file threshold (bytes given).
+    /// File exceeds the openable-file ceiling (bytes given).
     case tooLarge(byteSize: Int)
-    /// A single line exceeds the pathological-line threshold (ADR 0009:
-    /// a 100 MB single-line file drives TextKit RSS to 11 GB).
-    case lineTooLong(utf8Length: Int)
 
     var errorDescription: String? {
         switch self {
         case let .tooLarge(byteSize):
-            "This file is \(byteSize / (1024 * 1024)) MB. Files of 64 MB or more need "
-                + "huge-file mode, which arrives in a later release."
-        case .lineTooLong:
-            "This file contains an extremely long line, which this version cannot "
-                + "display safely. Support arrives with huge-file mode in a later release."
+            "This file is \(byteSize / (1024 * 1024)) MB. Meridian opens files "
+                + "up to 100 MB. Larger files are refused rather than opened "
+                + "slowly — use a streaming viewer such as `less` for them."
         }
     }
 }
@@ -111,10 +106,15 @@ private final class RootSplitViewDelegate: NSObject, NSSplitViewDelegate {
 /// NSUndoManager actions replaying the rope's UndoStack (spec decision 3).
 final class MeridianDocument: NSDocument {
     // swiftlint:disable:previous type_body_length
-    /// Upper bound on file size Meridian will attempt to open (2 GB).
-    nonisolated static let maxFileSize = 2 * 1024 * 1024 * 1024
-    /// Pathological-line threshold, in UTF-8 bytes.
-    nonisolated static let maxLineLength = 1_000_000
+    /// Hard ceiling on a file Meridian will open, in bytes.
+    ///
+    /// Files above this are refused rather than opened slowly: measurement
+    /// during M10 showed a 700 MB file taking over five minutes to become
+    /// visible and 4.7x its size in resident memory. Refusing is the honest
+    /// behaviour; the previous 2 GB limit promised a capability the app does
+    /// not have. Raising this later means implementing mapped rope leaves and
+    /// a windowed text mirror first (ADR 0011).
+    nonisolated static let maxFileSize = 100 * 1024 * 1024
 
     private var documentModel: DocumentModel?
     /// One entry when unsplit, two when split. Index 0 is always the
@@ -197,9 +197,6 @@ final class MeridianDocument: NSDocument {
             throw DocumentOpenError.tooLarge(byteSize: size)
         }
         let file = try TextFileIO.loadTextFile(at: url)
-        guard file.longestLineUTF8Length < Self.maxLineLength else {
-            throw DocumentOpenError.lineTooLong(utf8Length: file.longestLineUTF8Length)
-        }
         MainActor.assumeIsolated {
             loadedMetadata = (file.encoding, file.hadBOM)
             pendingBuffer = file.buffer
@@ -736,9 +733,6 @@ final class MeridianDocument: NSDocument {
         guard let url = fileURL else { return }
         do {
             let file = try TextFileIO.loadTextFile(at: url, overrideEncoding: encoding)
-            guard file.longestLineUTF8Length < Self.maxLineLength else {
-                throw DocumentOpenError.lineTooLong(utf8Length: file.longestLineUTF8Length)
-            }
             loadedMetadata = (file.encoding, file.hadBOM)
             pendingBuffer = file.buffer
             loadedProfile = file.profile

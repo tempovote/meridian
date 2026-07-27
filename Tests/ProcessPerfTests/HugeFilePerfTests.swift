@@ -53,14 +53,6 @@ final class HugeFilePerfTests: XCTestCase {
         _ = try measure(label, path: path)
     }
 
-    func testRecord1GBManyLines() throws {
-        try recordBaseline(label: "1GB many-line", path: PerfCorpus.text1GB.path)
-    }
-
-    func testRecord10MLines() throws {
-        try recordBaseline(label: "10M lines", path: PerfCorpus.log10MLines.path)
-    }
-
     func testRecordSingleLine100MB() throws {
         try recordBaseline(label: "100MB single line", path: PerfCorpus.singleLine100MB.path)
     }
