@@ -17,7 +17,11 @@ public struct LoadedTextFile: Sendable {
     /// The file's size on disk, in bytes.
     public let byteSize: Int
     /// The longest line's length in UTF-8 bytes, excluding break characters.
-    /// Drives the pathological-line-shape guard (ADR 0009).
+    /// Drives the pathological-line-shape guard (ADR 0009). Exact below
+    /// ``HugeFileProfile/hugeThresholdBytes``; at or above it, this is only
+    /// a **lower bound** — the scan stops as soon as it can no longer
+    /// change ``profile``'s tier, so treat this value as a threshold signal
+    /// in huge mode, never as the true longest line.
     public let longestLineUTF8Length: Int
     /// Which editor features this file's size and line shape permit.
     public let profile: HugeFileProfile
