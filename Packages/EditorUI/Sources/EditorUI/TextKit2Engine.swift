@@ -279,6 +279,7 @@ public final class TextKit2Engine: NSObject, TextLayoutEngine {
                 typingAttributes, range: NSRange(location: 0, length: storage.length),
             )
         }
+        refreshGutterMetrics()
         highlightCurrentBuffer()
     }
 
@@ -311,6 +312,7 @@ public final class TextKit2Engine: NSObject, TextLayoutEngine {
         }
         buffer.apply(transaction)
         assertMirrorInvariant()
+        refreshGutterMetrics()
         let foldedBefore = foldModel.folded
         foldModel.apply(transaction)
         if foldModel.folded != foldedBefore {
@@ -426,6 +428,32 @@ public final class TextKit2Engine: NSObject, TextLayoutEngine {
             .foregroundColor: NSColor.textColor,
             .paragraphStyle: paragraphStyle,
         ]
+    }
+
+    /// Resizes the gutter for the current line count and repaints it.
+    ///
+    /// Deliberately driven from here — every place the line count can
+    /// change — rather than from the ruler's own draw method, which is
+    /// where it used to live: re-tiling the scroll view mid-draw
+    /// invalidates all TextKit 2 layout and collapses the document's
+    /// scrollable height to the visible viewport. See
+    /// `LineNumberRulerView.updateThickness()`.
+    func refreshGutterMetrics() {
+        rulerView?.updateThickness()
+        rulerView?.needsDisplay = true
+    }
+
+    /// `refreshGutterMetrics()` for the typing path, which runs inside
+    /// `NSTextStorageDelegate.didProcessEditing`. Assigning `ruleThickness`
+    /// tiles the scroll view, i.e. does layout work, which must not happen
+    /// inside an editing transaction (`BreakOnEnumerateWhileEditing`) — so
+    /// the rare width change hops past the notification, and the common
+    /// "same number of digits" keystroke does nothing at all.
+    func refreshGutterMetricsDeferred() {
+        guard rulerView?.needsThicknessUpdate == true else { return }
+        Task { @MainActor [weak self] in
+            self?.refreshGutterMetrics()
+        }
     }
 
     public func setGitGutterMarkProvider(_ provider: ((Int) -> GitGutterMark)?) {

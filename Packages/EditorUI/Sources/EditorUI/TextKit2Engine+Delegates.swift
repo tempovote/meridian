@@ -78,6 +78,7 @@ extension TextKit2Engine {
         )
         buffer.apply(transaction)
         assertMirrorInvariant()
+        refreshGutterMetricsDeferred()
         let foldedBefore = foldModel.folded
         foldModel.apply(transaction)
         if foldModel.folded != foldedBefore {

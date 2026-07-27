@@ -37,6 +37,9 @@ public final class LineNumberRulerView: NSRulerView {
     /// only when `foldMarkProvider` is set.
     private static let chevronBandWidth: CGFloat = 14
 
+    /// Line-count digit count the current `ruleThickness` was sized for.
+    private var lastDigits = 0
+
     /// Per-line fold gutter state; nil provider = no fold band (M7 CoreText
     /// engine, or gutter before folding data arrives).
     public var foldMarkProvider: ((Int) -> FoldGutterMark)? {
@@ -62,9 +65,23 @@ public final class LineNumberRulerView: NSRulerView {
         fatalError("init(coder:) has not been implemented")
     }
 
+    /// Recomputes `ruleThickness` from the current line count, font and
+    /// fold-band state.
+    ///
+    /// **Never call this from a draw method.** Assigning `ruleThickness`
+    /// makes the enclosing `NSScrollView` re-tile, which changes the text
+    /// container's geometry and so invalidates *all* TextKit 2 layout —
+    /// including the whole-document size estimate `NSTextView` derives its
+    /// scrollable height from (`usageBoundsForTextContainer`). Doing that
+    /// mid-draw leaves the viewport-scoped enumeration below as the only
+    /// layout that follows, so the usage bounds come back covering one
+    /// viewport instead of the file, the document view collapses to the
+    /// visible height and the file becomes unscrollable. Outside drawing,
+    /// the invalidation is followed by a normal viewport layout pass that
+    /// re-estimates the full document, so it is harmless there.
     public func updateThickness() {
-        let lineCount = bufferProvider?().lineCount ?? 1
-        let digits = max(3, String(lineCount).count)
+        let digits = currentDigits
+        lastDigits = digits
         let sampleString = String(repeating: "8", count: digits) as NSString
         let width = sampleString.size(withAttributes: [.font: font]).width
         var newThickness = max(40, ceil(width + 16))
@@ -74,6 +91,20 @@ public final class LineNumberRulerView: NSRulerView {
         if ruleThickness != newThickness {
             ruleThickness = newThickness
         }
+    }
+
+    /// Digit count the current line count needs — the only input to
+    /// `updateThickness()` that changes on the typing hot path (font and
+    /// fold-band changes drive their own `didSet` update).
+    private var currentDigits: Int {
+        max(3, String(bufferProvider?().lineCount ?? 1).count)
+    }
+
+    /// Whether `updateThickness()` has anything to do, answered without the
+    /// text measurement that method performs — cheap enough to consult on
+    /// every keystroke.
+    var needsThicknessUpdate: Bool {
+        currentDigits != lastDigits
     }
 
     private func drawBackgroundAndSeparator() {
@@ -95,8 +126,9 @@ public final class LineNumberRulerView: NSRulerView {
               let buffer = bufferProvider?()
         else { return }
 
-        updateThickness()
-
+        // No `updateThickness()` here — see its doc comment: re-tiling the
+        // scroll view mid-draw collapses the document's scrollable height.
+        // The engine calls it whenever the line count can have changed.
         NSGraphicsContext.saveGraphicsState()
         drawBackgroundAndSeparator()
 
@@ -115,14 +147,13 @@ public final class LineNumberRulerView: NSRulerView {
         let rectInTextView = textView.convert(rect, from: self)
         let startPointInContainer = NSPoint(
             x: 0,
-            y: rectInTextView.minY - textView.textContainerOrigin.y
+            y: rectInTextView.minY - textView.textContainerOrigin.y,
         )
         guard let startFragment = textLayoutManager.textLayoutFragment(for: startPointInContainer)
         else {
             NSGraphicsContext.restoreGraphicsState()
             return
         }
-
         textLayoutManager.enumerateTextLayoutFragments(
             from: startFragment.rangeInElement.location,
             options: [.ensuresLayout, .estimatesSize],
@@ -131,14 +162,13 @@ public final class LineNumberRulerView: NSRulerView {
             let viewY = frame.origin.y + textView.textContainerOrigin.y
             let fragmentRectInRuler = self.convert(
                 NSRect(x: 0, y: viewY, width: 1, height: frame.height),
-                from: textView
+                from: textView,
             )
             // Stop enumeration once past the visible rect
             guard fragmentRectInRuler.minY <= rect.maxY else { return false }
             self.drawLabel(for: fragment, in: rect, context, lastDrawnLine: &lastDrawnLine)
             return true
         }
-
         NSGraphicsContext.restoreGraphicsState()
     }
 

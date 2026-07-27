@@ -306,6 +306,20 @@ public final class MeridianTextView: NSTextView {
 // MARK: - Indent Guides (private extension to keep type body length in check)
 
 private extension MeridianTextView {
+    /// Indent level of the line holding the caret, or `-1` when there is
+    /// none to resolve — that level's guide is drawn in the active color.
+    ///
+    /// Goes through the selection's own text location so the fragment comes
+    /// from an O(1) lookup, rather than the O(n) `location(docStart,
+    /// offsetBy:)` scan a character offset would need.
+    func caretIndentLevel(_ textLayoutManager: NSTextLayoutManager) -> Int {
+        guard let caretLocation = textLayoutManager.textSelections.first?.textRanges.first?.location,
+              let caretFragment = textLayoutManager.textLayoutFragment(for: caretLocation),
+              let paragraph = caretFragment.textElement as? NSTextParagraph
+        else { return -1 }
+        return computeIndentLevel(for: paragraph.attributedString.string)
+    }
+
     func drawIndentGuides(in rect: NSRect) {
         guard isIndentGuidesEnabled, tabWidth > 0, let font else { return }
         guard let textLayoutManager else { return }
@@ -314,17 +328,7 @@ private extension MeridianTextView {
         guard spaceAdvance > 0 else { return }
         let indentStepWidth = spaceAdvance * CGFloat(tabWidth)
 
-        // Use the selection's layout fragment (O(1) point-based lookup via
-        // the text view's insertion point rect) instead of the O(n) linear
-        // `location(docStart, offsetBy:)` scan.
-        var activeIndentLevel = -1
-        if let insertionRect = textLayoutManager.textSelections.first?
-            .textRanges.first?.location,
-           let caretFragment = textLayoutManager.textLayoutFragment(for: insertionRect),
-           let paragraph = caretFragment.textElement as? NSTextParagraph
-        {
-            activeIndentLevel = computeIndentLevel(for: paragraph.attributedString.string)
-        }
+        let activeIndentLevel = caretIndentLevel(textLayoutManager)
 
         NSGraphicsContext.saveGraphicsState()
 
@@ -332,7 +336,7 @@ private extension MeridianTextView {
         // instead of enumerating all 671K fragments from docStart.
         let startPointInContainer = NSPoint(
             x: 0,
-            y: rect.minY - textContainerOrigin.y
+            y: rect.minY - textContainerOrigin.y,
         )
         guard let startFragment = textLayoutManager.textLayoutFragment(for: startPointInContainer)
         else {
