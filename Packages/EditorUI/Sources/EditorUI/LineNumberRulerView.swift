@@ -91,6 +91,7 @@ public final class LineNumberRulerView: NSRulerView {
     override public func drawHashMarksAndLabels(in rect: NSRect) {
         guard let textView,
               let textLayoutManager = textView.textLayoutManager,
+              let contentStorage = textView.textContentStorage,
               let buffer = bufferProvider?()
         else { return }
 
@@ -103,14 +104,37 @@ public final class LineNumberRulerView: NSRulerView {
             textView: textView,
             buffer: buffer,
             textLayoutManager: textLayoutManager,
+            contentStorage: contentStorage,
             textAttributes: [.font: font, .foregroundColor: textColor],
         )
         var lastDrawnLine: Int?
 
+        // Convert the dirty rect back to text-view container coordinates
+        // to find the first visible fragment via O(1) point-based lookup
+        // instead of enumerating all fragments from docRange.location.
+        let rectInTextView = textView.convert(rect, from: self)
+        let startPointInContainer = NSPoint(
+            x: 0,
+            y: rectInTextView.minY - textView.textContainerOrigin.y
+        )
+        guard let startFragment = textLayoutManager.textLayoutFragment(for: startPointInContainer)
+        else {
+            NSGraphicsContext.restoreGraphicsState()
+            return
+        }
+
         textLayoutManager.enumerateTextLayoutFragments(
-            from: context.docRange.location,
+            from: startFragment.rangeInElement.location,
             options: [.ensuresLayout, .estimatesSize],
         ) { fragment in
+            let frame = fragment.layoutFragmentFrame
+            let viewY = frame.origin.y + textView.textContainerOrigin.y
+            let fragmentRectInRuler = self.convert(
+                NSRect(x: 0, y: viewY, width: 1, height: frame.height),
+                from: textView
+            )
+            // Stop enumeration once past the visible rect
+            guard fragmentRectInRuler.minY <= rect.maxY else { return false }
             self.drawLabel(for: fragment, in: rect, context, lastDrawnLine: &lastDrawnLine)
             return true
         }
@@ -126,6 +150,7 @@ public final class LineNumberRulerView: NSRulerView {
         let textView: NSTextView
         let buffer: TextBuffer
         let textLayoutManager: NSTextLayoutManager
+        let contentStorage: NSTextContentStorage
         let textAttributes: [NSAttributedString.Key: Any]
         var docRange: NSTextRange {
             textLayoutManager.documentRange
@@ -153,7 +178,7 @@ public final class LineNumberRulerView: NSRulerView {
         let fragmentRectInRuler = convert(fragmentRectInTextView, from: context.textView)
         guard fragmentRectInRuler.maxY >= rect.minY, fragmentRectInRuler.minY <= rect.maxY else { return }
 
-        let offsetInUTF16 = context.textLayoutManager.offset(
+        let offsetInUTF16 = context.contentStorage.offset(
             from: context.docRange.location, to: fragment.rangeInElement.location,
         )
         let byteOffset = context.buffer.byteOffset(of: UTF16Offset(offsetInUTF16))
@@ -213,6 +238,7 @@ public final class LineNumberRulerView: NSRulerView {
               localPoint.x >= ruleThickness - Self.chevronBandWidth,
               let textView,
               let textLayoutManager = textView.textLayoutManager,
+              let contentStorage = textView.textContentStorage,
               let buffer = bufferProvider?()
         else {
             super.mouseDown(with: event)
@@ -230,7 +256,7 @@ public final class LineNumberRulerView: NSRulerView {
             super.mouseDown(with: event)
             return
         }
-        let offset = textLayoutManager.offset(
+        let offset = contentStorage.offset(
             from: textLayoutManager.documentRange.location, to: fragment.rangeInElement.location,
         )
         let line = buffer.linePosition(of: buffer.byteOffset(of: UTF16Offset(offset))).line

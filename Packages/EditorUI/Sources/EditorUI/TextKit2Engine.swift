@@ -208,7 +208,9 @@ public final class TextKit2Engine: NSObject, TextLayoutEngine {
 
             let startFrag = mgr.textLayoutFragment(for: startPt)
             if let startLoc = startFrag?.rangeInElement.location {
-                let offset = mgr.offset(from: docRange.location, to: startLoc)
+                // Use contentStorage.offset (O(1) via NSTextStorage) instead
+                // of mgr.offset (O(n) linear scan through text elements).
+                let offset = contentStorage.offset(from: docRange.location, to: startLoc)
                 firstLine = buffer.linePosition(of: UTF16Offset(offset)).line + 1
             } else {
                 let ratio = visibleRect.minY / max(1, textView.bounds.height)
@@ -217,7 +219,7 @@ public final class TextKit2Engine: NSObject, TextLayoutEngine {
 
             let endFrag = mgr.textLayoutFragment(for: endPt)
             if let endLoc = endFrag?.rangeInElement.location {
-                let offset = mgr.offset(from: docRange.location, to: endLoc)
+                let offset = contentStorage.offset(from: docRange.location, to: endLoc)
                 lastLine = buffer.linePosition(of: UTF16Offset(offset)).line + 1
             } else {
                 let ratio = visibleRect.maxY / max(1, textView.bounds.height)

@@ -259,8 +259,9 @@ public final class MeridianTextView: NSTextView {
 
     private func caretRect(for characterRange: NSRange) -> NSRect? {
         guard let textLayoutManager,
+              let contentStorage = textContentStorage,
               let docStart = textLayoutManager.documentRange.location as NSTextLocation?,
-              let caretLoc = textLayoutManager.location(docStart, offsetBy: characterRange.location),
+              let caretLoc = contentStorage.location(docStart, offsetBy: characterRange.location),
               let fragment = textLayoutManager.textLayoutFragment(for: caretLoc)
         else { return nil }
 
@@ -269,7 +270,7 @@ public final class MeridianTextView: NSTextView {
         let height = frame.height > 0 ? frame.height : (font?.pointSize ?? 13) * 1.2
 
         var originX = textContainerOrigin.x + frame.origin.x
-        let charOffsetInElement = textLayoutManager.offset(from: fragment.rangeInElement.location, to: caretLoc)
+        let charOffsetInElement = contentStorage.offset(from: fragment.rangeInElement.location, to: caretLoc)
 
         for lineFragment in fragment.textLineFragments {
             let lineRange = lineFragment.characterRange
@@ -288,8 +289,9 @@ public final class MeridianTextView: NSTextView {
 
     private func lineHighlightRect(for characterRange: NSRange) -> NSRect? {
         guard let textLayoutManager,
+              let contentStorage = textContentStorage,
               let docStart = textLayoutManager.documentRange.location as NSTextLocation?,
-              let caretLoc = textLayoutManager.location(docStart, offsetBy: characterRange.location),
+              let caretLoc = contentStorage.location(docStart, offsetBy: characterRange.location),
               let fragment = textLayoutManager.textLayoutFragment(for: caretLoc)
         else { return nil }
 
@@ -312,43 +314,54 @@ private extension MeridianTextView {
         guard spaceAdvance > 0 else { return }
         let indentStepWidth = spaceAdvance * CGFloat(tabWidth)
 
-        let selectedLocation = selectedRanges.first?.rangeValue.location ?? 0
+        // Use the selection's layout fragment (O(1) point-based lookup via
+        // the text view's insertion point rect) instead of the O(n) linear
+        // `location(docStart, offsetBy:)` scan.
         var activeIndentLevel = -1
-
-        let caretParagraph: NSTextParagraph? = {
-            guard let docStart = textLayoutManager.documentRange.location as NSTextLocation?,
-                  let caretLoc = textLayoutManager.location(docStart, offsetBy: selectedLocation),
-                  let caretFragment = textLayoutManager.textLayoutFragment(for: caretLoc)
-            else { return nil }
-            return caretFragment.textElement as? NSTextParagraph
-        }()
-
-        if let paragraph = caretParagraph {
+        if let insertionRect = textLayoutManager.textSelections.first?
+            .textRanges.first?.location,
+           let caretFragment = textLayoutManager.textLayoutFragment(for: insertionRect),
+           let paragraph = caretFragment.textElement as? NSTextParagraph
+        {
             activeIndentLevel = computeIndentLevel(for: paragraph.attributedString.string)
         }
 
         NSGraphicsContext.saveGraphicsState()
-        guard let docStart = textLayoutManager.documentRange.location as NSTextLocation? else {
+
+        // Find the first visible fragment via O(1) point-based lookup
+        // instead of enumerating all 671K fragments from docStart.
+        let startPointInContainer = NSPoint(
+            x: 0,
+            y: rect.minY - textContainerOrigin.y
+        )
+        guard let startFragment = textLayoutManager.textLayoutFragment(for: startPointInContainer)
+        else {
             NSGraphicsContext.restoreGraphicsState()
             return
         }
 
-        textLayoutManager.enumerateTextLayoutFragments(from: docStart, options: [.ensuresLayout]) { fragment in
+        textLayoutManager.enumerateTextLayoutFragments(
+            from: startFragment.rangeInElement.location,
+            options: [.ensuresLayout],
+        ) { fragment in
             let frame = fragment.layoutFragmentFrame
-            let originY = frame.origin.y + textContainerOrigin.y
-            let lineRect = NSRect(x: 0, y: originY, width: bounds.width, height: frame.height)
+            let originY = frame.origin.y + self.textContainerOrigin.y
+            // Stop once past the visible rect
+            guard originY <= rect.maxY else { return false }
+
+            let lineRect = NSRect(x: 0, y: originY, width: self.bounds.width, height: frame.height)
             guard lineRect.intersects(rect) else { return true }
 
             let lineText = (fragment.textElement as? NSTextParagraph)?.attributedString.string ?? ""
-            let indentLevel = computeIndentLevel(for: lineText)
+            let indentLevel = self.computeIndentLevel(for: lineText)
             if indentLevel <= 0 {
                 return true
             }
 
             for level in 1 ... indentLevel {
-                let xPos = textContainerOrigin.x + CGFloat(level) * indentStepWidth
+                let xPos = self.textContainerOrigin.x + CGFloat(level) * indentStepWidth
                 let guideRect = NSRect(x: xPos, y: originY, width: 1.0, height: frame.height)
-                let color = (level == activeIndentLevel) ? activeIndentGuideColor : indentGuideColor
+                let color = (level == activeIndentLevel) ? self.activeIndentGuideColor : self.indentGuideColor
                 color.setFill()
                 guideRect.fill(using: .sourceOver)
             }

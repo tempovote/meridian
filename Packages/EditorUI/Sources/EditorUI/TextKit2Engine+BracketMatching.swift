@@ -68,18 +68,10 @@ extension TextKit2Engine {
         }
         currentBracketHighlightRanges = []
 
-        // `buffer` (the rope mirror) is only advanced by `buffer.apply(...)`
-        // *after* `performEditingTransaction`'s closure returns, but AppKit
-        // can fire `textViewDidChangeSelection` synchronously as a side
-        // effect of `storage.replaceCharacters` itself — mid-transaction,
-        // while `buffer` still holds the pre-edit content but `storage`/
-        // `textView.selectedRanges` already reflect the post-edit content.
-        // `storage.length` is always current, so a length mismatch is a
-        // reliable, cheap signal that `buffer` is momentarily stale; skip
-        // this recomputation and let the caller that eventually re-syncs
-        // `buffer` (`apply`/`handleUserEdit`, both of which call
-        // `highlightCurrentBuffer()` → `applyHighlighting` →
-        // `updateBracketHighlight()` again once consistent) repaint it.
+        // Skip bracket matching for large files (> 10 MB) — the linear
+        // scan costs ~45ms per caret move on a 32 MB file.
+        guard buffer.utf8Count < 10 * 1024 * 1024 else { return }
+
         guard storage.length == buffer.utf16Count else { return }
 
         let selectedRanges = textView.selectedRanges.map(\.rangeValue)
