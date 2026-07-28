@@ -1,13 +1,73 @@
 import SwiftUI
 
 /// Observable model that bridges AppKit scroll events to the SwiftUI MinimapView.
+///
+/// Holds the length of each mark to draw rather than the document's text: the
+/// view derives a mark's width from the line's character count and ignores
+/// everything else about it, so retaining one `String` per line was dead
+/// weight that scaled with the document.
+///
+/// Above ``perLineLimit`` lines the marks are bucketed instead, bounding both
+/// storage and per-frame draw work. Below it the mapping is one mark per line,
+/// which reproduces the previous rendering exactly — the point at which
+/// bucketing starts is far past where an 80-point-wide view could resolve
+/// individual lines anyway.
 public final class MinimapViewModel: ObservableObject {
-    @Published public var lines: [String]
+    /// Documents at or below this many lines keep one mark per line.
+    public static let perLineLimit = 5000
+    /// Number of buckets used once ``perLineLimit`` is exceeded.
+    public static let sampleCount = 400
+
+    /// Number of lines in the document. Distinct from `markLengths.count`
+    /// once bucketing kicks in, and the value the viewport indicator maps
+    /// scroll position against.
+    @Published public private(set) var lineCount: Int
+    /// One entry per drawn mark, in points, before the view clamps it to the
+    /// minimap's width. Zero means "draw nothing here" — a blank line.
+    @Published public private(set) var markLengths: [Double]
     @Published public var visibleLineRange: ClosedRange<Int>?
 
+    /// Length in points of the mark drawn for a line of `count` characters.
+    /// Kept as one function so the per-line and bucketed paths cannot drift.
+    static func markLength(forCharacterCount count: Int) -> Double {
+        Double(max(4, count * 2))
+    }
+
     public init(lines: [String], visibleLineRange: ClosedRange<Int>? = nil) {
-        self.lines = lines
+        lineCount = 0
+        markLengths = []
         self.visibleLineRange = visibleLineRange
+        update(fromLines: lines)
+    }
+
+    /// Recomputes the marks from the document's lines.
+    public func update(fromLines lines: [String]) {
+        lineCount = lines.count
+        guard !lines.isEmpty else {
+            markLengths = []
+            return
+        }
+        guard lines.count > Self.perLineLimit else {
+            markLengths = lines.map(Self.markLength(forLine:))
+            return
+        }
+        // Each bucket takes the longest line it covers rather than an
+        // average, so an isolated long line in a sparse region stays visible.
+        var buckets = [Double](repeating: 0, count: Self.sampleCount)
+        for (index, line) in lines.enumerated() {
+            let length = Self.markLength(forLine: line)
+            guard length > 0 else { continue }
+            let bucket = min(Self.sampleCount - 1, index * Self.sampleCount / lines.count)
+            buckets[bucket] = max(buckets[bucket], length)
+        }
+        markLengths = buckets
+    }
+
+    /// Zero for a blank line, so the view can skip it. Checked without
+    /// `trimmingCharacters`, which would allocate a `String` per line.
+    private static func markLength(forLine line: String) -> Double {
+        guard !line.allSatisfy(\.isWhitespace) else { return 0 }
+        return markLength(forCharacterCount: line.count)
     }
 }
 
@@ -36,7 +96,7 @@ public struct MinimapView: View {
 
     public var body: some View {
         GeometryReader { geometry in
-            let totalLines = max(1, model.lines.count)
+            let totalLines = max(1, model.lineCount)
             let height = geometry.size.height
             let width = geometry.size.width
 
@@ -44,16 +104,16 @@ public struct MinimapView: View {
                 Color(NSColor.controlBackgroundColor)
                     .opacity(0.4)
 
-                // High-performance Canvas rendering ALL document lines without truncation
+                // Canvas rendering every mark the model holds — one per line
+                // for an ordinary document, one per bucket for a huge one.
                 Canvas { context, size in
-                    let lineSpacing = size.height / CGFloat(totalLines)
-                    for (idx, line) in model.lines.enumerated() {
-                        let trimmed = line.trimmingCharacters(in: .whitespaces)
-                        guard !trimmed.isEmpty else { continue }
-
-                        let lineY = (CGFloat(idx) / CGFloat(totalLines)) * size.height
-                        let lineWidth = min(size.width * 0.75, CGFloat(max(4, line.count * 2)))
-                        let lineH = max(1.0, min(2.5, lineSpacing * 0.8))
+                    let markCount = model.markLengths.count
+                    guard markCount > 0 else { return }
+                    let rowSpacing = size.height / CGFloat(markCount)
+                    for (idx, markLength) in model.markLengths.enumerated() where markLength > 0 {
+                        let lineY = (CGFloat(idx) / CGFloat(markCount)) * size.height
+                        let lineWidth = min(size.width * 0.75, CGFloat(markLength))
+                        let lineH = max(1.0, min(2.5, rowSpacing * 0.8))
 
                         let rect = CGRect(
                             x: 4,
