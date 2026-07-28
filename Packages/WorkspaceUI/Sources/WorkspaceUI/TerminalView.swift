@@ -256,7 +256,12 @@ public struct TerminalView: View {
     /// document's own containing folder, or home for an untitled document.
     /// The app's process working directory — whatever LaunchServices left
     /// it at for a GUI launch, typically "/" — is never a sensible prompt.
-    static func fallbackWorkingDirectory(documentURL: URL?) -> String {
+    ///
+    /// `nonisolated` because `TerminalView: View` infers `@MainActor` on the
+    /// whole type from the protocol requirement, and this does nothing
+    /// actor-isolated (`URL`/`FileManager` path math) — without it, calling
+    /// this from a plain (non-`@MainActor`) test function is a compile error.
+    nonisolated static func fallbackWorkingDirectory(documentURL: URL?) -> String {
         documentURL?.deletingLastPathComponent().path
             ?? FileManager.default.homeDirectoryForCurrentUser.path
     }
