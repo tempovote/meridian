@@ -112,4 +112,49 @@ struct GutterScrollHeightTests {
 
         #expect(ruler.ruleThickness > narrow)
     }
+
+    /// `refreshRulerGeometry()` exists for a pane whose frame shrank without
+    /// its content changing (`toggleTerminal` giving the editor area less
+    /// height). It must run without crashing at any frame size, including
+    /// shrinking past the point where not all lines fit — the exact
+    /// situation a resize-to-make-room-for-a-panel produces.
+    @Test func refreshRulerGeometryRunsCleanlyAfterAFrameShrink() {
+        let engine = makeEngine()
+        engine.load(buffer: buffer(lines: 3000))
+        let window = hostInWindow(engine, height: 600)
+
+        window.contentView?.setFrameSize(NSSize(width: 800, height: 300))
+        engine.refreshRulerGeometry()
+        engine.view.layoutSubtreeIfNeeded()
+
+        forceDraw(window)
+        #expect(engine.rulerViewForTesting.frame.height <= 300.5)
+    }
+
+    /// The point of having a separate, cheap method: it must not force the
+    /// full-document layout `refreshViewportLayout()` relies on, or every
+    /// terminal-panel toggle would pay the O(document) cost ADR 0011
+    /// measured at 84s on a 100 MB file. `usageBoundsForTextContainer`
+    /// collapsing to a single viewport (per `documentStaysScrollableAfter-
+    /// FirstGutterDraw` above) is the same signal that full layout ran;
+    /// here the opposite must hold — nothing this method does should be
+    /// able to grow it.
+    @Test func refreshRulerGeometryDoesNotForceFullDocumentLayout() throws {
+        let engine = makeEngine()
+        engine.load(buffer: buffer(lines: 3000))
+        let window = hostInWindow(engine, height: 600)
+        let layoutManager = try #require(engine.textView.textLayoutManager)
+
+        let beforeResize = layoutManager.usageBoundsForTextContainer.height
+
+        window.contentView?.setFrameSize(NSSize(width: 800, height: 300))
+        engine.refreshRulerGeometry()
+
+        // A method that (wrongly) forced full-document layout would only
+        // ever grow this estimate, never shrink it below what was already
+        // computed above — checking it stayed put is the cheap way to prove
+        // no full-document pass ran, without instrumenting
+        // NSTextLayoutManager itself.
+        #expect(layoutManager.usageBoundsForTextContainer.height == beforeResize)
+    }
 }

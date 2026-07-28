@@ -1149,11 +1149,26 @@ final class MeridianDocument: NSDocument {
 
     private var terminalHost: NSView?
 
+    /// Forces every open editor pane's scroll view (and its line-number
+    /// ruler) to re-tile against its current frame. `rootSplitView` resizing
+    /// the editor area to make room for the terminal panel changes the
+    /// panes' frames as an ordinary view-hierarchy resize, which does not by
+    /// itself re-tile a ruler view. Uses `refreshRulerGeometry()`, not
+    /// `refreshViewportLayout()` — the content hasn't changed, only the
+    /// frame, and this runs on every terminal toggle rather than the rare
+    /// split-pane creation `refreshViewportLayout()` is scoped to.
+    private func refreshAllPanesViewportLayout() {
+        for pane in panes {
+            pane.engine.refreshRulerGeometry()
+        }
+    }
+
     @objc func toggleTerminal(_ sender: Any?) {
         if let host = terminalHost {
             host.removeFromSuperview()
             terminalHost = nil
             rootSplitView?.adjustSubviews()
+            refreshAllPanesViewportLayout()
         } else {
             guard let rootSplitView else { return }
             let terminal = TerminalView(documentURL: fileURL)
@@ -1168,6 +1183,7 @@ final class MeridianDocument: NSDocument {
             let targetDividerPos = max(100, totalHeight - 300)
             rootSplitView.setPosition(targetDividerPos, ofDividerAt: 0)
             rootSplitView.adjustSubviews()
+            refreshAllPanesViewportLayout()
 
             DispatchQueue.main.async { [weak self] in
                 guard let self, let rootSplitView = self.rootSplitView, terminalHost != nil else { return }
@@ -1175,6 +1191,7 @@ final class MeridianDocument: NSDocument {
                 if currentHeight > 300 {
                     rootSplitView.setPosition(currentHeight - 300, ofDividerAt: 0)
                     rootSplitView.adjustSubviews()
+                    refreshAllPanesViewportLayout()
                 }
             }
         }
