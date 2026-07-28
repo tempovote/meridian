@@ -251,6 +251,21 @@ public struct TerminalView: View {
 
     // MARK: Session Persistence
 
+    /// Where a terminal panel starts when no session was previously saved
+    /// for `documentURL` (or the saved directory no longer exists): the
+    /// document's own containing folder, or home for an untitled document.
+    /// The app's process working directory — whatever LaunchServices left
+    /// it at for a GUI launch, typically "/" — is never a sensible prompt.
+    ///
+    /// `nonisolated` because `TerminalView: View` infers `@MainActor` on the
+    /// whole type from the protocol requirement, and this does nothing
+    /// actor-isolated (`URL`/`FileManager` path math) — without it, calling
+    /// this from a plain (non-`@MainActor`) test function is a compile error.
+    nonisolated static func fallbackWorkingDirectory(documentURL: URL?) -> String {
+        documentURL?.deletingLastPathComponent().path
+            ?? FileManager.default.homeDirectoryForCurrentUser.path
+    }
+
     private func restoreSession() {
         let key = String.terminalDirKey(for: documentURL)
         let saved = UserDefaults.standard.string(forKey: key)
@@ -258,6 +273,7 @@ public struct TerminalView: View {
             workingDirectory = saved
             appendLine("Resumed session at \(saved)", color: .secondary)
         } else {
+            workingDirectory = Self.fallbackWorkingDirectory(documentURL: documentURL)
             appendLine("Meridian Embedded Terminal (zsh)", color: .accentColor)
             appendLine("Type a command and press Enter...", color: .secondary)
         }

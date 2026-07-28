@@ -44,11 +44,20 @@ public struct KeybindingSettings: Codable, Sendable, Equatable {
 
     public static let `default` = KeybindingSettings(customBindings: [:])
 
+    /// Every action ID that `MainMenu.addCommand` resolves through
+    /// `KeybindingRegistry` must have an entry here. `addCommand` looks up
+    /// `shortcut(for: actionID)` with no `default:` argument, so a missing
+    /// entry does not fall back to the `keyEquivalent`/`modifierMask` that
+    /// call site also passed in — it silently resolves to the empty string,
+    /// erasing that menu item's shortcut instead of falling back to it.
     public static let defaultShortcuts: [String: String] = [
         "find": "cmd+f",
         "findInFiles": "cmd+shift+f",
         "formatDocument": "cmd+shift+i",
         "toggleMarkdownPreview": "cmd+shift+m",
+        "toggleHexView": "cmd+option+h",
+        "toggleMinimap": "cmd+option+m",
+        "toggleTerminal": "ctrl+`",
         "foldAll": "cmd+option+[",
         "unfoldAll": "cmd+option+]",
         "toggleSoftWrap": "cmd+option+w",
