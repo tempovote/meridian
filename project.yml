@@ -210,6 +210,21 @@ targets:
     dependencies:
       - target: Meridian
 
+  MeridianProcessPerfTests:
+    type: bundle.unit-test
+    platform: macOS
+    sources:
+      - Tests/ProcessPerfTests
+      - Tests/PerformanceTests/PerfCorpus.swift
+    settings:
+      GENERATE_INFOPLIST_FILE: YES
+      # Deliberately NOT hosted in Meridian.app. These tests spawn the app
+      # as a subprocess; running inside the sandboxed host makes that spawn
+      # crash in libsecinit_appsandbox. No `dependencies:` entry on the app
+      # target either — that is what makes XcodeGen set TEST_HOST.
+      TEST_HOST: ""
+      BUNDLE_LOADER: ""
+
 schemes:
   Meridian:
     build:
@@ -232,4 +247,15 @@ schemes:
     test:
       config: Debug
       targets: [MeridianPerformanceTests]
+
+  MeridianProcessPerfTests:
+    build:
+      targets:
+        Meridian: all
+        MeridianProcessPerfTests: [test]
+    run:
+      config: Release
+    test:
+      config: Release
+      targets: [MeridianProcessPerfTests]
 

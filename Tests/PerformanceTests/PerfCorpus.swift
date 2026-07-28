@@ -32,17 +32,6 @@ enum PerfCorpus {
         }
     }
 
-    /// 1 GB standard text file (~20,000,000 lines).
-    static var text1GB: URL {
-        getThrows {
-            try ensureFile(
-                named: "corpus-1gb.txt",
-                targetBytes: 1_000_000_000,
-                lineTemplate: "0123456789012345678901234567890123456789012345678\n",
-            )
-        }
-    }
-
     /// 100 MB text file for search benchmark (~2,000 matches across 100 MB).
     static var text100MBSearch: URL {
         getThrows {
@@ -52,17 +41,6 @@ enum PerfCorpus {
                 lineTemplate: "0123456789012345678901234567890123456789012345678\n",
                 targetToken: "SEARCH_KEYWORD_TARGET_MATCH_100MB\n",
                 strideLines: 1000,
-            )
-        }
-    }
-
-    /// 10M line log file.
-    static var log10MLines: URL {
-        getThrows {
-            try ensureLineCountFile(
-                named: "corpus-10m-lines.log",
-                targetLines: 10_000_000,
-                lineTemplate: "2026-07-22T00:00:00.000Z [INFO] Meridian system performance log entry\n",
             )
         }
     }
@@ -150,41 +128,6 @@ enum PerfCorpus {
             try handle.write(contentsOf: dataToWrite)
             written += dataToWrite.count
             lineCount += 1
-        }
-        return fileURL
-    }
-
-    private static func ensureLineCountFile(named name: String, targetLines: Int, lineTemplate: String) throws -> URL {
-        let fileURL = corpusDirectory.appendingPathComponent(name)
-        if FileManager.default.fileExists(atPath: fileURL.path) {
-            return fileURL
-        }
-
-        FileManager.default.createFile(atPath: fileURL.path, contents: nil)
-        let handle = try FileHandle(forWritingTo: fileURL)
-        defer { try? handle.close() }
-
-        let patternData = Data(lineTemplate.utf8)
-        let linesPerChunk = 20000
-        var chunk = Data()
-        chunk.reserveCapacity(patternData.count * linesPerChunk)
-        for _ in 0 ..< linesPerChunk {
-            chunk.append(patternData)
-        }
-
-        var linesWritten = 0
-        while linesWritten < targetLines {
-            let batch = min(linesPerChunk, targetLines - linesWritten)
-            if batch == linesPerChunk {
-                try handle.write(contentsOf: chunk)
-            } else {
-                var smallChunk = Data()
-                for _ in 0 ..< batch {
-                    smallChunk.append(patternData)
-                }
-                try handle.write(contentsOf: smallChunk)
-            }
-            linesWritten += batch
         }
         return fileURL
     }

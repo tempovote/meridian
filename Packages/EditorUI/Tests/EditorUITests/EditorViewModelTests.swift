@@ -1,5 +1,6 @@
 import AppKit
 import DocumentCore
+import FileKit
 import Testing
 @testable import EditorUI
 
@@ -14,6 +15,8 @@ final class MockLayoutEngine: TextLayoutEngine {
 
     var onUserEdit: ((EditTransaction) -> Void)?
     var onBecomeFirstResponder: (() -> Void)?
+    var profile: HugeFileProfile = .unrestricted
+    var capabilitiesOverride: HugeFileProfile.Capabilities?
     var loaded: [TextBuffer] = []
     // Matches TextLayoutEngine.apply's own 3-arg shape.
     // swiftlint:disable:next large_tuple
@@ -57,9 +60,19 @@ final class MockLayoutEngine: TextLayoutEngine {
     }
 }
 
+/// Not `private`: `EditorViewModelHugeFileTests.swift` (a separate file,
+/// same module) reuses this rather than duplicating it.
 @MainActor
-private func makeViewModel(_ buffer: TextBuffer, engine: MockLayoutEngine) -> EditorViewModel {
+func makeViewModel(_ buffer: TextBuffer, engine: MockLayoutEngine) -> EditorViewModel {
     EditorViewModel(documentModel: DocumentModel(buffer: buffer), engine: engine)
+}
+
+/// Convenience for tests that only care about huge-file-profile gating,
+/// not the buffer content or a specific mock engine instance. Not
+/// `private`: see the other overload's doc comment.
+@MainActor
+func makeViewModel() -> EditorViewModel {
+    makeViewModel(TextBuffer(""), engine: MockLayoutEngine())
 }
 
 @MainActor

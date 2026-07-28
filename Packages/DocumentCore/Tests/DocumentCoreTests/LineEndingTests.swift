@@ -96,6 +96,31 @@ import Testing
     }
 }
 
+@Test func boundedStatsMatchFullStatsWithinTheLimit() {
+    let text = String(repeating: "alpha\r\nbeta\r\n", count: 500)
+    let buffer = TextBuffer(text)
+    let full = buffer.lineEndingStats()
+    let bounded = buffer.lineEndingStats(limitedToFirst: buffer.utf8Count)
+    #expect(bounded == full)
+}
+
+@Test func boundedStatsStopAtTheLimit() {
+    // CRLF for the first stretch, LF after. A bound inside the CRLF
+    // region must report CRLF dominant even though LF wins overall.
+    let head = String(repeating: "a\r\n", count: 100)
+    let tail = String(repeating: "b\n", count: 10000)
+    let buffer = TextBuffer(head + tail)
+    let bounded = buffer.lineEndingStats(limitedToFirst: head.utf8.count)
+    #expect(bounded.dominant == .crlf)
+    #expect(buffer.lineEndingStats().dominant == .lf)
+}
+
+@Test func boundedStatsOnEmptyBufferAreZero() {
+    let buffer = TextBuffer("")
+    let stats = buffer.lineEndingStats(limitedToFirst: 1024)
+    #expect(stats.dominant == nil)
+}
+
 @Test func adjacentBreaksCountAndConvertCorrectly() {
     let stats = TextBuffer("\r\r\n\r").lineEndingStats()
     #expect(stats.crCount == 2)

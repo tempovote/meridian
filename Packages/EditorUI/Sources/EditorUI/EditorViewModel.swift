@@ -1,4 +1,5 @@
 import DocumentCore
+import FileKit
 import Foundation
 import Observation
 import SearchKit
@@ -16,7 +17,11 @@ import SearchKit
 @Observable
 public final class EditorViewModel {
     @ObservationIgnored public let documentModel: DocumentModel
-    @ObservationIgnored private let engine: any TextLayoutEngine
+    /// Not `private`: `EditorViewModel+HugeFile.swift` (a separate file,
+    /// same module) sets `engine.profile`/`engine.capabilitiesOverride`
+    /// directly rather than routing every capability change through a
+    /// method on this file's primary declaration.
+    @ObservationIgnored let engine: any TextLayoutEngine
 
     /// The authoritative document content — a passthrough to `documentModel`.
     public var buffer: TextBuffer {
@@ -36,9 +41,20 @@ public final class EditorViewModel {
         didSet { engine.setGutterVisible(isGutterVisible) }
     }
 
-    /// Whether soft wrap (line wrapping) is enabled.
+    /// Whether soft wrap (line wrapping) is enabled. Refuses to turn on
+    /// while ``hugeFileProfile`` forbids it — soft wrap over a
+    /// multi-megabyte line is the one restriction ``overrideCapabilities()``
+    /// never lifts (ADR 0009's 11 GB measurement), so there is no path
+    /// that makes setting this `true` here stick under a restricting
+    /// profile.
     public var isSoftWrapEnabled: Bool = true {
-        didSet { engine.setSoftWrap(isSoftWrapEnabled) }
+        didSet {
+            if isSoftWrapEnabled, !effectiveCapabilities.softWrap {
+                isSoftWrapEnabled = false
+                return
+            }
+            engine.setSoftWrap(isSoftWrapEnabled)
+        }
     }
 
     /// Whether the current caret line background highlight is enabled.
@@ -46,6 +62,27 @@ public final class EditorViewModel {
 
     /// Whether the status bar at the bottom of the window is visible.
     public var isStatusBarVisible: Bool = true
+
+    /// Which features this document's size and line shape permit.
+    /// Setting it re-clamps any capability the user had switched on.
+    public var hugeFileProfile: HugeFileProfile = .unrestricted {
+        didSet {
+            hasOverriddenCapabilities = false
+            isBannerDismissed = false
+            clampCapabilities()
+        }
+    }
+
+    /// True once the user has explicitly accepted the cost and asked for
+    /// the heavy features back. Not `private`: see `engine`'s doc comment.
+    /// Deliberately NOT `@ObservationIgnored` — the huge-file banner host
+    /// reads it (via `effectiveCapabilities`/`isHugeFileBannerVisible`) and
+    /// must re-render the moment "Enable Anyway" flips it.
+    var hasOverriddenCapabilities = false
+
+    /// The banner is dismissible independently of the restrictions it
+    /// describes — hiding the message never restores a capability.
+    public var isBannerDismissed = false
 
     /// Fired after any transaction changes `documentModel`'s buffer via
     /// this pane — a user edit in this pane's engine, a programmatic

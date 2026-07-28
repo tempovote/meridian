@@ -11,7 +11,7 @@ import WorkspaceUI
 
 /// Errors that block opening a document, with user-facing text.
 enum DocumentOpenError: LocalizedError {
-    /// File exceeds the huge-file threshold (bytes given).
+    /// File exceeds the openable-file ceiling (bytes given).
     case tooLarge(byteSize: Int)
     /// A single line exceeds the pathological-line threshold (ADR 0009:
     /// a 100 MB single-line file drives TextKit RSS to 11 GB).
@@ -20,11 +20,13 @@ enum DocumentOpenError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case let .tooLarge(byteSize):
-            "This file is \(byteSize / (1024 * 1024)) MB. Files of 64 MB or more need "
-                + "huge-file mode, which arrives in a later release."
-        case .lineTooLong:
-            "This file contains an extremely long line, which this version cannot "
-                + "display safely. Support arrives with huge-file mode in a later release."
+            "This file is \(byteSize / (1024 * 1024)) MB. Meridian opens files "
+                + "up to 100 MB. Larger files are refused rather than opened "
+                + "slowly — use a streaming viewer such as `less` for them."
+        case let .lineTooLong(utf8Length):
+            "This file's longest line is \(utf8Length / (1024 * 1024)) MB. "
+                + "Meridian cannot open it yet — laying out one enormous line "
+                + "blocks the app for minutes with no progress or cancel."
         }
     }
 }
@@ -111,9 +113,25 @@ private final class RootSplitViewDelegate: NSObject, NSSplitViewDelegate {
 /// NSUndoManager actions replaying the rope's UndoStack (spec decision 3).
 final class MeridianDocument: NSDocument {
     // swiftlint:disable:previous type_body_length
-    /// Upper bound on file size Meridian will attempt to open (2 GB).
-    nonisolated static let maxFileSize = 2 * 1024 * 1024 * 1024
-    /// Pathological-line threshold, in UTF-8 bytes.
+    /// Hard ceiling on a file Meridian will open, in bytes.
+    ///
+    /// Files above this are refused rather than opened slowly: measurement
+    /// during M10 showed a 700 MB file taking over five minutes to become
+    /// visible and 4.7x its size in resident memory. Refusing is the honest
+    /// behaviour; the previous 2 GB limit promised a capability the app does
+    /// not have. Raising this later means implementing mapped rope leaves and
+    /// a windowed text mirror first (ADR 0011).
+    nonisolated static let maxFileSize = 100 * 1024 * 1024
+
+    /// Hard ceiling on a single line's length, in UTF-8 bytes.
+    ///
+    /// Temporary, pending the viewport-layout milestone. A file whose longest
+    /// line reaches this is refused, because laying out one enormous line
+    /// blocks the main run loop for minutes with no progress and no cancel —
+    /// measurably worse than an immediate, honest refusal. The threshold is
+    /// the pre-M10 value rather than a measured one on purpose: every number
+    /// available today is polluted by the full-document-layout defect, so it
+    /// must be re-derived once that is fixed (ADR 0011).
     nonisolated static let maxLineLength = 1_000_000
 
     private var documentModel: DocumentModel?
@@ -128,6 +146,13 @@ final class MeridianDocument: NSDocument {
     private var focusedPaneIndex: Int = 0
     private var containerStack: NSStackView?
     private var statusBarHost: NSHostingView<StatusBarView>?
+    /// Persistently hosted (never added/removed): its SwiftUI body reads
+    /// `HugeFileBannerHost.viewModel.isHugeFileBannerVisible` directly, so
+    /// the banner appears/disappears reactively as that `@Observable`
+    /// state changes, rather than needing an explicit show/hide call each
+    /// time — see `refreshHugeFileBanner()` for the one thing that DOES
+    /// need to be explicit: rebinding to a new `EditorViewModel` instance.
+    private var bannerHost: NSHostingView<HugeFileBannerHost>?
     /// Whatever currently occupies the container stack's editor/split slot
     /// (a single pane's `engine.view`, or an `NSSplitView` wrapping two) —
     /// tracked explicitly rather than assumed to be
@@ -142,6 +167,8 @@ final class MeridianDocument: NSDocument {
     private var loadedMetadata: (encoding: TextEncoding, hadBOM: Bool)?
     /// Buffer read before window controllers exist.
     private var pendingBuffer = TextBuffer()
+    /// The restriction profile of the file most recently read from disk.
+    private var loadedProfile: HugeFileProfile = .unrestricted
 
     private let fileTreeViewModel = FileTreeViewModel()
     private var sidebarHost: NSHostingView<FileTreeView>?
@@ -194,6 +221,7 @@ final class MeridianDocument: NSDocument {
         MainActor.assumeIsolated {
             loadedMetadata = (file.encoding, file.hadBOM)
             pendingBuffer = file.buffer
+            loadedProfile = file.profile
             fileTreeViewModel.setRootURL(url.deletingLastPathComponent())
             // Re-opened into an existing window (revert): reload the
             // model. Rebuild rather than diff — P1 has no revert UI; this
@@ -219,7 +247,19 @@ final class MeridianDocument: NSDocument {
             documentModel = newDocumentModel
             let primaryEngine = panes[0].engine
             primaryEngine.languageID = languageID(forFileExtension: url.pathExtension)
+            // Set on the engine BEFORE `EditorViewModel.init` triggers its
+            // synchronous `load(buffer:)` — that call ends by starting a
+            // parse if the engine's capabilities allow it, so the profile
+            // must already be in force here or a huge file's first load
+            // (including every revert, which reuses this engine) launches
+            // one whole-file parse before anything gets a chance to
+            // forbid it. Setting `newViewModel.hugeFileProfile` below is
+            // still needed for the view-model-side state (soft wrap
+            // clamping, banner visibility) — it is just too late to gate
+            // the engine's first load.
+            primaryEngine.profile = loadedProfile
             let newViewModel = EditorViewModel(documentModel: newDocumentModel, engine: primaryEngine)
+            newViewModel.hugeFileProfile = loadedProfile
             newViewModel.isSoftWrapEnabled = AppDelegate.settingsStore.current.editor.softWrapDefault
             panes = [(newViewModel, primaryEngine)]
             currentSplitOrientation = nil
@@ -230,6 +270,7 @@ final class MeridianDocument: NSDocument {
             rebuildSplitLayout()
             windowControllers.first?.window?.makeFirstResponder(panes[0].engine.keyView)
             refreshStatusBar()
+            refreshHugeFileBanner()
         }
     }
 
@@ -256,7 +297,14 @@ final class MeridianDocument: NSDocument {
             let documentModel = DocumentModel(buffer: pendingBuffer)
             self.documentModel = documentModel
             let engine = makeEngine(languageID: fileURL.flatMap { languageID(forFileExtension: $0.pathExtension) })
+            // Must precede `EditorViewModel.init` — see the matching
+            // comment in `read(from:ofType:)`. `loadedProfile` was already
+            // populated by `read(from:ofType:)`, which NSDocument runs
+            // before `makeWindowControllers()` for a file opened from
+            // disk; it stays `.unrestricted` for a brand-new document.
+            engine.profile = loadedProfile
             let viewModel = EditorViewModel(documentModel: documentModel, engine: engine)
+            viewModel.hugeFileProfile = loadedProfile
             viewModel.isSoftWrapEnabled = AppDelegate.settingsStore.current.editor.softWrapDefault
             panes = [(viewModel, engine)]
             wireUndoCallback()
@@ -274,6 +322,10 @@ final class MeridianDocument: NSDocument {
             self.containerStack = containerStack
             editorSlotView = engine.view
             host.setContentHuggingPriority(.required, for: .vertical)
+
+            let bannerHostView = NSHostingView(rootView: HugeFileBannerHost(viewModel: viewModel))
+            bannerHost = bannerHostView
+            containerStack.insertView(bannerHostView, at: 0, in: .top)
 
             let mainSplitView = makeSidebarSplitView(containerStack: containerStack)
 
@@ -498,7 +550,22 @@ final class MeridianDocument: NSDocument {
         }
         if panes.count == 1 {
             let secondaryEngine = makeEngine(languageID: primary.engine.languageID)
+            // Must precede `EditorViewModel.init` — see the matching
+            // comment in `read(from:ofType:)`: the engine's `load(buffer:)`
+            // (triggered synchronously by that init) starts a parse gated
+            // on `engine.activeCapabilities`, so an unrestricted default
+            // here would launch one whole-file parse on the new pane
+            // before anything gets a chance to forbid it.
+            secondaryEngine.profile = primary.viewModel.hugeFileProfile
             let secondaryViewModel = EditorViewModel(documentModel: documentModel, engine: secondaryEngine)
+            // Must be set before `isSoftWrapEnabled` below: the profile's
+            // own didSet re-clamps soft wrap, and a huge-file document
+            // must gate the split pane's engine the same as the primary's
+            // (or its syntax highlighter would keep running unrestricted).
+            // `inheritHugeFileState` also carries over an already-accepted
+            // "Enable Anyway" override and the banner's dismissal state —
+            // plain `hugeFileProfile = ...` would silently reset both.
+            secondaryViewModel.inheritHugeFileState(from: primary.viewModel)
             secondaryViewModel.isGutterVisible = primary.viewModel.isGutterVisible
             secondaryViewModel.isSoftWrapEnabled = primary.viewModel.isSoftWrapEnabled
             secondaryViewModel.isCurrentLineHighlightEnabled = primary.viewModel.isCurrentLineHighlightEnabled
@@ -537,6 +604,7 @@ final class MeridianDocument: NSDocument {
         rebuildSplitLayout()
         windowControllers.first?.window?.makeFirstResponder(panes[0].engine.keyView)
         refreshStatusBar()
+        refreshHugeFileBanner()
     }
 
     /// Swaps whatever currently occupies the container stack's top slot
@@ -600,11 +668,16 @@ final class MeridianDocument: NSDocument {
             newPrimarySlot = panes[0].engine.view
         }
         newPrimarySlot.setContentHuggingPriority(.defaultLow, for: .vertical)
-        // Insert below any open overlay (find bar / command palette), not
-        // unconditionally at index 0 — an open overlay currently occupies
-        // that slot and must stay on top of the editor, not be displaced.
+        // Insert below any open overlay (find bar / command palette) and
+        // below the huge-file banner host — both currently occupy slots
+        // above the editor and must stay there, not be displaced. The
+        // banner host is inserted once in `makeWindowControllers()` and
+        // never removed (its visibility is controlled by SwiftUI content,
+        // not by adding/removing the arranged subview), so it is always
+        // present by the time a split can happen; the `nil` check is just
+        // defensive.
         let overlayIsOpen = findBarHost != nil || commandPaletteHost != nil
-        let insertIndex = overlayIsOpen ? 1 : 0
+        let insertIndex = (overlayIsOpen ? 1 : 0) + (bannerHost != nil ? 1 : 0)
         containerStack.insertView(newPrimarySlot, at: insertIndex, in: .top)
         editorSlotView = newPrimarySlot
     }
@@ -633,6 +706,7 @@ final class MeridianDocument: NSDocument {
             pane.engine.onBecomeFirstResponder = { [weak self] in
                 self?.focusedPaneIndex = index
                 self?.refreshStatusBar()
+                self?.refreshHugeFileBanner()
             }
         }
     }
@@ -663,6 +737,18 @@ final class MeridianDocument: NSDocument {
         host.isHidden = !viewModel.isStatusBarVisible
     }
 
+    /// Rebinds the huge-file banner host to the currently focused pane's
+    /// view model — needed alongside `refreshStatusBar()` at every point
+    /// that can replace or add an `EditorViewModel` (revert, reopen with
+    /// a different encoding, split, focus change): the host's SwiftUI
+    /// tree otherwise keeps observing a stale instance. Visibility itself
+    /// does NOT need an explicit refresh — `HugeFileBannerHost`'s body
+    /// reads `isHugeFileBannerVisible` directly and reacts on its own.
+    private func refreshHugeFileBanner() {
+        guard let viewModel = focusedViewModel else { return }
+        bannerHost?.rootView = HugeFileBannerHost(viewModel: viewModel)
+    }
+
     func changeEncoding(to newEncoding: TextEncoding, includeBOM: Bool) {
         loadedMetadata = (newEncoding, includeBOM)
         updateChangeCount(.changeDone)
@@ -678,11 +764,16 @@ final class MeridianDocument: NSDocument {
             }
             loadedMetadata = (file.encoding, file.hadBOM)
             pendingBuffer = file.buffer
+            loadedProfile = file.profile
             let newDocumentModel = DocumentModel(buffer: file.buffer)
             documentModel = newDocumentModel
             if !panes.isEmpty {
                 let primaryEngine = panes[0].engine
+                // Must precede `EditorViewModel.init` — see the matching
+                // comment in `read(from:ofType:)`.
+                primaryEngine.profile = loadedProfile
                 let newViewModel = EditorViewModel(documentModel: newDocumentModel, engine: primaryEngine)
+                newViewModel.hugeFileProfile = loadedProfile
                 newViewModel.isSoftWrapEnabled = AppDelegate.settingsStore.current.editor.softWrapDefault
                 panes[0] = (newViewModel, primaryEngine)
                 wireUndoCallback()
@@ -690,6 +781,7 @@ final class MeridianDocument: NSDocument {
                 wireFocusTracking()
             }
             refreshStatusBar()
+            refreshHugeFileBanner()
         } catch {
             let alert = NSAlert(error: error)
             if let window = windowControllers.first?.window {
@@ -1011,11 +1103,21 @@ final class MeridianDocument: NSDocument {
 
     @objc func toggleMinimap(_ sender: Any?) {
         guard let viewModel = focusedViewModel else { return }
+        // Closing an already-open minimap must always be allowed: the
+        // capability can go from permitted to forbidden out from under an
+        // open minimap (e.g. a revert that turns the document huge), and
+        // gating the close branch on the same guard as the open branch
+        // would strand the user with an open minimap and no way to turn
+        // it off (`validateMenuItem` would also grey out the menu item).
         if let host = minimapHost {
             host.removeFromSuperview()
             minimapHost = nil
             focusedEngine?.onScrollChange = nil
         } else {
+            guard viewModel.effectiveCapabilities.minimap else {
+                NSSound.beep()
+                return
+            }
             let lines = viewModel.buffer.string.components(separatedBy: .newlines)
             let minimapModel = MinimapViewModel(lines: lines)
             let minimap = MinimapView(model: minimapModel) { [weak self] targetLine in
@@ -1123,7 +1225,9 @@ final class MeridianDocument: NSDocument {
     private var gitGutterMarks: [Int: GitGutterMark] = [:]
 
     private func refreshGitGutter() {
-        guard let url = fileURL, let viewModel = focusedViewModel else {
+        guard let url = fileURL, let viewModel = focusedViewModel,
+              viewModel.effectiveCapabilities.gitGutter
+        else {
             gitGutterMarks = [:]
             updateGitGutterMarkProviders()
             return
@@ -1271,7 +1375,10 @@ final class MeridianDocument: NSDocument {
             return focusedViewModel != nil
         case #selector(toggleMinimap(_:)):
             menuItem.state = (minimapHost != nil) ? .on : .off
-            return focusedViewModel != nil
+            // Stay enabled while the minimap is already open even if the
+            // capability has since gone false — closing it must always be
+            // possible (see `toggleMinimap`'s doc comment).
+            return minimapHost != nil || focusedViewModel?.effectiveCapabilities.minimap == true
         case #selector(toggleTerminal(_:)):
             menuItem.state = (terminalHost != nil) ? .on : .off
             return true
@@ -1289,7 +1396,7 @@ final class MeridianDocument: NSDocument {
             return true
         case #selector(toggleSoftWrap(_:)):
             menuItem.state = (focusedViewModel?.isSoftWrapEnabled == true) ? .on : .off
-            return true
+            return focusedViewModel?.effectiveCapabilities.softWrap == true
         case #selector(toggleStatusBar(_:)):
             menuItem.state = (focusedViewModel?.isStatusBarVisible == true) ? .on : .off
             return true
@@ -1350,6 +1457,31 @@ final class MeridianDocument: NSDocument {
                 }
                 document.registerUndoReplay()
             }
+        }
+    }
+}
+
+/// Wraps ``HugeFileBannerView`` so its presence, not just its content,
+/// tracks `EditorViewModel`'s `@Observable` state: reading
+/// `viewModel.isHugeFileBannerVisible` directly in `body` means SwiftUI
+/// re-renders (and the hosting `NSStackView` collapses this to zero
+/// height) the moment the profile changes, the user dismisses the
+/// banner, or overrides the capabilities — with no imperative
+/// insert/remove bookkeeping in `MeridianDocument` beyond rebinding
+/// `viewModel` itself when a pane's view model instance changes (see
+/// `MeridianDocument.refreshHugeFileBanner()`).
+private struct HugeFileBannerHost: View {
+    let viewModel: EditorViewModel
+
+    var body: some View {
+        if viewModel.isHugeFileBannerVisible {
+            HugeFileBannerView(
+                profile: viewModel.hugeFileProfile,
+                effectiveCapabilities: viewModel.effectiveCapabilities,
+                hasOverriddenCapabilities: viewModel.hasEnabledHeavyFeatureOverride,
+                onOverride: { viewModel.overrideCapabilities() },
+                onDismiss: { viewModel.isBannerDismissed = true },
+            )
         }
     }
 }
