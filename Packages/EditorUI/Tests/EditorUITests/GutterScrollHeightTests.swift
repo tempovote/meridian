@@ -131,6 +131,72 @@ struct GutterScrollHeightTests {
         #expect(engine.rulerViewForTesting.frame.height <= 300.5)
     }
 
+    /// Reproduces the real view hierarchy `MeridianDocument` builds, since
+    /// `hostInWindow` alone (engine.view straight into a plain window) does
+    /// not: `rootSplitView` (an `NSSplitView`) contains a `containerStack`
+    /// (an `NSStackView`, Auto-Layout-based) which in turn contains
+    /// `engine.view` (the scroll view). `NSSplitView.adjustSubviews()`
+    /// resizes its direct subviews' frames immediately; whether that alone
+    /// is enough to resolve the stack view's Auto Layout constraints below
+    /// it, without an extra forced layout pass, is exactly what the
+    /// following test checks.
+    private func hostInNestedSplitHierarchy(
+        _ engine: TextKit2Engine, height: CGFloat,
+    ) -> (window: NSWindow, splitView: NSSplitView) {
+        let containerStack = NSStackView(views: [engine.view])
+        containerStack.orientation = .vertical
+        containerStack.translatesAutoresizingMaskIntoConstraints = false
+
+        let editorSlot = NSView()
+        editorSlot.translatesAutoresizingMaskIntoConstraints = true
+        editorSlot.addSubview(containerStack)
+        NSLayoutConstraint.activate([
+            containerStack.leadingAnchor.constraint(equalTo: editorSlot.leadingAnchor),
+            containerStack.trailingAnchor.constraint(equalTo: editorSlot.trailingAnchor),
+            containerStack.topAnchor.constraint(equalTo: editorSlot.topAnchor),
+            containerStack.bottomAnchor.constraint(equalTo: editorSlot.bottomAnchor),
+        ])
+
+        let terminalSlot = NSView()
+        terminalSlot.translatesAutoresizingMaskIntoConstraints = true
+
+        let splitView = NSSplitView()
+        splitView.isVertical = false
+        splitView.addArrangedSubview(editorSlot)
+        splitView.addArrangedSubview(terminalSlot)
+
+        let window = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 800, height: height),
+            styleMask: [.titled], backing: .buffered, defer: false,
+        )
+        window.contentView = splitView
+        splitView.frame = NSRect(x: 0, y: 0, width: 800, height: height)
+        window.contentView?.layoutSubtreeIfNeeded()
+        return (window, splitView)
+    }
+
+    /// NEGATIVE RESULT, kept deliberately: this was written to confirm a
+    /// hypothesis for the live gutter-overflow bug reported against
+    /// `toggleTerminal` (a `containerStack` `NSStackView` sitting between
+    /// `NSSplitView` and the scroll view would leave the scroll view's
+    /// bounds stale after `adjustSubviews()` until an explicit
+    /// `layoutSubtreeIfNeeded()` ran). It does not hold — bounds already
+    /// track the new split position with no extra help — so this specific
+    /// mechanism is ruled out. The live bug was independently confirmed
+    /// STILL PRESENT after `refreshRulerGeometry()` shipped, so whatever
+    /// causes it is something else; this is pinned so a future investigation
+    /// does not re-spend time on the same disproved theory.
+    @Test func splitViewAdjustSubviewsAloneAlreadyResizesTheNestedScrollView() {
+        let engine = makeEngine()
+        engine.load(buffer: buffer(lines: 3000))
+        let (_, splitView) = hostInNestedSplitHierarchy(engine, height: 600)
+
+        splitView.setPosition(300, ofDividerAt: 0)
+        splitView.adjustSubviews()
+
+        #expect(engine.view.bounds.height == 300)
+    }
+
     /// The point of having a separate, cheap method: it must not force the
     /// full-document layout `refreshViewportLayout()` relies on, or every
     /// terminal-panel toggle would pay the O(document) cost ADR 0011
