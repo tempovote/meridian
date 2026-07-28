@@ -455,20 +455,6 @@ public final class TextKit2Engine: NSObject, TextLayoutEngine {
         scrollView.rulersVisible = enabled
     }
 
-    /// Re-tiles the scroll view and its ruler after the pane's frame changed
-    /// with its content untouched — e.g. `rootSplitView` resizing to make
-    /// room for the terminal panel. Deliberately much cheaper than
-    /// `refreshViewportLayout()`: it does not touch `NSTextLayoutManager` at
-    /// all, so it cannot force the full-document `ensureLayout` that method
-    /// relies on. A resize is common enough (every terminal-panel toggle)
-    /// that paying that cost on a huge file would reintroduce exactly the
-    /// layout stall ADR 0011 documents.
-    public func refreshRulerGeometry() {
-        scrollView.tile()
-        textView.needsDisplay = true
-        rulerView?.needsDisplay = true
-    }
-
     /// Forces the TextKit 2 viewport to re-lay-out and redraw. Needed
     /// when a pane whose content was loaded while it had zero size (a
     /// freshly created split pane) is first shown at a real size:
