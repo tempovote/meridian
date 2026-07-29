@@ -123,16 +123,13 @@ final class MeridianDocument: NSDocument {
     /// a windowed text mirror first (ADR 0011).
     nonisolated static let maxFileSize = 100 * 1024 * 1024
 
-    /// Hard ceiling on a single line's length, in UTF-8 bytes.
+    /// Hard ceiling on a single line's length, in UTF-8 bytes (1 MiB).
     ///
-    /// Temporary, pending the viewport-layout milestone. A file whose longest
+    /// Aligned with `HugeFileProfile.pathologicalLineBytes`. A file whose longest
     /// line reaches this is refused, because laying out one enormous line
     /// blocks the main run loop for minutes with no progress and no cancel —
-    /// measurably worse than an immediate, honest refusal. The threshold is
-    /// the pre-M10 value rather than a measured one on purpose: every number
-    /// available today is polluted by the full-document-layout defect, so it
-    /// must be re-derived once that is fixed (ADR 0011).
-    nonisolated static let maxLineLength = 1_000_000
+    /// measurably worse than an immediate, honest refusal (ADR 0011).
+    nonisolated static let maxLineLength = HugeFileProfile.pathologicalLineBytes
 
     private var documentModel: DocumentModel?
     /// One entry when unsplit, two when split. Index 0 is always the
@@ -167,8 +164,15 @@ final class MeridianDocument: NSDocument {
     private var loadedMetadata: (encoding: TextEncoding, hadBOM: Bool)?
     /// Buffer read before window controllers exist.
     private var pendingBuffer = TextBuffer()
+    /// The buffer state as of the last open or save operation.
+    private var savedBuffer = TextBuffer()
     /// The restriction profile of the file most recently read from disk.
     private var loadedProfile: HugeFileProfile = .unrestricted
+
+    override var isDocumentEdited: Bool {
+        guard let documentModel else { return super.isDocumentEdited }
+        return !documentModel.buffer.contentEquals(savedBuffer)
+    }
 
     private let fileTreeViewModel = FileTreeViewModel()
     private var sidebarHost: NSHostingView<FileTreeView>?
@@ -221,6 +225,7 @@ final class MeridianDocument: NSDocument {
         MainActor.assumeIsolated {
             loadedMetadata = (file.encoding, file.hadBOM)
             pendingBuffer = file.buffer
+            savedBuffer = file.buffer
             loadedProfile = file.profile
             fileTreeViewModel.setRootURL(url.deletingLastPathComponent())
             // Re-opened into an existing window (revert): reload the
@@ -290,12 +295,32 @@ final class MeridianDocument: NSDocument {
         }
     }
 
+    override func write(
+        to url: URL,
+        ofType typeName: String,
+        for saveOperation: NSDocument.SaveOperationType,
+        originalContentsURL absoluteOriginalContentsURL: URL?,
+    ) throws {
+        try super.write(
+            to: url,
+            ofType: typeName,
+            for: saveOperation,
+            originalContentsURL: absoluteOriginalContentsURL,
+        )
+        MainActor.assumeIsolated {
+            if let currentBuffer = documentModel?.buffer {
+                savedBuffer = currentBuffer
+            }
+        }
+    }
+
     override func makeWindowControllers() {
         MainActor.assumeIsolated {
             // Inject the shared favourites store before the sidebar is built.
             fileTreeViewModel.favoritesStore = AppDelegate.favoritesStore
             let documentModel = DocumentModel(buffer: pendingBuffer)
             self.documentModel = documentModel
+            self.savedBuffer = pendingBuffer
             let engine = makeEngine(languageID: fileURL.flatMap { languageID(forFileExtension: $0.pathExtension) })
             // Must precede `EditorViewModel.init` — see the matching
             // comment in `read(from:ofType:)`. `loadedProfile` was already
@@ -764,6 +789,7 @@ final class MeridianDocument: NSDocument {
             }
             loadedMetadata = (file.encoding, file.hadBOM)
             pendingBuffer = file.buffer
+            savedBuffer = file.buffer
             loadedProfile = file.profile
             let newDocumentModel = DocumentModel(buffer: file.buffer)
             documentModel = newDocumentModel

@@ -58,7 +58,7 @@ public struct Edit: Equatable, Sendable {
     }
 }
 
-private extension TextBuffer {
+public extension TextBuffer {
     /// Byte-for-byte content equality. Not exposed as `Equatable`
     /// conformance on `TextBuffer` itself (see `Edit`'s DocC for why) — this
     /// is O(n) in the buffers' byte length, with a summary comparison as a
