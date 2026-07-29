@@ -10,44 +10,11 @@ struct TerminalChunk: Identifiable {
     let color: Color
 }
 
-/// Strips ANSI escape sequences and returns an array of coloured chunks.
-private func parseANSI(_ raw: String) -> [TerminalChunk] {
-    // Regex: ESC [ … m sequences
-    var chunks: [TerminalChunk] = []
-    var current = ""
-    var currentColor = Color.primary
-    var idx = raw.startIndex
-
-    while idx < raw.endIndex {
-        let nextIdx = raw.index(after: idx)
-        let isEscSeq = raw[idx] == "\u{1B}" && nextIdx < raw.endIndex && raw[nextIdx] == "["
-        if isEscSeq {
-            if !current.isEmpty {
-                chunks.append(TerminalChunk(text: current, color: currentColor))
-                current = ""
-            }
-            // Find closing 'm'
-            let seqStart = raw.index(idx, offsetBy: 2)
-            if let mIdx = raw[seqStart...].firstIndex(of: "m") {
-                let codes = raw[seqStart ..< mIdx].split(separator: ";")
-                currentColor = ansiColor(from: codes.map { Int($0) ?? 0 }, fallback: currentColor)
-                idx = raw.index(after: mIdx)
-            } else {
-                idx = raw.index(after: idx)
-            }
-        } else {
-            current.append(raw[idx])
-            idx = raw.index(after: idx)
-        }
-    }
-    if !current.isEmpty {
-        chunks.append(TerminalChunk(text: current, color: currentColor))
-    }
-    return chunks.isEmpty ? [TerminalChunk(text: raw, color: .primary)] : chunks
-}
-
+/// SGR code → the colour actually drawn. Parsing lives in ``ANSIParser``;
+/// this table is the view's half of the job, kept here because the choice of
+/// `NSColor.system*` (which follow the user's accent and appearance) is a
+/// presentation decision, not something the parser should know about.
 private let ansiStandardColors: [Int: Color] = [
-    0: .primary,
     30: .black,
     31: Color(nsColor: NSColor.systemRed),
     32: Color(nsColor: NSColor.systemGreen),
@@ -66,16 +33,14 @@ private let ansiStandardColors: [Int: Color] = [
     97: .primary,
 ]
 
-private func ansiColor(from codes: [Int], fallback: Color) -> Color {
-    for code in codes {
-        if code == 1 {
-            continue
-        } // bold — keep existing colour
-        if let mapped = ansiStandardColors[code] {
-            return mapped
-        }
+/// Maps a parsed colour code to the colour drawn. `.primary` means "no
+/// opinion" and is what ``TerminalView/appendLine(_:color:)`` replaces with
+/// the caller's own colour, so an error line stays red throughout.
+private func displayColor(for ansi: ANSIColor) -> Color {
+    switch ansi {
+    case .default: .primary
+    case let .standard(code), let .bright(code): ansiStandardColors[code] ?? .primary
     }
-    return fallback
 }
 
 // MARK: - Session Persistence
@@ -392,8 +357,14 @@ public struct TerminalView: View {
     // MARK: Helpers
 
     private func appendLine(_ text: String, color: Color = .primary) {
-        outputLines.append(parseANSI(text).map {
-            TerminalChunk(text: $0.text, color: $0.color == .primary ? color : $0.color)
-        })
+        let chunks = ANSIParser.parse(text).map {
+            let mapped = displayColor(for: $0.color)
+            return TerminalChunk(text: $0.text, color: mapped == .primary ? color : mapped)
+        }
+        // A line that parsed to nothing — genuinely blank output, or a line
+        // that was only an escape sequence — still has to occupy a row. The
+        // row is an `HStack` of one `Text` per chunk, so an empty chunk list
+        // would collapse it to zero height and swallow the blank line.
+        outputLines.append(chunks.isEmpty ? [TerminalChunk(text: "", color: color)] : chunks)
     }
 }

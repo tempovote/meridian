@@ -58,6 +58,114 @@ struct GitServiceTests {
         }
     }
 
+    /// Initialises a repository in `directory` with `file.txt` committed.
+    private func makeRepo(in directory: URL, contents: String = "alpha\nbeta\n") throws {
+        try git(["init", "--initial-branch=main"], in: directory)
+        try git(["config", "user.email", "test@example.com"], in: directory)
+        try git(["config", "user.name", "Test"], in: directory)
+        try Data(contents.utf8).write(to: directory.appendingPathComponent("file.txt"))
+        try git(["add", "file.txt"], in: directory)
+        try git(["commit", "-q", "-m", "initial"], in: directory)
+    }
+
+    @Test func committedFileWithNoEditsHasNoMarks() async throws {
+        try await withTemporaryDirectory { directory in
+            try makeRepo(in: directory)
+            let marks = await GitService.shared.diffStatus(for: directory.appendingPathComponent("file.txt"))
+            #expect(marks.isEmpty)
+        }
+    }
+
+    @Test func modifiedFileOnDiskReportsMarks() async throws {
+        try await withTemporaryDirectory { directory in
+            try makeRepo(in: directory)
+            let fileURL = directory.appendingPathComponent("file.txt")
+            try Data("alpha\nCHANGED\n".utf8).write(to: fileURL)
+
+            let marks = await GitService.shared.diffStatus(for: fileURL)
+            #expect(!marks.isEmpty)
+            #expect(marks.values.contains { $0 == .modified || $0 == .added })
+        }
+    }
+
+    /// A repository that has been `git init`-ed but never committed has no
+    /// HEAD to compare against, so every line is genuinely new — the same
+    /// answer as an untracked file, and for the same reason. Asserted rather
+    /// than assumed because `rev-parse --show-prefix` *succeeds* here, so
+    /// this does not take the "not in a repository" path.
+    @Test func repositoryWithNoCommitsMarksEveryLineAdded() async throws {
+        try await withTemporaryDirectory { directory in
+            try git(["init", "--initial-branch=main"], in: directory)
+            let fileURL = directory.appendingPathComponent("file.txt")
+            let text = "one\ntwo\n"
+            try Data(text.utf8).write(to: fileURL)
+
+            let marks = await GitService.shared.diffStatus(bufferText: text, fileURL: fileURL)
+            #expect(marks[0] == .added)
+            #expect(marks[1] == .added)
+        }
+    }
+
+    /// Arguments are passed to `Process` as an array, so a space in a name is
+    /// only safe because nothing builds a shell command string. This pins it.
+    @Test func fileNameContainingSpacesIsHandled() async throws {
+        try await withTemporaryDirectory { directory in
+            try makeRepo(in: directory)
+            let spaced = directory.appendingPathComponent("file with spaces.txt")
+            try Data("x\n".utf8).write(to: spaced)
+            try git(["add", "file with spaces.txt"], in: directory)
+            try git(["commit", "-q", "-m", "spaced"], in: directory)
+            try Data("y\n".utf8).write(to: spaced)
+
+            let marks = await GitService.shared.diffStatus(for: spaced)
+            #expect(!marks.isEmpty)
+        }
+    }
+
+    /// Exercises the `--show-prefix` branch: for a file below the repository
+    /// root the path handed to `git show HEAD:` must carry the prefix, or the
+    /// lookup fails and the gutter silently falls back to marking everything
+    /// added.
+    @Test func fileInSubdirectoryResolvesAgainstRepositoryRoot() async throws {
+        try await withTemporaryDirectory { directory in
+            try makeRepo(in: directory)
+            let subdirectory = directory.appendingPathComponent("sub", isDirectory: true)
+            try FileManager.default.createDirectory(at: subdirectory, withIntermediateDirectories: true)
+            let nested = subdirectory.appendingPathComponent("nested.txt")
+            try Data("one\ntwo\n".utf8).write(to: nested)
+            try git(["add", "sub/nested.txt"], in: directory)
+            try git(["commit", "-q", "-m", "nested"], in: directory)
+
+            // Committed and unedited: an all-added result here would mean the
+            // prefix was lost and HEAD lookup failed.
+            let marks = await GitService.shared.diffStatus(bufferText: "one\ntwo\n", fileURL: nested)
+            #expect(marks.isEmpty)
+        }
+    }
+
+    @Test func deletedFileReturnsWithoutCrashing() async throws {
+        try await withTemporaryDirectory { directory in
+            try makeRepo(in: directory)
+            let fileURL = directory.appendingPathComponent("file.txt")
+            try FileManager.default.removeItem(at: fileURL)
+            _ = await GitService.shared.diffStatus(for: fileURL)
+        }
+    }
+
+    /// The path the gutter actually uses while typing: nothing is written to
+    /// disk, so the diff has to come from the in-memory text.
+    @Test func inMemoryBufferDiffersFromCommittedContent() async throws {
+        try await withTemporaryDirectory { directory in
+            try makeRepo(in: directory)
+            let fileURL = directory.appendingPathComponent("file.txt")
+
+            let marks = await GitService.shared.diffStatus(
+                bufferText: "alpha\nEDITED IN MEMORY\n", fileURL: fileURL,
+            )
+            #expect(!marks.isEmpty)
+        }
+    }
+
     @Test func parseAdditionHunk() {
         let diff = """
         @@ -0,0 +1,3 @@
