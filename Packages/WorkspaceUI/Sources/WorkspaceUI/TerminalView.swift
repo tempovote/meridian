@@ -140,7 +140,11 @@ public struct TerminalView: View {
     private var headerBar: some View {
         HStack {
             HStack(spacing: 6) {
-                Image(systemName: "terminal")
+                Image("icon_terminal")
+                    .resizable()
+                    .renderingMode(.template)
+                    .aspectRatio(contentMode: .fit)
+                    .frame(width: 14, height: 14)
                     .foregroundColor(.accentColor)
                 Text("Terminal — zsh")
                     .font(.headline)

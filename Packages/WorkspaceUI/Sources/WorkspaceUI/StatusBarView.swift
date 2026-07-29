@@ -12,6 +12,7 @@ public struct StatusBarView: View {
     public var fileSizeString: String?
     public var currentEncoding: TextEncoding?
     public var currentIncludeBOM: Bool
+    public var gitBranchName: String?
     public var onSelectEncoding: ((TextEncoding, Bool) -> Void)?
     public var onReopenWithEncoding: ((TextEncoding) -> Void)?
 
@@ -22,6 +23,7 @@ public struct StatusBarView: View {
         fileSizeString: String? = nil,
         currentEncoding: TextEncoding? = nil,
         currentIncludeBOM: Bool = false,
+        gitBranchName: String? = nil,
         onSelectEncoding: ((TextEncoding, Bool) -> Void)? = nil,
         onReopenWithEncoding: ((TextEncoding) -> Void)? = nil,
     ) {
@@ -31,6 +33,7 @@ public struct StatusBarView: View {
         self.fileSizeString = fileSizeString
         self.currentEncoding = currentEncoding
         self.currentIncludeBOM = currentIncludeBOM
+        self.gitBranchName = gitBranchName
         self.onSelectEncoding = onSelectEncoding
         self.onReopenWithEncoding = onReopenWithEncoding
     }
@@ -39,6 +42,21 @@ public struct StatusBarView: View {
         VStack(spacing: 0) {
             Divider()
             HStack(spacing: 16) {
+                // Git Branch Indicator
+                if let gitBranchName, !gitBranchName.isEmpty {
+                    HStack(spacing: 4) {
+                        Image("icon_git_branch")
+                            .resizable()
+                            .renderingMode(.template)
+                            .aspectRatio(contentMode: .fit)
+                            .frame(width: 12, height: 12)
+                            .foregroundColor(.secondary)
+                        Text(gitBranchName)
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundColor(.secondary)
+                    }
+                }
+
                 // Line / Column & Selection
                 HStack(spacing: 8) {
                     let pos = viewModel.currentCaretLineColumn

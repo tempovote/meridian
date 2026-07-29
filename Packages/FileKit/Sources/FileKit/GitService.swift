@@ -194,4 +194,28 @@ public actor GitService {
         let count = parts.count > 1 ? (Int(parts[1]) ?? 1) : 1
         return (line, count)
     }
+
+    /// Returns current Git branch name for `directory`, or `nil` if not inside a git worktree.
+    public func currentBranch(in directory: URL) async -> String? {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/git")
+        process.arguments = ["rev-parse", "--abbrev-ref", "HEAD"]
+        process.currentDirectoryURL = directory
+
+        let pipe = Pipe()
+        process.standardOutput = pipe
+        process.standardError = Pipe()
+
+        do {
+            try process.run()
+            process.waitUntilExit()
+            guard process.terminationStatus == 0 else { return nil }
+            let data = pipe.fileHandleForReading.readDataToEndOfFile()
+            guard let name = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines),
+                  !name.isEmpty, name != "HEAD" else { return nil }
+            return name
+        } catch {
+            return nil
+        }
+    }
 }

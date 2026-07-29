@@ -33,6 +33,8 @@ targets:
     settings:
       base:
         OTHER_CODE_SIGN_FLAGS: "--deep"
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        INFOPLIST_KEY_CFBundleIconFile: AppIcon
     dependencies:
       - package: WorkspaceUI
       - package: SearchKit

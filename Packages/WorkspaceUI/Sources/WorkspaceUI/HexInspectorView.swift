@@ -25,7 +25,11 @@ public struct HexInspectorView: View {
     private var headerBar: some View {
         HStack {
             HStack(spacing: 6) {
-                Image(systemName: "number.square")
+                Image("icon_hex_inspector")
+                    .resizable()
+                    .renderingMode(.template)
+                    .aspectRatio(contentMode: .fit)
+                    .frame(width: 14, height: 14)
                     .foregroundColor(.accentColor)
                 Text("Hex Inspector — \(fileName)")
                     .font(.headline)

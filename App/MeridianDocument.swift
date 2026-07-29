@@ -389,6 +389,7 @@ final class MeridianDocument: NSDocument {
             lineEndingName: "LF",
             currentEncoding: currentEnc,
             currentIncludeBOM: hadBOM,
+            gitBranchName: currentGitBranchName,
             onSelectEncoding: { [weak self] newEncoding, includeBOM in
                 self?.changeEncoding(to: newEncoding, includeBOM: includeBOM)
             },
@@ -747,6 +748,7 @@ final class MeridianDocument: NSDocument {
             lineEndingName: "LF",
             currentEncoding: currentEnc,
             currentIncludeBOM: hadBOM,
+            gitBranchName: currentGitBranchName,
             onSelectEncoding: { [weak self] newEncoding, includeBOM in
                 self?.changeEncoding(to: newEncoding, includeBOM: includeBOM)
             },
@@ -1249,8 +1251,24 @@ final class MeridianDocument: NSDocument {
     }
 
     private var gitGutterMarks: [Int: GitGutterMark] = [:]
+    private var currentGitBranchName: String?
+
+    private func refreshGitBranch() {
+        guard let url = fileURL else {
+            currentGitBranchName = nil
+            refreshStatusBar()
+            return
+        }
+        let directory = url.deletingLastPathComponent()
+        Task { @MainActor in
+            let branch = await GitService.shared.currentBranch(in: directory)
+            self.currentGitBranchName = branch
+            self.refreshStatusBar()
+        }
+    }
 
     private func refreshGitGutter() {
+        refreshGitBranch()
         guard let url = fileURL, let viewModel = focusedViewModel,
               viewModel.effectiveCapabilities.gitGutter
         else {

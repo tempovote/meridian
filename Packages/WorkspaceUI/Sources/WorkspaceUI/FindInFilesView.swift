@@ -47,8 +47,12 @@ public struct FindInFilesView: View {
                     .help(viewModel.isReplaceVisible ? "Hide Replace" : "Show Replace")
 
                     HStack(spacing: 6) {
-                        Image(systemName: "magnifyingglass")
-                            .foregroundColor(.secondary)
+                        Image("icon_find_in_files")
+                            .resizable()
+                            .renderingMode(.template)
+                            .aspectRatio(contentMode: .fit)
+                            .frame(width: 14, height: 14)
+                            .foregroundColor(.accentColor)
                         TextField("Search workspace...", text: $viewModel.query)
                             .textFieldStyle(.plain)
                             .focused($isQueryFocused)

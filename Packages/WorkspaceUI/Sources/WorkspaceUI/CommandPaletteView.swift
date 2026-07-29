@@ -26,8 +26,12 @@ public struct CommandPaletteView: View {
     public var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             HStack(spacing: 8) {
-                Image(systemName: "magnifyingglass")
-                    .foregroundColor(.secondary)
+                Image("icon_command_palette")
+                    .resizable()
+                    .renderingMode(.template)
+                    .aspectRatio(contentMode: .fit)
+                    .frame(width: 16, height: 16)
+                    .foregroundColor(.accentColor)
                 TextField("Type a command…", text: $viewModel.query)
                     .textFieldStyle(.plain)
                     .focused($isSearchFieldFocused)
