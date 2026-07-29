@@ -50,7 +50,9 @@ public struct CommandPaletteView: View {
                 ScrollViewReader { proxy in
                     ScrollView {
                         VStack(spacing: 2) {
-                            ForEach(Array(viewModel.filteredCommands.enumerated()), id: \.element.id) { index, command in
+                            ForEach(Array(viewModel.filteredCommands.enumerated()),
+                                    id: \.element.id)
+                            { index, command in
                                 commandRow(command, isSelected: index == viewModel.selectedIndex, index: index)
                                     .id(index)
                             }
@@ -74,7 +76,7 @@ public struct CommandPaletteView: View {
         .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .stroke(Color.primary.opacity(0.15), lineWidth: 1)
+                .stroke(Color.primary.opacity(0.15), lineWidth: 1),
         )
         .shadow(color: Color.black.opacity(0.35), radius: 14, x: 0, y: 7)
         .onKeyPress(.upArrow) {

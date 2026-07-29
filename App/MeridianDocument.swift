@@ -32,8 +32,13 @@ enum DocumentOpenError: LocalizedError {
 }
 
 private final class CommandPalettePanel: NSPanel {
-    override var canBecomeKey: Bool { true }
-    override var canBecomeMain: Bool { true }
+    override var canBecomeKey: Bool {
+        true
+    }
+
+    override var canBecomeMain: Bool {
+        true
+    }
 }
 
 /// The two ways a document's editor can be split into two panes. Naming
@@ -384,7 +389,7 @@ final class MeridianDocument: NSDocument {
                 onFind: { [weak self] in self?.performFind(nil) },
                 onMarkdownPreview: { [weak self] in self?.toggleMarkdownPreview(nil) },
                 onTerminal: { [weak self] in self?.toggleTerminal(nil) },
-                onCommandPalette: { [weak self] in self?.showCommandPalette(nil) }
+                onCommandPalette: { [weak self] in self?.showCommandPalette(nil) },
             )
             let accessoryHost = NSHostingView(rootView: quickActionsView)
             accessoryHost.frame = NSRect(x: 0, y: 0, width: 130, height: 24)
@@ -916,7 +921,7 @@ final class MeridianDocument: NSDocument {
             contentRect: NSRect(x: 0, y: 0, width: panelWidth, height: panelHeight),
             styleMask: [.borderless, .nonactivatingPanel],
             backing: .buffered,
-            defer: false
+            defer: false,
         )
         panel.isOpaque = false
         panel.backgroundColor = .clear
@@ -934,9 +939,9 @@ final class MeridianDocument: NSDocument {
 
         commandPaletteClickMonitor = NSEvent
             .addLocalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [weak self] event in
-                guard let self, let currentPanel = self.commandPalettePanel else { return event }
+                guard let self, let currentPanel = commandPalettePanel else { return event }
                 if event.window !== currentPanel {
-                    self.hideCommandPalette()
+                    hideCommandPalette()
                 }
                 return event
             }

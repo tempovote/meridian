@@ -1,4 +1,5 @@
 import AppKit
+import UniformTypeIdentifiers
 
 /// Custom `NSWindow` subclass for Meridian.
 ///
@@ -42,7 +43,8 @@ final class MeridianWindow: NSWindow {
     private func updateTabAttributedTitle() {
         guard let url = representedURL else { return }
         let ext = url.pathExtension
-        let icon = NSWorkspace.shared.icon(forFileType: ext)
+        let contentType = UTType(filenameExtension: ext) ?? .data
+        let icon = NSWorkspace.shared.icon(for: contentType)
         icon.size = NSSize(width: 14, height: 14)
 
         let attachment = NSTextAttachment()

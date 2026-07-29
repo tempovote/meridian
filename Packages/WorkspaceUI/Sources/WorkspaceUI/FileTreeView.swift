@@ -1,4 +1,5 @@
 import SwiftUI
+import UniformTypeIdentifiers
 
 /// Sidebar SwiftUI view displaying a collapsible tree of files and directories in the workspace.
 public struct FileTreeView: View {
@@ -234,7 +235,8 @@ public struct FileTreeView: View {
 
     private func fileIconImage(for url: URL) -> Image {
         let ext = url.pathExtension
-        let icon = NSWorkspace.shared.icon(forFileType: ext)
+        let contentType = UTType(filenameExtension: ext) ?? .data
+        let icon = NSWorkspace.shared.icon(for: contentType)
         return Image(nsImage: icon)
     }
 }
