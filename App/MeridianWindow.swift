@@ -15,14 +15,43 @@ final class MeridianWindow: NSWindow {
         tabbingMode = .preferred
     }
 
+    override var title: String {
+        didSet {
+            updateTabAttributedTitle()
+        }
+    }
+
+    override var representedURL: URL? {
+        didSet {
+            updateTabAttributedTitle()
+        }
+    }
+
     override func makeKeyAndOrderFront(_ sender: Any?) {
         super.makeKeyAndOrderFront(sender)
         ensureTabBarVisible()
+        updateTabAttributedTitle()
     }
 
     override func orderFront(_ sender: Any?) {
         super.orderFront(sender)
         ensureTabBarVisible()
+        updateTabAttributedTitle()
+    }
+
+    private func updateTabAttributedTitle() {
+        guard let url = representedURL else { return }
+        let ext = url.pathExtension
+        let icon = NSWorkspace.shared.icon(forFileType: ext)
+        icon.size = NSSize(width: 14, height: 14)
+
+        let attachment = NSTextAttachment()
+        attachment.image = icon
+        attachment.bounds = CGRect(x: 0, y: -2, width: 14, height: 14)
+
+        let attrTitle = NSMutableAttributedString(attachment: attachment)
+        attrTitle.append(NSAttributedString(string: "  " + title))
+        tab.attributedTitle = attrTitle
     }
 
     private func ensureTabBarVisible() {

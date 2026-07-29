@@ -67,12 +67,32 @@ public actor GitService {
         return nil
     }
 
+    private func isIgnored(fileURL: URL, directory: String) -> Bool {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/git")
+        process.arguments = ["check-ignore", "-q", "--", fileURL.path]
+        process.currentDirectoryURL = URL(fileURLWithPath: directory)
+        process.standardOutput = Pipe()
+        process.standardError = Pipe()
+        do {
+            try process.run()
+            process.waitUntilExit()
+            return process.terminationStatus == 0
+        } catch {
+            return false
+        }
+    }
+
     /// Calculates line-by-line git diff marks for `bufferText` relative to git HEAD at `fileURL`.
     /// Works for both saved and unsaved in-memory edits.
     public func diffStatus(bufferText: String, fileURL: URL) async -> [Int: GitGutterMark] {
         let directory = fileURL.deletingLastPathComponent().path
         guard let relativePath = repositoryRelativePath(fileURL: fileURL, directory: directory) else {
             // Not version-controlled at all — nothing to diff, no marks.
+            return [:]
+        }
+        if isIgnored(fileURL: fileURL, directory: directory) {
+            // Ignored by git (e.g. .git/info/exclude, .gitignore) — no marks.
             return [:]
         }
         guard let headText = await fetchHeadText(relativePath: relativePath, directory: directory) else {
@@ -125,6 +145,9 @@ public actor GitService {
     public func diffStatus(for fileURL: URL) async -> [Int: GitGutterMark] {
         let path = fileURL.path
         let directory = fileURL.deletingLastPathComponent().path
+        if isIgnored(fileURL: fileURL, directory: directory) {
+            return [:]
+        }
 
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/usr/bin/git")

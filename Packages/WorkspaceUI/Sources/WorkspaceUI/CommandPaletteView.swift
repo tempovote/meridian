@@ -24,7 +24,8 @@ public struct CommandPaletteView: View {
     }
 
     public var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
+        VStack(alignment: .leading, spacing: 6) {
+            // Search Input Field
             HStack(spacing: 8) {
                 Image("icon_command_palette")
                     .resizable()
@@ -34,28 +35,48 @@ public struct CommandPaletteView: View {
                     .foregroundColor(.accentColor)
                 TextField("Type a command…", text: $viewModel.query)
                     .textFieldStyle(.plain)
+                    .font(.system(size: 14))
                     .focused($isSearchFieldFocused)
                     .onSubmit(execute)
             }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 8)
+            .background(Color(NSColor.controlBackgroundColor).opacity(0.5))
+            .cornerRadius(6)
 
+            // Results List
             if !viewModel.filteredCommands.isEmpty {
                 Divider()
-                ForEach(Array(viewModel.filteredCommands.enumerated()), id: \.element.id) { index, command in
-                    commandRow(command, isSelected: index == viewModel.selectedIndex)
-                        .onTapGesture {
-                            viewModel.moveSelection(by: index - viewModel.selectedIndex)
-                            execute()
+                ScrollViewReader { proxy in
+                    ScrollView {
+                        VStack(spacing: 2) {
+                            ForEach(Array(viewModel.filteredCommands.enumerated()), id: \.element.id) { index, command in
+                                commandRow(command, isSelected: index == viewModel.selectedIndex, index: index)
+                                    .id(index)
+                            }
                         }
+                    }
+                    .frame(maxHeight: 280)
+                    .onChange(of: viewModel.selectedIndex) { _, newIndex in
+                        proxy.scrollTo(newIndex)
+                    }
                 }
+            } else {
+                Text("No matching commands")
+                    .font(.system(size: 12))
+                    .foregroundColor(.secondary)
+                    .padding(.vertical, 12)
+                    .frame(maxWidth: .infinity, alignment: .center)
             }
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
-        .background(Material.bar)
-        .cornerRadius(6)
-        .shadow(radius: 2)
-        .padding(8)
-        .frame(width: 420)
+        .padding(10)
+        .background(Material.ultraThick)
+        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .stroke(Color.primary.opacity(0.15), lineWidth: 1)
+        )
+        .shadow(color: Color.black.opacity(0.35), radius: 14, x: 0, y: 7)
         .onKeyPress(.upArrow) {
             viewModel.moveSelection(by: -1)
             return .handled
@@ -69,24 +90,43 @@ public struct CommandPaletteView: View {
             return .handled
         }
         .onAppear {
-            isSearchFieldFocused = true
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                isSearchFieldFocused = true
+            }
         }
     }
 
-    private func commandRow(_ command: Command, isSelected: Bool) -> some View {
+    private func commandRow(_ command: Command, isSelected: Bool, index: Int) -> some View {
         HStack {
             Text(command.title)
+                .font(.system(size: 13, weight: isSelected ? .semibold : .regular))
+                .foregroundColor(isSelected ? .primary : .primary.opacity(0.9))
             Spacer()
             if let keyEquivalent = command.keyEquivalent, !keyEquivalent.isEmpty {
                 Text(Self.shortcutDisplayString(modifierMask: command.modifierMask, keyEquivalent: keyEquivalent))
-                    .font(.caption)
-                    .foregroundColor(.secondary)
+                    .font(.system(size: 11, weight: .medium, design: .monospaced))
+                    .foregroundColor(isSelected ? .primary.opacity(0.8) : .secondary)
             }
         }
-        .padding(.horizontal, 6)
-        .padding(.vertical, 3)
-        .background(isSelected ? Color.accentColor.opacity(0.2) : Color.clear)
-        .cornerRadius(4)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 6)
+        .contentShape(Rectangle())
+        .background(isSelected ? Color.accentColor.opacity(0.25) : Color.clear)
+        .cornerRadius(5)
+        .onHover { isHovered in
+            if isHovered {
+                viewModel.moveSelection(by: index - viewModel.selectedIndex)
+            }
+        }
+        .onTapGesture {
+            selectAndExecute(at: index)
+        }
+    }
+
+    private func selectAndExecute(at index: Int) {
+        let delta = index - viewModel.selectedIndex
+        viewModel.moveSelection(by: delta)
+        execute()
     }
 
     private func execute() {

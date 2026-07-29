@@ -31,6 +31,11 @@ enum DocumentOpenError: LocalizedError {
     }
 }
 
+private final class CommandPalettePanel: NSPanel {
+    override var canBecomeKey: Bool { true }
+    override var canBecomeMain: Bool { true }
+}
+
 /// The two ways a document's editor can be split into two panes. Naming
 /// matches the View-menu items, NOT `NSSplitView.isVertical` (whose
 /// "vertical" describes the DIVIDER's orientation, the opposite of the
@@ -371,11 +376,27 @@ final class MeridianDocument: NSDocument {
                 defer: false,
             )
             window.tabbingMode = .preferred
+            window.titleVisibility = .hidden
             window.center()
             window.contentView = verticalRootSplitView
+
+            let quickActionsView = TitlebarQuickActionsView(
+                onFind: { [weak self] in self?.performFind(nil) },
+                onMarkdownPreview: { [weak self] in self?.toggleMarkdownPreview(nil) },
+                onTerminal: { [weak self] in self?.toggleTerminal(nil) },
+                onCommandPalette: { [weak self] in self?.showCommandPalette(nil) }
+            )
+            let accessoryHost = NSHostingView(rootView: quickActionsView)
+            accessoryHost.frame = NSRect(x: 0, y: 0, width: 130, height: 24)
+            let accessory = NSTitlebarAccessoryViewController()
+            accessory.view = accessoryHost
+            accessory.layoutAttribute = .trailing
+            window.addTitlebarAccessoryViewController(accessory)
+
             let windowController = NSWindowController(window: window)
             windowController.shouldCascadeWindows = true
             addWindowController(windowController)
+            refreshWindowTitle()
         }
     }
 
@@ -503,6 +524,15 @@ final class MeridianDocument: NSDocument {
         UpdaterService.shared.checkForUpdates()
     }
 
+    override var displayName: String? {
+        get {
+            super.displayName
+        }
+        set {
+            super.displayName = newValue
+        }
+    }
+
     /// Toggles the current document's favourite state and updates the
     /// window title to show or hide the ⭐ suffix.
     @objc func toggleFavorite(_ sender: Any?) {
@@ -511,14 +541,15 @@ final class MeridianDocument: NSDocument {
         refreshWindowTitle()
     }
 
-    /// Refreshes the window title to append ⭐ when the current document
-    /// URL is in the shared favourites list.
+    /// Refreshes the window title and representedURL so the native macOS Tab
+    /// renders the exact system file extension icon on the leading (left) side of the title.
     private func refreshWindowTitle() {
-        guard let window = windowControllers.first?.window, let url = fileURL else { return }
-        let base = url.deletingPathExtension().lastPathComponent
-        let ext = url.pathExtension.isEmpty ? "" : ".\(url.pathExtension)"
-        let suffix = AppDelegate.favoritesStore.isFavorite(url) ? " ⭐" : ""
-        window.title = base + ext + suffix
+        guard let window = windowControllers.first?.window else { return }
+        window.representedURL = fileURL
+        window.tab.accessoryView = nil
+        let baseName = super.displayName ?? "Untitled"
+        let suffix = (fileURL != nil && AppDelegate.favoritesStore.isFavorite(fileURL!)) ? " ⭐" : ""
+        window.title = baseName + suffix
     }
 
     @objc func splitHorizontally(_ sender: Any?) {
@@ -702,7 +733,7 @@ final class MeridianDocument: NSDocument {
         // not by adding/removing the arranged subview), so it is always
         // present by the time a split can happen; the `nil` check is just
         // defensive.
-        let overlayIsOpen = findBarHost != nil || commandPaletteHost != nil
+        let overlayIsOpen = findBarHost != nil || commandPalettePanel != nil
         let insertIndex = (overlayIsOpen ? 1 : 0) + (bannerHost != nil ? 1 : 0)
         containerStack.insertView(newPrimarySlot, at: insertIndex, in: .top)
         editorSlotView = newPrimarySlot
@@ -842,7 +873,7 @@ final class MeridianDocument: NSDocument {
         findBarViewModel?.findPrevious()
     }
 
-    private var commandPaletteHost: NSHostingView<CommandPaletteView>?
+    private var commandPalettePanel: NSPanel?
     /// Local mouse-down monitor that dismisses the palette on click-outside
     /// (spec: "The palette closes on Esc, on executing a command, or on
     /// click-outside"). Installed only while the palette is open; removed
@@ -850,30 +881,18 @@ final class MeridianDocument: NSDocument {
     private var commandPaletteClickMonitor: Any?
 
     @objc func showCommandPalette(_ sender: Any?) {
-        guard commandPaletteHost == nil else {
+        if commandPalettePanel != nil {
             hideCommandPalette()
             return
         }
+        guard let window = windowControllers.first?.window else { return }
+
         let viewModel = CommandPaletteViewModel(commands: CommandRegistry.commands)
         let paletteView = CommandPaletteView(
             viewModel: viewModel,
             onExecute: { [weak self] in
                 guard let self, let command = viewModel.selectedCommand else { return }
                 hideCommandPalette()
-                // Commands `MeridianDocument` implements directly (the toggles
-                // and text transforms — see the list in `CommandRegistry`'s
-                // Edit/View sections) are sent straight to `self`, bypassing
-                // the responder-chain walk entirely. That walk depends on
-                // `hideCommandPalette()` having already handed first-responder
-                // status back to the editor's text view — true today, but a
-                // needless dependency for actions `self` already answers to
-                // directly, and one that showed up here as "Soft Wrap doesn't
-                // actually toggle" when invoked from the palette. Commands the
-                // document does NOT implement (Cut/Copy/Paste/Select All,
-                // which `NSTextView` answers; Undo/Redo, which it also
-                // intercepts itself — see `documentUndoManager`'s doc comment)
-                // still need the real responder-chain resolution, since only
-                // the text view (now first responder again) can answer them.
                 if responds(to: command.selector) {
                     NSApp.sendAction(command.selector, to: self, from: nil)
                 } else {
@@ -884,25 +903,43 @@ final class MeridianDocument: NSDocument {
                 self?.hideCommandPalette()
             },
         )
-        let host = NSHostingView(rootView: paletteView)
-        commandPaletteHost = host
-        if let window = windowControllers.first?.window, let containerStack {
-            containerStack.insertView(host, at: 0, in: .top)
-            window.makeFirstResponder(host)
-            commandPaletteClickMonitor = NSEvent
-                .addLocalMonitorForEvents(matching: .leftMouseDown) { [weak self] event in
-                    guard let self else { return event }
-                    // Only clicks inside this document's own window can dismiss
-                    // its palette — other windows (e.g. another document) are
-                    // left alone.
-                    guard event.window === window else { return event }
-                    let locationInHost = host.convert(event.locationInWindow, from: nil)
-                    if !host.bounds.contains(locationInHost) {
-                        hideCommandPalette()
-                    }
-                    return event
+
+        let panelWidth: CGFloat = 480
+        let panelHeight: CGFloat = 360
+
+        let hostingView = NSHostingView(rootView: paletteView)
+        hostingView.wantsLayer = true
+        hostingView.layer?.backgroundColor = NSColor.clear.cgColor
+        hostingView.frame = NSRect(x: 0, y: 0, width: panelWidth, height: panelHeight)
+
+        let panel = CommandPalettePanel(
+            contentRect: NSRect(x: 0, y: 0, width: panelWidth, height: panelHeight),
+            styleMask: [.borderless, .nonactivatingPanel],
+            backing: .buffered,
+            defer: false
+        )
+        panel.isOpaque = false
+        panel.backgroundColor = .clear
+        panel.hasShadow = false
+        panel.contentView = hostingView
+        commandPalettePanel = panel
+
+        let windowFrame = window.frame
+        let panelX = windowFrame.origin.x + (windowFrame.width - panelWidth) / 2
+        let panelY = windowFrame.origin.y + windowFrame.height - panelHeight - 90
+
+        panel.setFrame(NSRect(x: panelX, y: panelY, width: panelWidth, height: panelHeight), display: true)
+        window.addChildWindow(panel, ordered: .above)
+        panel.makeKeyAndOrderFront(nil)
+
+        commandPaletteClickMonitor = NSEvent
+            .addLocalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [weak self] event in
+                guard let self, let currentPanel = self.commandPalettePanel else { return event }
+                if event.window !== currentPanel {
+                    self.hideCommandPalette()
                 }
-        }
+                return event
+            }
     }
 
     private func hideCommandPalette() {
@@ -910,9 +947,13 @@ final class MeridianDocument: NSDocument {
             NSEvent.removeMonitor(monitor)
             commandPaletteClickMonitor = nil
         }
-        if let host = commandPaletteHost {
-            host.removeFromSuperview()
-            commandPaletteHost = nil
+        if let panel = commandPalettePanel {
+            if let window = windowControllers.first?.window {
+                window.removeChildWindow(panel)
+                window.makeKey()
+            }
+            panel.orderOut(nil)
+            commandPalettePanel = nil
             windowControllers.first?.window?.makeFirstResponder(focusedEngine?.keyView)
         }
     }
@@ -1543,5 +1584,55 @@ private struct SidebarLeadingTitlebarButton: View {
         .help("Toggle Sidebar (⌘B)")
         .padding(.horizontal, 8)
         .padding(.vertical, 4)
+    }
+}
+
+private struct TitlebarQuickActionsView: View {
+    let onFind: () -> Void
+    let onMarkdownPreview: () -> Void
+    let onTerminal: () -> Void
+    let onCommandPalette: () -> Void
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Button(action: onFind) {
+                Image(systemName: "magnifyingglass")
+                    .font(.system(size: 12, weight: .medium))
+            }
+            .buttonStyle(.plain)
+            .help("Find (⌘F)")
+
+            Button(action: onMarkdownPreview) {
+                Image("icon_live_preview")
+                    .resizable()
+                    .renderingMode(.template)
+                    .aspectRatio(contentMode: .fit)
+                    .frame(width: 14, height: 14)
+            }
+            .buttonStyle(.plain)
+            .help("Toggle Markdown Preview")
+
+            Button(action: onTerminal) {
+                Image("icon_terminal")
+                    .resizable()
+                    .renderingMode(.template)
+                    .aspectRatio(contentMode: .fit)
+                    .frame(width: 14, height: 14)
+            }
+            .buttonStyle(.plain)
+            .help("Toggle Terminal (⌃`)")
+
+            Button(action: onCommandPalette) {
+                Image("icon_command_palette")
+                    .resizable()
+                    .renderingMode(.template)
+                    .aspectRatio(contentMode: .fit)
+                    .frame(width: 14, height: 14)
+            }
+            .buttonStyle(.plain)
+            .help("Command Palette (⌘K / ⇧⌘P)")
+        }
+        .foregroundColor(.secondary)
+        .padding(.horizontal, 6)
     }
 }

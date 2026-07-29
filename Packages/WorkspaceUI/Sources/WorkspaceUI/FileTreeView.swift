@@ -87,9 +87,10 @@ public struct FileTreeView: View {
 
     private func favoriteRow(url: URL) -> some View {
         HStack(spacing: 6) {
-            Image(systemName: iconName(for: url))
-                .foregroundColor(.secondary)
-                .font(.system(size: 12))
+            fileIconImage(for: url)
+                .resizable()
+                .aspectRatio(contentMode: .fit)
+                .frame(width: 14, height: 14)
 
             Text(url.lastPathComponent)
                 .font(.system(size: 12))
@@ -184,9 +185,16 @@ public struct FileTreeView: View {
 
     private func treeRow(item: FileTreeItem) -> some View {
         HStack(spacing: 6) {
-            Image(systemName: itemIconName(for: item))
-                .foregroundColor(item.isDirectory ? .accentColor : .secondary)
-                .font(.system(size: 12))
+            if item.isDirectory {
+                Image(systemName: "folder.fill")
+                    .foregroundColor(.accentColor)
+                    .font(.system(size: 12))
+            } else {
+                fileIconImage(for: item.url)
+                    .resizable()
+                    .aspectRatio(contentMode: .fit)
+                    .frame(width: 14, height: 14)
+            }
 
             Text(item.name)
                 .font(.system(size: 12))
@@ -224,24 +232,9 @@ public struct FileTreeView: View {
 
     // MARK: - Helpers
 
-    private func itemIconName(for item: FileTreeItem) -> String {
-        if item.isDirectory {
-            return "folder.fill"
-        }
-        return iconName(for: item.url)
-    }
-
-    private func iconName(for url: URL) -> String {
-        let ext = url.pathExtension.lowercased()
-        switch ext {
-        case "swift":
-            return "swift"
-        case "json", "yml", "yaml", "plist", "toml":
-            return "gearshape"
-        case "md", "txt":
-            return "doc.text"
-        default:
-            return "doc"
-        }
+    private func fileIconImage(for url: URL) -> Image {
+        let ext = url.pathExtension
+        let icon = NSWorkspace.shared.icon(forFileType: ext)
+        return Image(nsImage: icon)
     }
 }
