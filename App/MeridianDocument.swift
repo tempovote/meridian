@@ -400,7 +400,7 @@ final class MeridianDocument: NSDocument {
         window.addTitlebarAccessoryViewController(accessory)
     }
 
-    private func makeRootSplitView(containerStack: NSView) -> WideDividerSplitView {
+    private func makeRootSplitView(containerStack: NSStackView) -> WideDividerSplitView {
         let mainSplitView = makeSidebarSplitView(containerStack: containerStack)
         let verticalRootSplitView = WideDividerSplitView()
         verticalRootSplitView.isVertical = false
