@@ -50,9 +50,10 @@ public struct CommandPaletteView: View {
                 ScrollViewReader { proxy in
                     ScrollView {
                         VStack(spacing: 2) {
-                            ForEach(Array(viewModel.filteredCommands.enumerated()),
-                                    id: \.element.id)
-                            { index, command in
+                            ForEach(
+                                Array(viewModel.filteredCommands.enumerated()),
+                                id: \.element.id,
+                            ) { index, command in
                                 commandRow(command, isSelected: index == viewModel.selectedIndex, index: index)
                                     .id(index)
                             }

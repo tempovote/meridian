@@ -362,16 +362,7 @@ final class MeridianDocument: NSDocument {
             bannerHost = bannerHostView
             containerStack.insertView(bannerHostView, at: 0, in: .top)
 
-            let mainSplitView = makeSidebarSplitView(containerStack: containerStack)
-
-            let verticalRootSplitView = WideDividerSplitView()
-            verticalRootSplitView.isVertical = false
-            verticalRootSplitView.dividerStyle = .thin
-            verticalRootSplitView.addArrangedSubview(mainSplitView)
-            let splitDelegate = RootSplitViewDelegate()
-            verticalRootSplitView.delegate = splitDelegate
-            rootSplitDelegate = splitDelegate
-            rootSplitView = verticalRootSplitView
+            let verticalRootSplitView = makeRootSplitView(containerStack: containerStack)
 
             NSWindow.allowsAutomaticWindowTabbing = true
             let window = MeridianWindow(
@@ -385,24 +376,41 @@ final class MeridianDocument: NSDocument {
             window.center()
             window.contentView = verticalRootSplitView
 
-            let quickActionsView = TitlebarQuickActionsView(
-                onFind: { [weak self] in self?.performFind(nil) },
-                onMarkdownPreview: { [weak self] in self?.toggleMarkdownPreview(nil) },
-                onTerminal: { [weak self] in self?.toggleTerminal(nil) },
-                onCommandPalette: { [weak self] in self?.showCommandPalette(nil) },
-            )
-            let accessoryHost = NSHostingView(rootView: quickActionsView)
-            accessoryHost.frame = NSRect(x: 0, y: 0, width: 130, height: 24)
-            let accessory = NSTitlebarAccessoryViewController()
-            accessory.view = accessoryHost
-            accessory.layoutAttribute = .trailing
-            window.addTitlebarAccessoryViewController(accessory)
+            setupTitlebarAccessory(for: window)
 
             let windowController = NSWindowController(window: window)
             windowController.shouldCascadeWindows = true
             addWindowController(windowController)
             refreshWindowTitle()
         }
+    }
+
+    private func setupTitlebarAccessory(for window: NSWindow) {
+        let quickActionsView = TitlebarQuickActionsView(
+            onFind: { [weak self] in self?.performFind(nil) },
+            onMarkdownPreview: { [weak self] in self?.toggleMarkdownPreview(nil) },
+            onTerminal: { [weak self] in self?.toggleTerminal(nil) },
+            onCommandPalette: { [weak self] in self?.showCommandPalette(nil) },
+        )
+        let accessoryHost = NSHostingView(rootView: quickActionsView)
+        accessoryHost.frame = NSRect(x: 0, y: 0, width: 130, height: 24)
+        let accessory = NSTitlebarAccessoryViewController()
+        accessory.view = accessoryHost
+        accessory.layoutAttribute = .trailing
+        window.addTitlebarAccessoryViewController(accessory)
+    }
+
+    private func makeRootSplitView(containerStack: NSView) -> WideDividerSplitView {
+        let mainSplitView = makeSidebarSplitView(containerStack: containerStack)
+        let verticalRootSplitView = WideDividerSplitView()
+        verticalRootSplitView.isVertical = false
+        verticalRootSplitView.dividerStyle = .thin
+        verticalRootSplitView.addArrangedSubview(mainSplitView)
+        let splitDelegate = RootSplitViewDelegate()
+        verticalRootSplitView.delegate = splitDelegate
+        rootSplitDelegate = splitDelegate
+        rootSplitView = verticalRootSplitView
+        return verticalRootSplitView
     }
 
     private func makeStatusBarHost(viewModel: EditorViewModel) -> NSHostingView<StatusBarView> {
@@ -917,16 +925,7 @@ final class MeridianDocument: NSDocument {
         hostingView.layer?.backgroundColor = NSColor.clear.cgColor
         hostingView.frame = NSRect(x: 0, y: 0, width: panelWidth, height: panelHeight)
 
-        let panel = CommandPalettePanel(
-            contentRect: NSRect(x: 0, y: 0, width: panelWidth, height: panelHeight),
-            styleMask: [.borderless, .nonactivatingPanel],
-            backing: .buffered,
-            defer: false,
-        )
-        panel.isOpaque = false
-        panel.backgroundColor = .clear
-        panel.hasShadow = false
-        panel.contentView = hostingView
+        let panel = createCommandPalettePanel(hostingView: hostingView, width: panelWidth, height: panelHeight)
         commandPalettePanel = panel
 
         let windowFrame = window.frame
@@ -957,10 +956,27 @@ final class MeridianDocument: NSDocument {
                 window.removeChildWindow(panel)
                 window.makeKey()
             }
-            panel.orderOut(nil)
             commandPalettePanel = nil
             windowControllers.first?.window?.makeFirstResponder(focusedEngine?.keyView)
         }
+    }
+
+    private func createCommandPalettePanel(
+        hostingView: NSView,
+        width: CGFloat,
+        height: CGFloat,
+    ) -> CommandPalettePanel {
+        let panel = CommandPalettePanel(
+            contentRect: NSRect(x: 0, y: 0, width: width, height: height),
+            styleMask: [.borderless, .nonactivatingPanel],
+            backing: .buffered,
+            defer: false,
+        )
+        panel.isOpaque = false
+        panel.backgroundColor = .clear
+        panel.hasShadow = false
+        panel.contentView = hostingView
+        return panel
     }
 
     @objc func duplicateLine(_ sender: Any?) {
