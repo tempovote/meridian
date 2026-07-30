@@ -387,13 +387,14 @@ final class MeridianDocument: NSDocument {
 
     private func setupTitlebarAccessory(for window: NSWindow) {
         let quickActionsView = TitlebarQuickActionsView(
+            onOpen: { NSDocumentController.shared.openDocument(nil) },
             onFind: { [weak self] in self?.performFind(nil) },
             onMarkdownPreview: { [weak self] in self?.toggleMarkdownPreview(nil) },
             onTerminal: { [weak self] in self?.toggleTerminal(nil) },
             onCommandPalette: { [weak self] in self?.showCommandPalette(nil) },
         )
         let accessoryHost = NSHostingView(rootView: quickActionsView)
-        accessoryHost.frame = NSRect(x: 0, y: 0, width: 130, height: 24)
+        accessoryHost.frame = NSRect(x: 0, y: 0, width: 156, height: 24)
         let accessory = NSTitlebarAccessoryViewController()
         accessory.view = accessoryHost
         accessory.layoutAttribute = .trailing
@@ -1623,6 +1624,7 @@ private struct SidebarLeadingTitlebarButton: View {
 }
 
 private struct TitlebarQuickActionsView: View {
+    let onOpen: () -> Void
     let onFind: () -> Void
     let onMarkdownPreview: () -> Void
     let onTerminal: () -> Void
@@ -1630,6 +1632,13 @@ private struct TitlebarQuickActionsView: View {
 
     var body: some View {
         HStack(spacing: 12) {
+            Button(action: onOpen) {
+                Image(systemName: "folder")
+                    .font(.system(size: 12, weight: .medium))
+            }
+            .buttonStyle(.plain)
+            .help("Open… (⌘O)")
+
             Button(action: onFind) {
                 Image(systemName: "magnifyingglass")
                     .font(.system(size: 12, weight: .medium))
