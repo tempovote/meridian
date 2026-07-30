@@ -59,6 +59,8 @@ struct CustomTerminalTextField: NSViewRepresentable {
     @Binding var text: String
     var onSubmit: () -> Void
     var onTab: () -> Void
+    var onUp: () -> Void
+    var onDown: () -> Void
 
     class Coordinator: NSObject, NSTextFieldDelegate {
         var parent: CustomTerminalTextField
@@ -79,6 +81,12 @@ struct CustomTerminalTextField: NSViewRepresentable {
                 return true
             } else if commandSelector == #selector(NSResponder.insertNewline(_:)) {
                 parent.onSubmit()
+                return true
+            } else if commandSelector == #selector(NSResponder.moveUp(_:)) {
+                parent.onUp()
+                return true
+            } else if commandSelector == #selector(NSResponder.moveDown(_:)) {
+                parent.onDown()
                 return true
             }
             return false
@@ -103,6 +111,9 @@ struct CustomTerminalTextField: NSViewRepresentable {
     func updateNSView(_ nsView: NSTextField, context: Context) {
         if nsView.stringValue != text {
             nsView.stringValue = text
+            if let currentEditor = nsView.currentEditor() {
+                currentEditor.selectedRange = NSRange(location: text.utf16.count, length: 0)
+            }
         }
     }
 }
@@ -118,6 +129,10 @@ public struct TerminalView: View {
     @State private var inputCommand: String = ""
     @State private var outputLines: [[TerminalChunk]] = []
     @State private var workingDirectory: String = FileManager.default.currentDirectoryPath
+
+    @State private var commandHistory: [String] = []
+    @State private var historyIndex: Int = 0
+    @State private var draftInput: String = ""
 
     public init(documentURL: URL? = nil) {
         self.documentURL = documentURL
@@ -211,11 +226,37 @@ public struct TerminalView: View {
                 text: $inputCommand,
                 onSubmit: executeCurrentCommand,
                 onTab: handleTabCompletion,
+                onUp: handleHistoryUp,
+                onDown: handleHistoryDown,
             )
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
         .background(Color(NSColor.controlBackgroundColor))
+    }
+
+    // MARK: Command History Navigation
+
+    private func handleHistoryUp() {
+        guard !commandHistory.isEmpty else { return }
+        if historyIndex == commandHistory.count {
+            draftInput = inputCommand
+        }
+        if historyIndex > 0 {
+            historyIndex -= 1
+            inputCommand = commandHistory[historyIndex]
+        }
+    }
+
+    private func handleHistoryDown() {
+        guard !commandHistory.isEmpty else { return }
+        if historyIndex < commandHistory.count - 1 {
+            historyIndex += 1
+            inputCommand = commandHistory[historyIndex]
+        } else if historyIndex == commandHistory.count - 1 {
+            historyIndex = commandHistory.count
+            inputCommand = draftInput
+        }
     }
 
     // MARK: Session Persistence
@@ -315,6 +356,12 @@ public struct TerminalView: View {
         guard !cmd.isEmpty else { return }
         appendLine("$ \(cmd)", color: .accentColor)
         inputCommand = ""
+
+        if commandHistory.last != cmd {
+            commandHistory.append(cmd)
+        }
+        historyIndex = commandHistory.count
+        draftInput = ""
 
         if cmd.hasPrefix("cd ") {
             let dirArg = String(cmd.dropFirst(3)).trimmingCharacters(in: .whitespacesAndNewlines)
