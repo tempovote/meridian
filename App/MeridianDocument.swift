@@ -871,7 +871,11 @@ final class MeridianDocument: NSDocument {
     private var findBarViewModel: FindBarViewModel?
 
     @objc func performFind(_ sender: Any?) {
-        showFindBar(startExpanded: false)
+        if findBarHost != nil {
+            hideFindBar()
+        } else {
+            showFindBar(startExpanded: false)
+        }
     }
 
     @objc func performFindAndReplace(_ sender: Any?) {
@@ -887,6 +891,7 @@ final class MeridianDocument: NSDocument {
     }
 
     private var commandPalettePanel: NSPanel?
+    private var lastCommandPaletteClickOutsideDismissTime: Date?
     /// Local mouse-down monitor that dismisses the palette on click-outside
     /// (spec: "The palette closes on Esc, on executing a command, or on
     /// click-outside"). Installed only while the palette is open; removed
@@ -896,6 +901,11 @@ final class MeridianDocument: NSDocument {
     @objc func showCommandPalette(_ sender: Any?) {
         if commandPalettePanel != nil {
             hideCommandPalette()
+            return
+        }
+        if let lastDismiss = lastCommandPaletteClickOutsideDismissTime,
+           Date().timeIntervalSince(lastDismiss) < 0.6 {
+            lastCommandPaletteClickOutsideDismissTime = nil
             return
         }
         guard let window = windowControllers.first?.window else { return }
@@ -940,6 +950,7 @@ final class MeridianDocument: NSDocument {
             .addLocalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [weak self] event in
                 guard let self, let currentPanel = commandPalettePanel else { return event }
                 if event.window !== currentPanel {
+                    lastCommandPaletteClickOutsideDismissTime = Date()
                     hideCommandPalette()
                 }
                 return event
@@ -956,6 +967,8 @@ final class MeridianDocument: NSDocument {
                 window.removeChildWindow(panel)
                 window.makeKey()
             }
+            panel.orderOut(nil)
+            panel.close()
             commandPalettePanel = nil
             windowControllers.first?.window?.makeFirstResponder(focusedEngine?.keyView)
         }
