@@ -904,7 +904,8 @@ final class MeridianDocument: NSDocument {
             return
         }
         if let lastDismiss = lastCommandPaletteClickOutsideDismissTime,
-           Date().timeIntervalSince(lastDismiss) < 0.6 {
+           Date().timeIntervalSince(lastDismiss) < 0.6
+        {
             lastCommandPaletteClickOutsideDismissTime = nil
             return
         }
