@@ -892,7 +892,7 @@ final class MeridianDocument: NSDocument {
     }
 
     private var commandPalettePanel: NSPanel?
-    private var lastCommandPaletteClickOutsideDismissTime: Date?
+    private var lastCommandPaletteDismissTime: Date?
     /// Local mouse-down monitor that dismisses the palette on click-outside
     /// (spec: "The palette closes on Esc, on executing a command, or on
     /// click-outside"). Installed only while the palette is open; removed
@@ -904,10 +904,8 @@ final class MeridianDocument: NSDocument {
             hideCommandPalette()
             return
         }
-        if let lastDismiss = lastCommandPaletteClickOutsideDismissTime,
-           Date().timeIntervalSince(lastDismiss) < 0.6
-        {
-            lastCommandPaletteClickOutsideDismissTime = nil
+        if let lastDismiss = lastCommandPaletteDismissTime, Date().timeIntervalSince(lastDismiss) < 0.6 {
+            lastCommandPaletteDismissTime = nil
             return
         }
         guard let window = windowControllers.first?.window else { return }
@@ -952,7 +950,7 @@ final class MeridianDocument: NSDocument {
             .addLocalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [weak self] event in
                 guard let self, let currentPanel = commandPalettePanel else { return event }
                 if event.window !== currentPanel {
-                    lastCommandPaletteClickOutsideDismissTime = Date()
+                    lastCommandPaletteDismissTime = Date()
                     hideCommandPalette()
                 }
                 return event
