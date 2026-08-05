@@ -107,4 +107,78 @@ struct TextTransformTests {
         buffer.apply(tx)
         #expect(buffer.string == "apple\nbanana\ncherry\n")
     }
+
+    @Test func wrapSelectionWrapsSelectedText() {
+        var buffer = TextBuffer("hello world")
+        let selection = SelectionSet(ranges: [ByteOffset(0) ..< ByteOffset(5)]) // "hello"
+        let tx = TextTransforms.wrapSelection(in: buffer, selection: selection, prefix: "**", suffix: "**")
+        buffer.apply(tx)
+        #expect(buffer.string == "**hello** world")
+    }
+
+    @Test func wrapSelectionWithEmptySelectionInsertsAndPlacesCaretBetween() {
+        var buffer = TextBuffer("")
+        let selection = SelectionSet(caretAt: ByteOffset(0))
+        let tx = TextTransforms.wrapSelection(in: buffer, selection: selection, prefix: "**", suffix: "**")
+        buffer.apply(tx)
+        #expect(buffer.string == "****")
+        #expect(tx.selectionAfter == SelectionSet(caretAt: ByteOffset(2)))
+    }
+
+    @Test func insertLinePrefixPrefixesEachSelectedLine() {
+        var buffer = TextBuffer("one\ntwo\nthree")
+        let selection = SelectionSet(ranges: [ByteOffset(0) ..< ByteOffset(7)]) // covers "one" and "two"
+        let tx = TextTransforms.insertLinePrefix(in: buffer, selection: selection, prefix: "- ")
+        buffer.apply(tx)
+        #expect(buffer.string == "- one\n- two\nthree")
+    }
+
+    @Test func insertMarkdownLinkWrapsLabelAndSelectsURLPlaceholder() {
+        var buffer = TextBuffer("click here")
+        let selection = SelectionSet(ranges: [ByteOffset(0) ..< ByteOffset(10)])
+        let tx = TextTransforms.insertMarkdownLink(in: buffer, selection: selection)
+        buffer.apply(tx)
+        #expect(buffer.string == "[click here](url)")
+        #expect(tx.selectionAfter == SelectionSet(ranges: [ByteOffset(13) ..< ByteOffset(16)]))
+    }
+
+    @Test func insertMarkdownCodeUsesInlineBackticksForSingleLineSelection() {
+        var buffer = TextBuffer("let x = 1")
+        let selection = SelectionSet(ranges: [ByteOffset(0) ..< ByteOffset(9)])
+        let tx = TextTransforms.insertMarkdownCode(in: buffer, selection: selection)
+        buffer.apply(tx)
+        #expect(buffer.string == "`let x = 1`")
+    }
+
+    @Test func insertMarkdownCodeUsesFencedBlockForMultiLineSelection() {
+        var buffer = TextBuffer("let x = 1\nlet y = 2")
+        let selection = SelectionSet(ranges: [ByteOffset(0) ..< ByteOffset(19)])
+        let tx = TextTransforms.insertMarkdownCode(in: buffer, selection: selection)
+        buffer.apply(tx)
+        #expect(buffer.string == "```\nlet x = 1\nlet y = 2\n```")
+    }
+
+    @Test func insertMarkdownHorizontalRuleInsertsNewLineBelowAnchorLine() {
+        var buffer = TextBuffer("above\nbelow")
+        let selection = SelectionSet(caretAt: ByteOffset(2)) // caret inside "above"
+        let tx = TextTransforms.insertMarkdownHorizontalRule(in: buffer, selection: selection)
+        buffer.apply(tx)
+        #expect(buffer.string == "above\n---\nbelow")
+    }
+
+    @Test func insertMarkdownHorizontalRuleOnLastLineWithNoTrailingNewline() {
+        var buffer = TextBuffer("notes")
+        let selection = SelectionSet(caretAt: ByteOffset(5))
+        let tx = TextTransforms.insertMarkdownHorizontalRule(in: buffer, selection: selection)
+        buffer.apply(tx)
+        #expect(buffer.string == "notes\n---")
+    }
+
+    @Test func insertMarkdownTableInsertsSkeletonBelowAnchorLine() {
+        var buffer = TextBuffer("notes")
+        let selection = SelectionSet(caretAt: ByteOffset(5))
+        let tx = TextTransforms.insertMarkdownTable(in: buffer, selection: selection)
+        buffer.apply(tx)
+        #expect(buffer.string == "notes\n| Header | Header |\n| --- | --- |\n| Cell | Cell |")
+    }
 }
