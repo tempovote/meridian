@@ -1031,6 +1031,93 @@ final class MeridianDocument: NSDocument {
         viewModel.perform(TextTransforms.convertLineEndings(in: viewModel.buffer, to: .crlf))
     }
 
+    // MARK: - Markdown Formatting Commands
+
+    @objc func insertMarkdownBold(_ sender: Any?) {
+        guard let viewModel = focusedViewModel else { return }
+        viewModel.perform(TextTransforms.wrapSelection(
+            in: viewModel.buffer, selection: viewModel.selection, prefix: "**", suffix: "**",
+        ))
+    }
+
+    @objc func insertMarkdownItalic(_ sender: Any?) {
+        guard let viewModel = focusedViewModel else { return }
+        viewModel.perform(TextTransforms.wrapSelection(
+            in: viewModel.buffer, selection: viewModel.selection, prefix: "*", suffix: "*",
+        ))
+    }
+
+    @objc func insertMarkdownStrikethrough(_ sender: Any?) {
+        guard let viewModel = focusedViewModel else { return }
+        viewModel.perform(TextTransforms.wrapSelection(
+            in: viewModel.buffer, selection: viewModel.selection, prefix: "~~", suffix: "~~",
+        ))
+    }
+
+    @objc func insertMarkdownHeading1(_ sender: Any?) {
+        guard let viewModel = focusedViewModel else { return }
+        viewModel.perform(TextTransforms.insertLinePrefix(
+            in: viewModel.buffer, selection: viewModel.selection, prefix: "# ",
+        ))
+    }
+
+    @objc func insertMarkdownHeading2(_ sender: Any?) {
+        guard let viewModel = focusedViewModel else { return }
+        viewModel.perform(TextTransforms.insertLinePrefix(
+            in: viewModel.buffer, selection: viewModel.selection, prefix: "## ",
+        ))
+    }
+
+    @objc func insertMarkdownHeading3(_ sender: Any?) {
+        guard let viewModel = focusedViewModel else { return }
+        viewModel.perform(TextTransforms.insertLinePrefix(
+            in: viewModel.buffer, selection: viewModel.selection, prefix: "### ",
+        ))
+    }
+
+    @objc func insertMarkdownList(_ sender: Any?) {
+        guard let viewModel = focusedViewModel else { return }
+        viewModel.perform(TextTransforms.insertLinePrefix(
+            in: viewModel.buffer, selection: viewModel.selection, prefix: "- ",
+        ))
+    }
+
+    @objc func insertMarkdownOrderedList(_ sender: Any?) {
+        guard let viewModel = focusedViewModel else { return }
+        viewModel.perform(TextTransforms.insertLinePrefix(
+            in: viewModel.buffer, selection: viewModel.selection, prefix: "1. ",
+        ))
+    }
+
+    @objc func insertMarkdownBlockquote(_ sender: Any?) {
+        guard let viewModel = focusedViewModel else { return }
+        viewModel.perform(TextTransforms.insertLinePrefix(
+            in: viewModel.buffer, selection: viewModel.selection, prefix: "> ",
+        ))
+    }
+
+    @objc func insertMarkdownLink(_ sender: Any?) {
+        guard let viewModel = focusedViewModel else { return }
+        viewModel.perform(TextTransforms.insertMarkdownLink(in: viewModel.buffer, selection: viewModel.selection))
+    }
+
+    @objc func insertMarkdownCode(_ sender: Any?) {
+        guard let viewModel = focusedViewModel else { return }
+        viewModel.perform(TextTransforms.insertMarkdownCode(in: viewModel.buffer, selection: viewModel.selection))
+    }
+
+    @objc func insertMarkdownHorizontalRule(_ sender: Any?) {
+        guard let viewModel = focusedViewModel else { return }
+        viewModel.perform(TextTransforms.insertMarkdownHorizontalRule(
+            in: viewModel.buffer, selection: viewModel.selection,
+        ))
+    }
+
+    @objc func insertMarkdownTable(_ sender: Any?) {
+        guard let viewModel = focusedViewModel else { return }
+        viewModel.perform(TextTransforms.insertMarkdownTable(in: viewModel.buffer, selection: viewModel.selection))
+    }
+
     @objc func addCaretAbove(_ sender: Any?) {
         focusedViewModel?.addCaretAbove()
     }
