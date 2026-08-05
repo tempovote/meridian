@@ -265,7 +265,7 @@ public extension TextTransforms {
 
     // MARK: - Private Helpers
 
-    static func emptyTransaction(in buffer: TextBuffer, selection: SelectionSet = .empty) -> EditTransaction {
+    private static func emptyTransaction(in buffer: TextBuffer, selection: SelectionSet = .empty) -> EditTransaction {
         EditTransaction(
             baseVersion: buffer.version,
             edits: [],
@@ -275,7 +275,7 @@ public extension TextTransforms {
         )
     }
 
-    static func coveredLineIndices(in buffer: TextBuffer, selection: SelectionSet) -> (start: Int, end: Int) {
+    private static func coveredLineIndices(in buffer: TextBuffer, selection: SelectionSet) -> (start: Int, end: Int) {
         guard let primary = selection.ranges.first else {
             return (0, max(0, buffer.lineCount - 1))
         }
@@ -284,7 +284,7 @@ public extension TextTransforms {
         return (startLine, endLine)
     }
 
-    static func coveredLineByteBounds(
+    internal static func coveredLineByteBounds(
         in buffer: TextBuffer,
         selection: SelectionSet,
     ) -> (start: ByteOffset, end: ByteOffset) {
@@ -294,7 +294,7 @@ public extension TextTransforms {
         return (startByte, endByte)
     }
 
-    static func lineStartOffset(in buffer: TextBuffer, line: Int) -> UTF16Offset {
+    private static func lineStartOffset(in buffer: TextBuffer, line: Int) -> UTF16Offset {
         let lines = buffer.string.components(separatedBy: "\n")
         var utf16 = 0
         for index in 0 ..< min(line, lines.count) {
@@ -303,7 +303,7 @@ public extension TextTransforms {
         return UTF16Offset(utf16)
     }
 
-    static func lineEndByteOffset(in buffer: TextBuffer, line: Int) -> ByteOffset {
+    private static func lineEndByteOffset(in buffer: TextBuffer, line: Int) -> ByteOffset {
         let lines = buffer.string.components(separatedBy: "\n")
         if line >= lines.count - 1 {
             return ByteOffset(buffer.utf8Count)

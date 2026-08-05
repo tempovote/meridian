@@ -12,7 +12,7 @@ public extension TextTransforms {
         prefix: String,
         suffix: String,
     ) -> EditTransaction {
-        let targetRange = selection.ranges.first ?? emptyCaretRange(in: buffer, selection: selection)
+        let targetRange = selection.ranges.first ?? emptyCaretRange(in: buffer)
         let originalText = buffer.slice(targetRange)
         let replacement = prefix + originalText + suffix
 
@@ -62,7 +62,7 @@ public extension TextTransforms {
     /// Wraps the selection as a Markdown link label (`[label](url)`),
     /// selecting the `url` placeholder so the user can type over it.
     static func insertMarkdownLink(in buffer: TextBuffer, selection: SelectionSet) -> EditTransaction {
-        let targetRange = selection.ranges.first ?? emptyCaretRange(in: buffer, selection: selection)
+        let targetRange = selection.ranges.first ?? emptyCaretRange(in: buffer)
         let label = buffer.slice(targetRange)
         let placeholder = "url"
         let replacement = "[\(label)](\(placeholder))"
@@ -83,7 +83,7 @@ public extension TextTransforms {
     /// Wraps the selection as inline code (selection within one line) or a
     /// fenced code block (selection spanning multiple lines).
     static func insertMarkdownCode(in buffer: TextBuffer, selection: SelectionSet) -> EditTransaction {
-        let targetRange = selection.ranges.first ?? emptyCaretRange(in: buffer, selection: selection)
+        let targetRange = selection.ranges.first ?? emptyCaretRange(in: buffer)
         let startLine = buffer.linePosition(of: targetRange.lowerBound).line
         let endLine = buffer.linePosition(of: targetRange.upperBound).line
         return startLine == endLine
@@ -110,7 +110,7 @@ public extension TextTransforms {
     // MARK: - Private Helpers
 
     /// A zero-width range at the end of `buffer`.
-    private static func emptyCaretRange(in buffer: TextBuffer, selection: SelectionSet) -> Range<ByteOffset> {
+    private static func emptyCaretRange(in buffer: TextBuffer) -> Range<ByteOffset> {
         let offset = ByteOffset(buffer.utf8Count)
         return offset ..< offset
     }
