@@ -376,29 +376,16 @@ final class MeridianDocument: NSDocument {
             window.center()
             window.contentView = verticalRootSplitView
 
-            setupTitlebarAccessory(for: window)
+            let toolbar = ToolbarBuilder.makeToolbar()
+            toolbar.delegate = self
+            window.toolbar = toolbar
+            window.toolbarStyle = .expanded
 
             let windowController = NSWindowController(window: window)
             windowController.shouldCascadeWindows = true
             addWindowController(windowController)
             refreshWindowTitle()
         }
-    }
-
-    private func setupTitlebarAccessory(for window: NSWindow) {
-        let quickActionsView = TitlebarQuickActionsView(
-            onOpen: { NSDocumentController.shared.openDocument(nil) },
-            onFind: { [weak self] in self?.performFind(nil) },
-            onMarkdownPreview: { [weak self] in self?.toggleMarkdownPreview(nil) },
-            onTerminal: { [weak self] in self?.toggleTerminal(nil) },
-            onCommandPalette: { [weak self] in self?.showCommandPalette(nil) },
-        )
-        let accessoryHost = NSHostingView(rootView: quickActionsView)
-        accessoryHost.frame = NSRect(x: 0, y: 0, width: 156, height: 24)
-        let accessory = NSTitlebarAccessoryViewController()
-        accessory.view = accessoryHost
-        accessory.layoutAttribute = .trailing
-        window.addTitlebarAccessoryViewController(accessory)
     }
 
     private func makeRootSplitView(containerStack: NSStackView) -> WideDividerSplitView {
@@ -1667,6 +1654,52 @@ final class MeridianDocument: NSDocument {
     }
 }
 
+extension MeridianDocument: NSToolbarDelegate, NSToolbarItemValidation {
+    func toolbar(
+        _ toolbar: NSToolbar,
+        itemForItemIdentifier itemIdentifier: NSToolbarItem.Identifier,
+        willBeInsertedIntoToolbar flag: Bool,
+    ) -> NSToolbarItem? {
+        ToolbarBuilder.item(for: itemIdentifier)
+    }
+
+    func toolbarDefaultItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] {
+        ToolbarBuilder.defaultItemIdentifiers
+    }
+
+    func toolbarAllowedItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] {
+        ToolbarBuilder.allowedItemIdentifiers
+    }
+
+    /// Markdown items are only meaningful on a Markdown-language document
+    /// (see `LanguageExtensionMap.swift`'s `.md`/`.markdown` → `"markdown"`
+    /// mapping). Undo/Redo mirror `EditorViewModel.canUndo`/`canRedo`
+    /// exactly. Everything else in this toolbar is enabled whenever a
+    /// document pane is focused, same bar `validateMenuItem` already uses
+    /// for the equivalent menu items — this deliberately does not attempt
+    /// clipboard-empty detection for Cut/Copy/Paste, matching the fact that
+    /// `validateEditorMenuItem`/`validateFormatAndPreviewMenuItem` don't
+    /// validate those selectors either (NSTextView's own built-in
+    /// validation already handles them ahead of `MeridianDocument` in the
+    /// responder chain when a menu is involved; the toolbar has no such
+    /// built-in path, so those three items stay enabled whenever a
+    /// document is focused).
+    func validateToolbarItem(_ item: NSToolbarItem) -> Bool {
+        switch item.itemIdentifier {
+        case .markdownBold, .markdownItalic, .markdownHeading, .markdownLink, .markdownList, .markdownCode,
+             .markdownOrderedList, .markdownBlockquote, .markdownStrikethrough, .markdownHorizontalRule,
+             .markdownTable:
+            focusedEngine?.languageID == "markdown"
+        case .undo:
+            focusedViewModel?.canUndo == true
+        case .redo:
+            focusedViewModel?.canRedo == true
+        default:
+            focusedViewModel != nil
+        }
+    }
+}
+
 /// Wraps ``HugeFileBannerView`` so its presence, not just its content,
 /// tracks `EditorViewModel`'s `@Observable` state: reading
 /// `viewModel.isHugeFileBannerVisible` directly in `body` means SwiftUI
@@ -1708,60 +1741,3 @@ private struct SidebarLeadingTitlebarButton: View {
     }
 }
 
-private struct TitlebarQuickActionsView: View {
-    let onOpen: () -> Void
-    let onFind: () -> Void
-    let onMarkdownPreview: () -> Void
-    let onTerminal: () -> Void
-    let onCommandPalette: () -> Void
-
-    var body: some View {
-        HStack(spacing: 12) {
-            Button(action: onOpen) {
-                Image(systemName: "folder")
-                    .font(.system(size: 12, weight: .medium))
-            }
-            .buttonStyle(.plain)
-            .help("Open… (⌘O)")
-
-            Button(action: onFind) {
-                Image(systemName: "magnifyingglass")
-                    .font(.system(size: 12, weight: .medium))
-            }
-            .buttonStyle(.plain)
-            .help("Find (⌘F)")
-
-            Button(action: onMarkdownPreview) {
-                Image("icon_live_preview")
-                    .resizable()
-                    .renderingMode(.template)
-                    .aspectRatio(contentMode: .fit)
-                    .frame(width: 14, height: 14)
-            }
-            .buttonStyle(.plain)
-            .help("Toggle Markdown Preview")
-
-            Button(action: onTerminal) {
-                Image("icon_terminal")
-                    .resizable()
-                    .renderingMode(.template)
-                    .aspectRatio(contentMode: .fit)
-                    .frame(width: 14, height: 14)
-            }
-            .buttonStyle(.plain)
-            .help("Toggle Terminal (⌃`)")
-
-            Button(action: onCommandPalette) {
-                Image("icon_command_palette")
-                    .resizable()
-                    .renderingMode(.template)
-                    .aspectRatio(contentMode: .fit)
-                    .frame(width: 14, height: 14)
-            }
-            .buttonStyle(.plain)
-            .help("Command Palette (⌘K / ⇧⌘P)")
-        }
-        .foregroundColor(.secondary)
-        .padding(.horizontal, 6)
-    }
-}
