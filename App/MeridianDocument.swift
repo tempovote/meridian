@@ -1673,11 +1673,21 @@ extension MeridianDocument: NSToolbarDelegate, NSToolbarItemValidation {
 
     /// Markdown items are only meaningful on a Markdown-language document
     /// (see `LanguageExtensionMap.swift`'s `.md`/`.markdown` → `"markdown"`
-    /// mapping). Undo/Redo mirror `EditorViewModel.canUndo`/`canRedo`
-    /// exactly. Everything else in this toolbar is enabled whenever a
-    /// document pane is focused, same bar `validateMenuItem` already uses
-    /// for the equivalent menu items — this deliberately does not attempt
-    /// clipboard-empty detection for Cut/Copy/Paste, matching the fact that
+    /// mapping). Undo/Redo are NOT validated here despite having toolbar
+    /// identifiers: `NSToolbarItem.validate()` resolves the `undo:`/`redo:`
+    /// action's target through the responder chain, and that resolves to
+    /// the document's `NSUndoManager` (via `NSDocument`'s default
+    /// `supplementalTargetForAction(_:sender:)` wiring — see
+    /// `registerUndoReplay()`/`wireUndoCallback()` above for how this
+    /// document's undo manager is set up), never to `MeridianDocument`
+    /// itself. Since `NSUndoManager` doesn't conform to
+    /// `NSToolbarItemValidation`, `.undo`/`.redo` fall through to the
+    /// `default` case below, which is a no-op here (AppKit decides their
+    /// enabled state on its own). Everything else in this toolbar is
+    /// enabled whenever a document pane is focused, same bar
+    /// `validateMenuItem` already uses for the equivalent menu items —
+    /// this deliberately does not attempt clipboard-empty detection for
+    /// Cut/Copy/Paste, matching the fact that
     /// `validateEditorMenuItem`/`validateFormatAndPreviewMenuItem` don't
     /// validate those selectors either (NSTextView's own built-in
     /// validation already handles them ahead of `MeridianDocument` in the
@@ -1690,10 +1700,6 @@ extension MeridianDocument: NSToolbarDelegate, NSToolbarItemValidation {
              .markdownOrderedList, .markdownBlockquote, .markdownStrikethrough, .markdownHorizontalRule,
              .markdownTable:
             focusedEngine?.languageID == "markdown"
-        case .undo:
-            focusedViewModel?.canUndo == true
-        case .redo:
-            focusedViewModel?.canRedo == true
         default:
             focusedViewModel != nil
         }
