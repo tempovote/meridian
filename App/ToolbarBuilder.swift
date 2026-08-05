@@ -4,6 +4,7 @@ import AppKit
 /// stateless-builder pattern). Item enablement is driven separately by
 /// `MeridianDocument`'s `NSToolbarItemValidation` conformance — this type
 /// only builds items and identifier lists.
+@MainActor
 enum ToolbarBuilder {
     static let identifier = NSToolbar.Identifier("MeridianDocumentToolbar")
 
@@ -15,15 +16,15 @@ enum ToolbarBuilder {
     }
 
     static let defaultItemIdentifiers: [NSToolbarItem.Identifier] = [
-        .fileGroup, .editGroup, .findGroup, .formatGroup, .markdownGroup,
+        .fileGroup, .editGroup, .findGroup, .formatGroup, .textFormatGroup, .insertGroup, .panelsGroup,
     ]
 
     /// Default items plus the long-tail Markdown items a user can opt into
     /// via right-click → "Customize Toolbar…" — not shown by default.
     static let allowedItemIdentifiers: [NSToolbarItem.Identifier] = [
-        .fileGroup, .editGroup, .findGroup, .formatGroup, .markdownGroup,
+        .fileGroup, .editGroup, .findGroup, .formatGroup, .textFormatGroup, .insertGroup, .panelsGroup,
         .markdownOrderedList, .markdownBlockquote, .markdownStrikethrough,
-        .markdownHorizontalRule, .markdownTable, .markdownPreview, .terminal,
+        .markdownHorizontalRule, .markdownTable,
     ]
 
     static func item(for identifier: NSToolbarItem.Identifier) -> NSToolbarItem? {
@@ -32,7 +33,9 @@ enum ToolbarBuilder {
         case .editGroup: editGroup()
         case .findGroup: findGroup()
         case .formatGroup: formatGroup()
-        case .markdownGroup: markdownGroup()
+        case .textFormatGroup: textFormatGroup()
+        case .insertGroup: insertGroup()
+        case .panelsGroup: panelsGroup()
         default: leafItem(for: identifier)
         }
     }
@@ -69,19 +72,16 @@ enum ToolbarBuilder {
             )
         case .markdownTable:
             leaf(.markdownTable, label: "Table", symbol: "tablecells", action: Selector(("insertMarkdownTable:")))
-        case .markdownPreview:
-            leaf(
-                .markdownPreview,
-                label: "Markdown Preview",
-                symbol: "doc.richtext",
-                action: Selector(("toggleMarkdownPreview:")),
-            )
-        case .terminal:
-            leaf(.terminal, label: "Terminal", symbol: "terminal", action: Selector(("toggleTerminal:")))
         default:
             nil
         }
     }
+
+    /// Icon point size shared by every toolbar item — smaller than SF
+    /// Symbols' default toolbar rendering so items sit with more breathing
+    /// room inside their bordered button chrome.
+    private static let iconPointSize: CGFloat = 12
+    private static let iconSymbolConfiguration = NSImage.SymbolConfiguration(pointSize: iconPointSize, weight: .regular)
 
     private static func leaf(
         _ identifier: NSToolbarItem.Identifier,
@@ -93,7 +93,29 @@ enum ToolbarBuilder {
         item.label = label
         item.paletteLabel = label
         item.toolTip = label
-        item.image = NSImage(systemSymbolName: symbol, accessibilityDescription: label)
+        item.image = NSImage(systemSymbolName: symbol, accessibilityDescription: label)?
+            .withSymbolConfiguration(iconSymbolConfiguration)
+        item.isBordered = true
+        item.action = action
+        return item
+    }
+
+    /// Same as `leaf`, but for the custom (non-SF Symbol) icon assets
+    /// already bundled for Terminal/Markdown Preview/Command Palette,
+    /// resized down to match `iconPointSize`'s footprint.
+    private static func customAssetLeaf(
+        _ identifier: NSToolbarItem.Identifier,
+        label: String,
+        assetName: String,
+        action: Selector,
+    ) -> NSToolbarItem {
+        let item = NSToolbarItem(itemIdentifier: identifier)
+        item.label = label
+        item.paletteLabel = label
+        item.toolTip = label
+        let image = NSImage(named: assetName)
+        image?.size = NSSize(width: iconPointSize + 4, height: iconPointSize + 4)
+        item.image = image
         item.isBordered = true
         item.action = action
         return item
@@ -167,11 +189,18 @@ enum ToolbarBuilder {
         ])
     }
 
-    private static func markdownGroup() -> NSToolbarItemGroup {
-        group(.markdownGroup, label: "Markdown", subitems: [
+    /// Character/paragraph-level Markdown formatting: Bold, Italic, Heading.
+    private static func textFormatGroup() -> NSToolbarItemGroup {
+        group(.textFormatGroup, label: "Text Format", subitems: [
             leaf(.markdownBold, label: "Bold", symbol: "bold", action: Selector(("insertMarkdownBold:"))),
             leaf(.markdownItalic, label: "Italic", symbol: "italic", action: Selector(("insertMarkdownItalic:"))),
             markdownHeadingItem(),
+        ])
+    }
+
+    /// Content-insertion Markdown tools: Link, List, Code.
+    private static func insertGroup() -> NSToolbarItemGroup {
+        group(.insertGroup, label: "Insert", subitems: [
             leaf(.markdownLink, label: "Link", symbol: "link", action: Selector(("insertMarkdownLink:"))),
             leaf(.markdownList, label: "List", symbol: "list.bullet", action: Selector(("insertMarkdownList:"))),
             leaf(
@@ -183,6 +212,24 @@ enum ToolbarBuilder {
         ])
     }
 
+    /// Panel toggles: Terminal, Markdown Preview, Command Palette — moved
+    /// here from the old titlebar quick-actions accessory.
+    private static func panelsGroup() -> NSToolbarItemGroup {
+        group(.panelsGroup, label: "Panels", subitems: [
+            customAssetLeaf(
+                .terminal, label: "Terminal", assetName: "icon_terminal", action: Selector(("toggleTerminal:")),
+            ),
+            customAssetLeaf(
+                .markdownPreview, label: "Markdown Preview", assetName: "icon_live_preview",
+                action: Selector(("toggleMarkdownPreview:")),
+            ),
+            customAssetLeaf(
+                .commandPalette, label: "Command Palette", assetName: "icon_command_palette",
+                action: Selector(("showCommandPalette:")),
+            ),
+        ])
+    }
+
     /// Clicking the button body inserts an H1; the dropdown arrow offers
     /// H1/H2/H3 explicitly.
     private static func markdownHeadingItem() -> NSMenuToolbarItem {
@@ -190,7 +237,8 @@ enum ToolbarBuilder {
         item.label = "Heading"
         item.paletteLabel = "Heading"
         item.toolTip = "Heading"
-        item.image = NSImage(systemSymbolName: "textformat.size", accessibilityDescription: "Heading")
+        item.image = NSImage(systemSymbolName: "textformat.size", accessibilityDescription: "Heading")?
+            .withSymbolConfiguration(iconSymbolConfiguration)
         item.isBordered = true
         item.action = Selector(("insertMarkdownHeading1:"))
 
@@ -209,7 +257,9 @@ extension NSToolbarItem.Identifier {
     static let editGroup = NSToolbarItem.Identifier("editGroup")
     static let findGroup = NSToolbarItem.Identifier("findGroup")
     static let formatGroup = NSToolbarItem.Identifier("formatGroup")
-    static let markdownGroup = NSToolbarItem.Identifier("markdownGroup")
+    static let textFormatGroup = NSToolbarItem.Identifier("textFormatGroup")
+    static let insertGroup = NSToolbarItem.Identifier("insertGroup")
+    static let panelsGroup = NSToolbarItem.Identifier("panelsGroup")
 
     static let newDocument = NSToolbarItem.Identifier("newDocument")
     static let openDocument = NSToolbarItem.Identifier("openDocument")
@@ -240,4 +290,5 @@ extension NSToolbarItem.Identifier {
 
     static let markdownPreview = NSToolbarItem.Identifier("markdownPreview")
     static let terminal = NSToolbarItem.Identifier("terminal")
+    static let commandPalette = NSToolbarItem.Identifier("commandPalette")
 }

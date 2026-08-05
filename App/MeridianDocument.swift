@@ -867,7 +867,11 @@ final class MeridianDocument: NSDocument {
     }
 
     @objc func performFindAndReplace(_ sender: Any?) {
-        showFindBar(startExpanded: true)
+        if findBarHost != nil {
+            hideFindBar()
+        } else {
+            showFindBar(startExpanded: true)
+        }
     }
 
     @objc func findNext(_ sender: Any?) {
@@ -1020,89 +1024,118 @@ final class MeridianDocument: NSDocument {
 
     // MARK: - Markdown Formatting Commands
 
-    @objc func insertMarkdownBold(_ sender: Any?) {
+    /// Tracks the most recent Markdown toolbar action so a second click on
+    /// the same button undoes it instead of stacking another transform
+    /// (e.g. Bold twice would otherwise wrap `**text**` in another layer
+    /// rather than removing the first one). Keyed by the buffer version
+    /// *after* applying: `BufferVersion` only ever increases, so any other
+    /// edit in between (typing, a different Markdown action, manual
+    /// undo/redo) leaves the buffer's current version different from what
+    /// was recorded, which naturally invalidates the toggle.
+    private var lastMarkdownToggle: (selector: Selector, versionAfter: BufferVersion)?
+
+    /// Applies `transform` via `viewModel.perform`, unless this exact
+    /// action was the last thing applied to this document with nothing
+    /// else happening in between — in that case it calls `viewModel.undo()`
+    /// instead. See `lastMarkdownToggle`'s doc comment for the invalidation
+    /// rule that makes this safe.
+    private func performMarkdownToggle(
+        _ selector: Selector,
+        transform: (EditorViewModel) -> EditTransaction,
+    ) {
         guard let viewModel = focusedViewModel else { return }
-        viewModel.perform(TextTransforms.wrapSelection(
-            in: viewModel.buffer, selection: viewModel.selection, prefix: "**", suffix: "**",
-        ))
+        if let last = lastMarkdownToggle, last.selector == selector, last.versionAfter == viewModel.buffer.version {
+            viewModel.undo()
+            lastMarkdownToggle = nil
+            return
+        }
+        viewModel.perform(transform(viewModel))
+        lastMarkdownToggle = (selector, viewModel.buffer.version)
+    }
+
+    @objc func insertMarkdownBold(_ sender: Any?) {
+        performMarkdownToggle(#selector(insertMarkdownBold(_:))) { viewModel in
+            TextTransforms.wrapSelection(
+                in: viewModel.buffer,
+                selection: viewModel.selection,
+                prefix: "**",
+                suffix: "**",
+            )
+        }
     }
 
     @objc func insertMarkdownItalic(_ sender: Any?) {
-        guard let viewModel = focusedViewModel else { return }
-        viewModel.perform(TextTransforms.wrapSelection(
-            in: viewModel.buffer, selection: viewModel.selection, prefix: "*", suffix: "*",
-        ))
+        performMarkdownToggle(#selector(insertMarkdownItalic(_:))) { viewModel in
+            TextTransforms.wrapSelection(in: viewModel.buffer, selection: viewModel.selection, prefix: "*", suffix: "*")
+        }
     }
 
     @objc func insertMarkdownStrikethrough(_ sender: Any?) {
-        guard let viewModel = focusedViewModel else { return }
-        viewModel.perform(TextTransforms.wrapSelection(
-            in: viewModel.buffer, selection: viewModel.selection, prefix: "~~", suffix: "~~",
-        ))
+        performMarkdownToggle(#selector(insertMarkdownStrikethrough(_:))) { viewModel in
+            TextTransforms.wrapSelection(
+                in: viewModel.buffer, selection: viewModel.selection, prefix: "~~", suffix: "~~",
+            )
+        }
     }
 
     @objc func insertMarkdownHeading1(_ sender: Any?) {
-        guard let viewModel = focusedViewModel else { return }
-        viewModel.perform(TextTransforms.insertLinePrefix(
-            in: viewModel.buffer, selection: viewModel.selection, prefix: "# ",
-        ))
+        performMarkdownToggle(#selector(insertMarkdownHeading1(_:))) { viewModel in
+            TextTransforms.insertLinePrefix(in: viewModel.buffer, selection: viewModel.selection, prefix: "# ")
+        }
     }
 
     @objc func insertMarkdownHeading2(_ sender: Any?) {
-        guard let viewModel = focusedViewModel else { return }
-        viewModel.perform(TextTransforms.insertLinePrefix(
-            in: viewModel.buffer, selection: viewModel.selection, prefix: "## ",
-        ))
+        performMarkdownToggle(#selector(insertMarkdownHeading2(_:))) { viewModel in
+            TextTransforms.insertLinePrefix(in: viewModel.buffer, selection: viewModel.selection, prefix: "## ")
+        }
     }
 
     @objc func insertMarkdownHeading3(_ sender: Any?) {
-        guard let viewModel = focusedViewModel else { return }
-        viewModel.perform(TextTransforms.insertLinePrefix(
-            in: viewModel.buffer, selection: viewModel.selection, prefix: "### ",
-        ))
+        performMarkdownToggle(#selector(insertMarkdownHeading3(_:))) { viewModel in
+            TextTransforms.insertLinePrefix(in: viewModel.buffer, selection: viewModel.selection, prefix: "### ")
+        }
     }
 
     @objc func insertMarkdownList(_ sender: Any?) {
-        guard let viewModel = focusedViewModel else { return }
-        viewModel.perform(TextTransforms.insertLinePrefix(
-            in: viewModel.buffer, selection: viewModel.selection, prefix: "- ",
-        ))
+        performMarkdownToggle(#selector(insertMarkdownList(_:))) { viewModel in
+            TextTransforms.insertLinePrefix(in: viewModel.buffer, selection: viewModel.selection, prefix: "- ")
+        }
     }
 
     @objc func insertMarkdownOrderedList(_ sender: Any?) {
-        guard let viewModel = focusedViewModel else { return }
-        viewModel.perform(TextTransforms.insertLinePrefix(
-            in: viewModel.buffer, selection: viewModel.selection, prefix: "1. ",
-        ))
+        performMarkdownToggle(#selector(insertMarkdownOrderedList(_:))) { viewModel in
+            TextTransforms.insertLinePrefix(in: viewModel.buffer, selection: viewModel.selection, prefix: "1. ")
+        }
     }
 
     @objc func insertMarkdownBlockquote(_ sender: Any?) {
-        guard let viewModel = focusedViewModel else { return }
-        viewModel.perform(TextTransforms.insertLinePrefix(
-            in: viewModel.buffer, selection: viewModel.selection, prefix: "> ",
-        ))
+        performMarkdownToggle(#selector(insertMarkdownBlockquote(_:))) { viewModel in
+            TextTransforms.insertLinePrefix(in: viewModel.buffer, selection: viewModel.selection, prefix: "> ")
+        }
     }
 
     @objc func insertMarkdownLink(_ sender: Any?) {
-        guard let viewModel = focusedViewModel else { return }
-        viewModel.perform(TextTransforms.insertMarkdownLink(in: viewModel.buffer, selection: viewModel.selection))
+        performMarkdownToggle(#selector(insertMarkdownLink(_:))) { viewModel in
+            TextTransforms.insertMarkdownLink(in: viewModel.buffer, selection: viewModel.selection)
+        }
     }
 
     @objc func insertMarkdownCode(_ sender: Any?) {
-        guard let viewModel = focusedViewModel else { return }
-        viewModel.perform(TextTransforms.insertMarkdownCode(in: viewModel.buffer, selection: viewModel.selection))
+        performMarkdownToggle(#selector(insertMarkdownCode(_:))) { viewModel in
+            TextTransforms.insertMarkdownCode(in: viewModel.buffer, selection: viewModel.selection)
+        }
     }
 
     @objc func insertMarkdownHorizontalRule(_ sender: Any?) {
-        guard let viewModel = focusedViewModel else { return }
-        viewModel.perform(TextTransforms.insertMarkdownHorizontalRule(
-            in: viewModel.buffer, selection: viewModel.selection,
-        ))
+        performMarkdownToggle(#selector(insertMarkdownHorizontalRule(_:))) { viewModel in
+            TextTransforms.insertMarkdownHorizontalRule(in: viewModel.buffer, selection: viewModel.selection)
+        }
     }
 
     @objc func insertMarkdownTable(_ sender: Any?) {
-        guard let viewModel = focusedViewModel else { return }
-        viewModel.perform(TextTransforms.insertMarkdownTable(in: viewModel.buffer, selection: viewModel.selection))
+        performMarkdownToggle(#selector(insertMarkdownTable(_:))) { viewModel in
+            TextTransforms.insertMarkdownTable(in: viewModel.buffer, selection: viewModel.selection)
+        }
     }
 
     @objc func addCaretAbove(_ sender: Any?) {
@@ -1451,9 +1484,7 @@ final class MeridianDocument: NSDocument {
         } else {
             FindBarViewModel(editorViewModel: viewModel, startExpanded: startExpanded)
         }
-        if startExpanded {
-            findBarVM.isReplaceExpanded = true
-        }
+        findBarVM.isReplaceExpanded = startExpanded
         findBarViewModel = findBarVM
         let findView = FindBarView(viewModel: findBarVM) { [weak self] in
             self?.hideFindBar()
