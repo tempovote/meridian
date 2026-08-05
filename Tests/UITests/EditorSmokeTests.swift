@@ -227,6 +227,64 @@ final class EditorSmokeTests: XCTestCase {
         app.terminate()
     }
 
+    /// Toolbar smoke: the Markdown group is enabled only for a `.md`
+    /// document, and clicking Bold wraps the current selection.
+    @MainActor
+    func testToolbarMarkdownGroupGatedByFileType() throws {
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("meridian-uitest-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        let mdURL = dir.appendingPathComponent("notes.md")
+        try "hello world\n".write(to: mdURL, atomically: true, encoding: .utf8)
+
+        let app = XCUIApplication()
+        app.launch()
+        XCTAssertTrue(app.windows.firstMatch.waitForExistence(timeout: 10))
+
+        // Open the .md fixture (same Open-panel idiom as testOpenTypeSaveQuit).
+        app.typeKey("o", modifierFlags: .command)
+        let openPanel = app.windows["open-panel"]
+        XCTAssertTrue(openPanel.waitForExistence(timeout: 10))
+        app.typeKey("g", modifierFlags: [.command, .shift])
+        app.typeText(mdURL.path)
+        app.typeKey(.return, modifierFlags: [])
+        var openConfirmPresses = 0
+        while openPanel.exists, openConfirmPresses < 10 {
+            app.typeKey(.return, modifierFlags: [])
+            openConfirmPresses += 1
+            _ = waitForDisappearance(of: openPanel, timeout: 1)
+        }
+        XCTAssertFalse(openPanel.exists, "open-panel did not close after \(openConfirmPresses) confirm Return presses")
+
+        let mdWindow = app.windows.matching(NSPredicate(format: "title CONTAINS 'notes.md'")).firstMatch
+        let textView = mdWindow.textViews.firstMatch
+        XCTAssertTrue(textView.waitForExistence(timeout: 25))
+
+        let boldButton = mdWindow.toolbars.buttons["Bold"]
+        XCTAssertTrue(boldButton.waitForExistence(timeout: 10))
+        XCTAssertTrue(boldButton.isEnabled, "Bold toolbar item should be enabled on a .md document")
+
+        textView.click()
+        app.typeKey("a", modifierFlags: .command) // select all
+        boldButton.click()
+        XCTAssertEqual(textView.value as? String, "**hello world\n**")
+
+        // A new, untitled document has no languageID, so the Markdown group
+        // must be disabled on it. Leave the .md window open and dirty —
+        // `app.terminate()` below kills the process directly and never goes
+        // through the in-app "unsaved changes" flow, so no sheet ever
+        // appears to interact with (see `testFoldAllThenTypeKeepsContentIntact`
+        // for the same terminate-without-saving idiom).
+        app.typeKey("n", modifierFlags: .command)
+        let untitledWindow = app.windows.matching(NSPredicate(format: "title CONTAINS 'Untitled'")).firstMatch
+        XCTAssertTrue(untitledWindow.waitForExistence(timeout: 10))
+        let untitledBold = untitledWindow.toolbars.buttons["Bold"]
+        XCTAssertTrue(untitledBold.waitForExistence(timeout: 10))
+        XCTAssertFalse(untitledBold.isEnabled, "Bold toolbar item should be disabled on a non-Markdown document")
+
+        app.terminate()
+    }
+
     private func waitForDisappearance(of element: XCUIElement, timeout: TimeInterval) -> Bool {
         let predicate = NSPredicate(format: "exists == false")
         let expectation = XCTNSPredicateExpectation(predicate: predicate, object: element)
