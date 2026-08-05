@@ -33,18 +33,49 @@ enum ToolbarBuilder {
         case .findGroup: findGroup()
         case .formatGroup: formatGroup()
         case .markdownGroup: markdownGroup()
+        default: leafItem(for: identifier)
+        }
+    }
+
+    private static func leafItem(for identifier: NSToolbarItem.Identifier) -> NSToolbarItem? {
+        switch identifier {
         case .markdownOrderedList:
-            leaf(.markdownOrderedList, label: "Ordered List", symbol: "list.number", action: Selector(("insertMarkdownOrderedList:")))
+            leaf(
+                .markdownOrderedList,
+                label: "Ordered List",
+                symbol: "list.number",
+                action: Selector(("insertMarkdownOrderedList:")),
+            )
         case .markdownBlockquote:
-            leaf(.markdownBlockquote, label: "Blockquote", symbol: "text.quote", action: Selector(("insertMarkdownBlockquote:")))
+            leaf(
+                .markdownBlockquote,
+                label: "Blockquote",
+                symbol: "text.quote",
+                action: Selector(("insertMarkdownBlockquote:")),
+            )
         case .markdownStrikethrough:
-            leaf(.markdownStrikethrough, label: "Strikethrough", symbol: "strikethrough", action: Selector(("insertMarkdownStrikethrough:")))
+            leaf(
+                .markdownStrikethrough,
+                label: "Strikethrough",
+                symbol: "strikethrough",
+                action: Selector(("insertMarkdownStrikethrough:")),
+            )
         case .markdownHorizontalRule:
-            leaf(.markdownHorizontalRule, label: "Horizontal Rule", symbol: "minus", action: Selector(("insertMarkdownHorizontalRule:")))
+            leaf(
+                .markdownHorizontalRule,
+                label: "Horizontal Rule",
+                symbol: "minus",
+                action: Selector(("insertMarkdownHorizontalRule:")),
+            )
         case .markdownTable:
             leaf(.markdownTable, label: "Table", symbol: "tablecells", action: Selector(("insertMarkdownTable:")))
         case .markdownPreview:
-            leaf(.markdownPreview, label: "Markdown Preview", symbol: "doc.richtext", action: Selector(("toggleMarkdownPreview:")))
+            leaf(
+                .markdownPreview,
+                label: "Markdown Preview",
+                symbol: "doc.richtext",
+                action: Selector(("toggleMarkdownPreview:")),
+            )
         case .terminal:
             leaf(.terminal, label: "Terminal", symbol: "terminal", action: Selector(("toggleTerminal:")))
         default:
@@ -84,8 +115,18 @@ enum ToolbarBuilder {
 
     private static func fileGroup() -> NSToolbarItemGroup {
         group(.fileGroup, label: "File", subitems: [
-            leaf(.newDocument, label: "New", symbol: "doc.badge.plus", action: #selector(NSDocumentController.newDocument(_:))),
-            leaf(.openDocument, label: "Open", symbol: "folder", action: #selector(NSDocumentController.openDocument(_:))),
+            leaf(
+                .newDocument,
+                label: "New",
+                symbol: "doc.badge.plus",
+                action: #selector(NSDocumentController.newDocument(_:)),
+            ),
+            leaf(
+                .openDocument,
+                label: "Open",
+                symbol: "folder",
+                action: #selector(NSDocumentController.openDocument(_:)),
+            ),
             leaf(.saveDocument, label: "Save", symbol: "square.and.arrow.down", action: Selector(("saveDocument:"))),
         ])
     }
@@ -103,7 +144,12 @@ enum ToolbarBuilder {
     private static func findGroup() -> NSToolbarItemGroup {
         group(.findGroup, label: "Find", subitems: [
             leaf(.find, label: "Find", symbol: "magnifyingglass", action: Selector(("performFind:"))),
-            leaf(.findAndReplace, label: "Find & Replace", symbol: "doc.text.magnifyingglass", action: Selector(("performFindAndReplace:"))),
+            leaf(
+                .findAndReplace,
+                label: "Find & Replace",
+                symbol: "doc.text.magnifyingglass",
+                action: Selector(("performFindAndReplace:")),
+            ),
         ])
     }
 
@@ -112,7 +158,12 @@ enum ToolbarBuilder {
             leaf(.formatDocument, label: "Format", symbol: "textformat", action: Selector(("formatDocument:"))),
             leaf(.upperCase, label: "UPPER", symbol: "character.cursor.ibeam", action: Selector(("makeUpperCase:"))),
             leaf(.lowerCase, label: "lower", symbol: "character", action: Selector(("makeLowerCase:"))),
-            leaf(.trimWhitespace, label: "Trim Whitespace", symbol: "eraser", action: Selector(("trimTrailingWhitespace:"))),
+            leaf(
+                .trimWhitespace,
+                label: "Trim Whitespace",
+                symbol: "eraser",
+                action: Selector(("trimTrailingWhitespace:")),
+            ),
         ])
     }
 
@@ -123,7 +174,12 @@ enum ToolbarBuilder {
             markdownHeadingItem(),
             leaf(.markdownLink, label: "Link", symbol: "link", action: Selector(("insertMarkdownLink:"))),
             leaf(.markdownList, label: "List", symbol: "list.bullet", action: Selector(("insertMarkdownList:"))),
-            leaf(.markdownCode, label: "Code", symbol: "chevron.left.forwardslash.chevron.right", action: Selector(("insertMarkdownCode:"))),
+            leaf(
+                .markdownCode,
+                label: "Code",
+                symbol: "chevron.left.forwardslash.chevron.right",
+                action: Selector(("insertMarkdownCode:")),
+            ),
         ])
     }
 

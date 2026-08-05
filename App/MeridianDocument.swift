@@ -1740,4 +1740,3 @@ private struct SidebarLeadingTitlebarButton: View {
         .padding(.vertical, 4)
     }
 }
-
