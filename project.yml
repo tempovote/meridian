@@ -180,6 +180,18 @@ targets:
         # Outgoing network connections: required for Sparkle to download
         # the appcast feed and update packages from GitHub Releases.
         com.apple.security.network.client: true
+        # Hardened Runtime (enabled below via ENABLE_HARDENED_RUNTIME)
+        # enforces library validation: a loaded dylib/framework must be
+        # signed with the same identity as the main executable. Ad-hoc
+        # signing (no paid Developer ID yet — see M5.1) gives every binary
+        # a distinct per-binary identity even when each individually reports
+        # "TeamIdentifier=not set", so the ad-hoc-signed, vendored
+        # Sparkle.framework fails validation and the app dies at launch
+        # with a DYLD "Library not loaded ... different Team IDs" abort —
+        # confirmed via crash log (2026-08-05), first local Release build.
+        # Same reason MeridianUITests' entitlements already carry this key.
+        # Safe to drop once the app ships Developer ID-signed and notarized.
+        com.apple.security.cs.disable-library-validation: true
         # Sparkle 2 XPC services run as separate processes. The app must
         # be allowed to talk to these Mach services by name so the
         # sandbox doesn't kill the IPC channels on installation.
