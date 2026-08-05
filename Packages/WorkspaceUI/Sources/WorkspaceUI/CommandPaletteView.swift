@@ -107,7 +107,8 @@ public struct CommandPaletteView: View {
             Spacer()
             if let keyEquivalent = command.keyEquivalent, !keyEquivalent.isEmpty {
                 Text(Self.shortcutDisplayString(modifierMask: command.modifierMask, keyEquivalent: keyEquivalent))
-                    .font(.system(size: 11, weight: .medium, design: .monospaced))
+                    .font(.system(size: 11, weight: .medium))
+                    .tracking(1.5)
                     .foregroundColor(isSelected ? .primary.opacity(0.8) : .secondary)
             }
         }

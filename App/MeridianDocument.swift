@@ -930,8 +930,14 @@ final class MeridianDocument: NSDocument {
         commandPalettePanel = panel
 
         let windowFrame = window.frame
+        // `contentLayoutRect` excludes the titlebar, the toolbar, and the
+        // native tab bar when visible — so this chrome height stays correct
+        // regardless of toolbar height/customization or tab bar visibility,
+        // instead of a fixed guess that drifted stale when the toolbar was
+        // added (the palette started overlapping the tab bar at that point).
+        let chromeHeight = windowFrame.height - window.contentLayoutRect.height
         let panelX = windowFrame.origin.x + (windowFrame.width - panelWidth) / 2
-        let panelY = windowFrame.origin.y + windowFrame.height - panelHeight - 90
+        let panelY = windowFrame.origin.y + windowFrame.height - chromeHeight - panelHeight - 12
 
         panel.setFrame(NSRect(x: panelX, y: panelY, width: panelWidth, height: panelHeight), display: true)
         window.addChildWindow(panel, ordered: .above)
