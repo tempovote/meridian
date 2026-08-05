@@ -366,7 +366,7 @@ final class MeridianDocument: NSDocument {
 
             NSWindow.allowsAutomaticWindowTabbing = true
             let window = MeridianWindow(
-                contentRect: NSRect(x: 0, y: 0, width: 900, height: 600),
+                contentRect: NSRect(x: 0, y: 0, width: 1300, height: 600),
                 styleMask: [.titled, .closable, .miniaturizable, .resizable],
                 backing: .buffered,
                 defer: false,
